@@ -10,35 +10,55 @@ import pandas as pd
 app = FastAPI(title="MetaView API", version="1.0.0")
 
 # -----------------------------
+# Resolve data path (robust)
+# -----------------------------
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))          # .../app
+REPO_ROOT = os.path.abspath(os.path.join(BASE_DIR, ".."))      # repo root
+
+DEFAULT_PATHS = [
+    os.path.join(REPO_ROOT, "data", "news_latest.csv"),                 # data/news_latest.csv
+    os.path.join(REPO_ROOT, "notebooks", "data", "news_latest.csv"),    # notebooks/data/news_latest.csv  (your current)
+    os.path.join(REPO_ROOT, "notebooks", "news_with_sentiment.csv"),    # alternative
+]
+
+ENV_PATH = os.getenv("DATA_PATH")
+
+def pick_data_path() -> str:
+    if ENV_PATH and os.path.exists(ENV_PATH):
+        return ENV_PATH
+    for p in DEFAULT_PATHS:
+        if os.path.exists(p):
+            return p
+    # fallback (will fail gracefully)
+    return DEFAULT_PATHS[0]
+
+DATA_PATH = pick_data_path()
+
+# -----------------------------
 # Load data
 # -----------------------------
-DATA_PATH = os.getenv("DATA_PATH", "data/news_latest.csv")
-
 def load_df(path: str) -> pd.DataFrame:
     df = pd.read_csv(path)
 
-    # Ensure expected text columns exist
-    if "headline" not in df.columns:
-        df["headline"] = ""
-    if "content" not in df.columns:
-        df["content"] = ""
-    if "article_summary" not in df.columns:
-        df["article_summary"] = ""
-    if "domain" not in df.columns:
-        df["domain"] = ""
-    if "country" not in df.columns:
-        df["country"] = ""
-    if "source" not in df.columns:
-        df["source"] = ""
-    if "url" not in df.columns:
-        df["url"] = ""
+    # Ensure expected columns exist
+    for col, default in [
+        ("headline", ""),
+        ("content", ""),
+        ("article_summary", ""),
+        ("domain", ""),
+        ("country", ""),
+        ("source", ""),
+        ("url", "")
+    ]:
+        if col not in df.columns:
+            df[col] = default
 
-    # Clean text
+    # Clean text columns
     df["headline"] = df["headline"].fillna("").astype(str)
     df["content"] = df["content"].fillna("").astype(str)
     df["article_summary"] = df["article_summary"].fillna("").astype(str)
 
-    # Parse dates (optional)
+    # Parse dates if present
     if "published_at" in df.columns:
         df["published_at"] = pd.to_datetime(df["published_at"], errors="coerce", utc=True)
 
@@ -47,7 +67,6 @@ def load_df(path: str) -> pd.DataFrame:
 try:
     df = load_df(DATA_PATH)
 except Exception as e:
-    # If file not found or parse error, keep empty DF but don't crash the server
     df = pd.DataFrame()
     print(f"[WARN] Failed to load data from {DATA_PATH}: {e}")
 
@@ -68,7 +87,12 @@ class SearchRequest(BaseModel):
 # -----------------------------
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "metaview", "rows": int(df.shape[0])}
+    return {
+        "status": "ok",
+        "service": "metaview",
+        "rows": int(df.shape[0]) if not df.empty else 0,
+        "data_path": DATA_PATH
+    }
 
 @app.get("/search-text")
 def search_text(
@@ -84,7 +108,7 @@ def search_text(
     Text search over (headline + content) + advanced filters.
     """
     if df.empty:
-        return {"count": 0, "results": [], "message": "dataset not loaded"}
+        return {"count": 0, "results": [], "message": f"dataset not loaded from {DATA_PATH}"}
 
     d = df.copy()
 
@@ -111,11 +135,11 @@ def search_text(
     hay = (d["headline"].fillna("") + " " + d["content"].fillna("")).str.lower()
     d = d[hay.str.contains(q.lower(), na=False)].copy()
 
-    # Output columns (only those that exist)
+    # Output columns
     wanted = [
-        "published_at","source","domain","country",
-        "headline","article_summary","sentiment_score",
-        "cluster_id","cluster_summary","url"
+        "published_at", "source", "domain", "country",
+        "headline", "article_summary", "sentiment_score",
+        "cluster_id", "cluster_summary", "url"
     ]
     cols = [c for c in wanted if c in d.columns]
 
