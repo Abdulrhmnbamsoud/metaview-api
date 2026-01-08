@@ -1,7 +1,23 @@
+# ===== Web / API =====
 fastapi==0.115.0
 uvicorn[standard]==0.30.6
 pydantic==2.8.2
-feedparser beautifulsoup4 requests html5lib
-sentence-transformers faiss-cpu
-transformers accelerate
-fastapi uvicorn nest_asyncio
+
+# ===== Data handling =====
+pandas==2.2.2
+numpy==1.26.4
+
+# ===== HTTP & scraping =====
+requests==2.32.3
+beautifulsoup4==4.12.3
+html5lib==1.1
+feedparser==6.0.11
+
+# ===== NLP & Search (جاهز للخطوة الجاية) =====
+scikit-learn==1.5.1
+
+# ===== Optional (للمستقبل القريب) =====
+# sentence-transformers==3.0.1
+# faiss-cpu==1.8.0.post1
+# transformers==4.44.2
+# torch==2.4.0
