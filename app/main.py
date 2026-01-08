@@ -1,239 +1,533 @@
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from __future__ import annotations
+
+import os
+import re
+import time
+import json
+import hashlib
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any
-import os, time, sqlite3, hashlib
+
+import numpy as np
 import pandas as pd
-import requests
+import httpx
 import feedparser
-from bs4 import BeautifulSoup
+import trafilatura
 
-# =============================
-# Config
-# =============================
-APP_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.getenv("DB_PATH", os.path.join(APP_DIR, "data", "metaview.db"))
-os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field
+from sqlalchemy import (
+    create_engine, Column, Integer, String, Text, DateTime, Float, UniqueConstraint
+)
+from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.exc import IntegrityError
 
-DEFAULT_TIMEOUT = 20
+from sentence_transformers import SentenceTransformer
+import faiss
 
-# مصادر RSS (ابدأ بها اليوم عشان لايف سريع)
-RSS_SOURCES = {
-    "bbc_world": "https://feeds.bbci.co.uk/news/world/rss.xml",
-    "cnn_world": "http://rss.cnn.com/rss/cnn_world.rss",
-    "nyt_world": "https://rss.nytimes.com/services/xml/rss/nyt/World.xml",
-    "the_guardian_world": "https://www.theguardian.com/world/rss",
-    "dw_world": "https://rss.dw.com/rdf/rss-en-world",
-    "france24_en": "https://www.france24.com/en/rss",
-    "wsj_world": "https://feeds.a.dj.com/rss/RSSWorldNews.xml",
-    "foreign_affairs": "https://www.foreignaffairs.com/rss.xml",
-    "le_monde": "https://www.lemonde.fr/rss/une.xml",
-    "economist_international": "https://www.economist.com/international/rss.xml",
-    "cbs_world": "https://www.cbsnews.com/latest/rss/world",
-    "nbc_world": "http://feeds.nbcnews.com/feeds/worldnews",
-    "abc_world": "http://feeds.abcnews.com/abcnews/internationalheadlines",
-    # زيد اللي عندك اللي يشتغل RSS (بعضهم بيطلع 403 طبيعي)
+
+# =========================
+# Config / ENV
+# =========================
+APP_NAME = "MetaView Live API"
+APP_VERSION = "2.0.0"
+
+DATABASE_URL = os.getenv("DATABASE_URL")  # Railway Postgres recommended
+DB_PATH = os.getenv("DB_PATH", "/app/app/data/metaview.db")  # SQLite fallback
+
+# If no DATABASE_URL -> use SQLite
+if not DATABASE_URL:
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+    DATABASE_URL = f"sqlite:///{DB_PATH}"
+
+FAISS_PATH = os.getenv("FAISS_PATH", "/app/app/data/faiss.index")
+FAISS_META_PATH = os.getenv("FAISS_META_PATH", "/app/app/data/faiss_meta.json")
+
+EMBED_MODEL_NAME = os.getenv("EMBED_MODEL_NAME", "sentence-transformers/all-MiniLM-L6-v2")
+HTTP_TIMEOUT = float(os.getenv("HTTP_TIMEOUT", "20"))
+USER_AGENT = os.getenv(
+    "USER_AGENT",
+    "MetaViewBot/2.0 (+contact: you@example.com) FastAPI"
+)
+
+# RSS-first, then fetch full text from article URL (if accessible).
+DEFAULT_SOURCES = {
+    # (ممكن تزيدها بعدين عبر API /sources)
+    "bbc_world": {
+        "type": "rss",
+        "url": "http://feeds.bbci.co.uk/news/world/rss.xml"
+    },
+    "cnn_world": {
+        "type": "rss",
+        "url": "http://rss.cnn.com/rss/edition_world.rss"
+    },
+    "nyt_world": {
+        "type": "rss",
+        "url": "https://rss.nytimes.com/services/xml/rss/nyt/World.xml"
+    },
+    "dw_world": {
+        "type": "rss",
+        "url": "https://rss.dw.com/rdf/rss-en-world"
+    },
+    "france24_en": {
+        "type": "rss",
+        "url": "https://www.france24.com/en/rss"
+    },
+    "the_guardian_world": {
+        "type": "rss",
+        "url": "https://www.theguardian.com/world/rss"
+    }
 }
 
-# =============================
-# DB helpers
-# =============================
-def db():
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
-    conn.execute("PRAGMA journal_mode=WAL;")
-    return conn
 
-def init_db():
-    conn = db()
-    conn.execute("""
-    CREATE TABLE IF NOT EXISTS articles (
-        id TEXT PRIMARY KEY,
-        source TEXT,
-        url TEXT,
-        headline TEXT,
-        content TEXT,
-        summary TEXT,
-        published_at TEXT,
-        domain TEXT,
-        country TEXT,
-        lang TEXT,
-        created_at TEXT
-    );
-    """)
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_articles_source ON articles(source);")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_articles_published ON articles(published_at);")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_articles_domain ON articles(domain);")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_articles_country ON articles(country);")
-    conn.commit()
-    conn.close()
+# =========================
+# DB
+# =========================
+Base = declarative_base()
+engine = create_engine(
+    DATABASE_URL,
+    connect_args={"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {},
+    pool_pre_ping=True
+)
+SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
-def make_id(source: str, url: str) -> str:
-    return hashlib.sha1(f"{source}|{url}".encode("utf-8")).hexdigest()
 
-def upsert_article(row: Dict[str, Any]) -> bool:
+class Source(Base):
+    __tablename__ = "sources"
+
+    id = Column(String(100), primary_key=True)        # bbc_world
+    type = Column(String(20), nullable=False)         # rss
+    url = Column(Text, nullable=False)                # rss url
+    enabled = Column(Integer, default=1)              # 1/0
+    meta_json = Column(Text, default="{}")            # {"domain":"Security",...}
+
+
+class Article(Base):
+    __tablename__ = "articles"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    uid = Column(String(64), nullable=False)          # hash(url or title+date)
+    source = Column(String(100), nullable=False)
+    domain = Column(String(100), default="")
+    country = Column(String(100), default="")
+
+    headline = Column(Text, default="")
+    url = Column(Text, default="")
+    published_at = Column(DateTime(timezone=True), nullable=True)
+
+    content = Column(Text, default="")
+    summary = Column(Text, default="")
+
+    sentiment_score = Column(Float, nullable=True)    # optional (bonus later)
+    cluster_id = Column(Integer, nullable=True)       # optional (bonus later)
+    cluster_summary = Column(Text, default="")        # optional (bonus later)
+
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    __table_args__ = (
+        UniqueConstraint("uid", name="uq_articles_uid"),
+    )
+
+
+Base.metadata.create_all(bind=engine)
+
+
+# =========================
+# FAISS (Semantic Search)
+# =========================
+_embedder: Optional[SentenceTransformer] = None
+_faiss_index: Optional[faiss.IndexFlatIP] = None
+_faiss_meta: Dict[str, Any] = {"ids": []}  # maps faiss row -> article_id
+
+
+def get_embedder() -> SentenceTransformer:
+    global _embedder
+    if _embedder is None:
+        _embedder = SentenceTransformer(EMBED_MODEL_NAME)
+    return _embedder
+
+
+def normalize(v: np.ndarray) -> np.ndarray:
+    # cosine similarity via inner product on normalized vectors
+    norm = np.linalg.norm(v, axis=1, keepdims=True) + 1e-12
+    return v / norm
+
+
+def load_faiss():
+    global _faiss_index, _faiss_meta
+    if os.path.exists(FAISS_PATH) and os.path.exists(FAISS_META_PATH):
+        _faiss_index = faiss.read_index(FAISS_PATH)
+        with open(FAISS_META_PATH, "r", encoding="utf-8") as f:
+            _faiss_meta = json.load(f)
+    else:
+        _faiss_index = None
+        _faiss_meta = {"ids": []}
+
+
+def save_faiss():
+    global _faiss_index, _faiss_meta
+    if _faiss_index is None:
+        return
+    os.makedirs(os.path.dirname(FAISS_PATH), exist_ok=True)
+    faiss.write_index(_faiss_index, FAISS_PATH)
+    with open(FAISS_META_PATH, "w", encoding="utf-8") as f:
+        json.dump(_faiss_meta, f)
+
+
+def ensure_faiss(dim: int):
+    global _faiss_index, _faiss_meta
+    if _faiss_index is None:
+        _faiss_index = faiss.IndexFlatIP(dim)
+        _faiss_meta = {"ids": []}
+
+
+def build_or_update_index(article_rows: List[Dict[str, Any]]):
     """
-    returns True if inserted, False if already exists
+    Add new articles to FAISS.
+    article_rows: [{"id":..., "text":...}, ...]
     """
-    conn = db()
-    cur = conn.cursor()
-    cur.execute("SELECT 1 FROM articles WHERE id = ?", (row["id"],))
-    exists = cur.fetchone() is not None
-    if exists:
-        conn.close()
-        return False
+    if not article_rows:
+        return 0
 
-    cur.execute("""
-        INSERT INTO articles
-        (id, source, url, headline, content, summary, published_at, domain, country, lang, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-    """, (
-        row["id"], row["source"], row["url"], row["headline"], row["content"],
-        row["summary"], row["published_at"], row["domain"], row["country"], row["lang"]
-    ))
-    conn.commit()
-    conn.close()
-    return True
+    embedder = get_embedder()
+    texts = [r["text"] for r in article_rows]
+    embs = embedder.encode(texts, batch_size=32, show_progress_bar=False)
+    embs = np.array(embs).astype("float32")
+    embs = normalize(embs)
 
-# =============================
-# Scraping / parsing helpers
-# =============================
-def fetch_url(url: str) -> str:
-    r = requests.get(url, timeout=DEFAULT_TIMEOUT, headers={"User-Agent": "Mozilla/5.0"})
-    r.raise_for_status()
-    return r.text
+    ensure_faiss(embs.shape[1])
 
-def extract_text_from_html(html: str) -> str:
-    soup = BeautifulSoup(html, "html.parser")
-    # إزالة سكربت/ستايل
-    for t in soup(["script", "style", "noscript"]):
-        t.decompose()
-    text = soup.get_text(separator=" ")
-    # تنظيف بسيط
-    text = " ".join(text.split())
-    return text[:20000]  # cap
+    _faiss_index.add(embs)
+    _faiss_meta["ids"].extend([int(r["id"]) for r in article_rows])
+    save_faiss()
+    return len(article_rows)
 
-def rss_to_items(source: str, feed_url: str, limit: int = 50) -> List[Dict[str, Any]]:
-    feed = feedparser.parse(feed_url)
-    items = []
-    for e in feed.entries[:limit]:
-        url = getattr(e, "link", "") or ""
-        title = getattr(e, "title", "") or ""
-        published = ""
-        if hasattr(e, "published"):
-            published = e.published
-        elif hasattr(e, "updated"):
-            published = e.updated
 
-        items.append({
-            "source": source,
-            "url": url,
-            "headline": title,
-            "published_at": published
-        })
-    return items
+# Load FAISS at startup
+load_faiss()
 
-def enrich_item_with_content(item: Dict[str, Any]) -> Dict[str, Any]:
-    url = item.get("url", "")
-    content = ""
-    if url:
-        try:
-            html = fetch_url(url)
-            content = extract_text_from_html(html)
-        except Exception:
-            content = ""  # بعض المواقع تمنع، عادي
 
-    # Summary بسيط اليوم (لاحقًا نخليه LLM)
-    summary = content[:600] if content else ""
+# =========================
+# Helpers
+# =========================
+def now_utc() -> datetime:
+    return datetime.now(timezone.utc)
 
-    # domain/country/lang (اليوم نخليها فارغة أو بسيطة)
-    item.update({
-        "content": content,
-        "summary": summary,
-        "domain": "",   # لاحقًا تصنيف
-        "country": "",  # لاحقًا NER
-        "lang": "en"
-    })
-    return item
 
-# =============================
-# API
-# =============================
-app = FastAPI(title="MetaView Live API", version="1.0.0")
-init_db()
+def make_uid(url: str, title: str, published: Optional[datetime]) -> str:
+    base = (url or "") + "||" + (title or "") + "||" + (published.isoformat() if published else "")
+    return hashlib.sha256(base.encode("utf-8")).hexdigest()
+
+
+def clean_text(s: str) -> str:
+    s = s or ""
+    s = re.sub(r"\s+", " ", s).strip()
+    return s
+
+
+async def fetch_url(url: str) -> str:
+    headers = {"User-Agent": USER_AGENT, "Accept": "*/*"}
+    async with httpx.AsyncClient(timeout=HTTP_TIMEOUT, follow_redirects=True, headers=headers) as client:
+        r = await client.get(url)
+        r.raise_for_status()
+        return r.text
+
+
+def extract_full_text(html: str, url: str) -> str:
+    """
+    Safe extraction using trafilatura.
+    If paywalled/blocked => returns "".
+    """
+    try:
+        downloaded = trafilatura.extract(html, url=url, include_comments=False, include_tables=False)
+        return clean_text(downloaded or "")
+    except Exception:
+        return ""
+
+
+def parse_published(entry: Any) -> Optional[datetime]:
+    # feedparser may provide published_parsed
+    try:
+        if getattr(entry, "published_parsed", None):
+            dt = datetime.fromtimestamp(time.mktime(entry.published_parsed), tz=timezone.utc)
+            return dt
+    except Exception:
+        pass
+    return None
+
+
+def to_article_text(row: Dict[str, Any]) -> str:
+    # what we embed for semantic search
+    return clean_text(
+        (row.get("headline") or "") + "\n" +
+        (row.get("summary") or "") + "\n" +
+        (row.get("content") or "")
+    )
+
+
+# =========================
+# API Schemas
+# =========================
+class SourceUpsert(BaseModel):
+    id: str = Field(..., description="Unique source id, e.g. bbc_world")
+    type: str = Field("rss", description="Only rss in this version")
+    url: str
+    enabled: bool = True
+    meta: Dict[str, Any] = Field(default_factory=dict)  # domain/country defaults etc.
+
 
 class IngestRequest(BaseModel):
-    sources: Optional[List[str]] = None
-    limit_per_source: int = 30
+    sources: Optional[List[str]] = Field(None, description="If null -> ingest all enabled sources")
+    limit_per_source: int = Field(30, ge=1, le=500)
+    since_minutes: int = Field(1440, ge=5, le=60*24*30, description="Only keep recent items window (minutes)")
+
 
 class SearchRequest(BaseModel):
     query: str
-    top_k: int = 20
+    top_k: int = Field(20, ge=1, le=200)
     domain: Optional[str] = None
     country: Optional[str] = None
     source: Optional[str] = None
-    min_date: Optional[str] = None
-    max_date: Optional[str] = None
+    min_date: Optional[str] = None  # ISO date string
+    max_date: Optional[str] = None  # ISO date string
+
+
+# =========================
+# FastAPI
+# =========================
+app = FastAPI(title=APP_NAME, version=APP_VERSION)
+
 
 @app.get("/health")
 def health():
-    conn = db()
-    cur = conn.cursor()
-    cur.execute("SELECT COUNT(*) FROM articles")
-    n = cur.fetchone()[0]
-    conn.close()
-    return {"status": "ok", "service": "metaview", "rows": int(n), "db_path": DB_PATH}
+    with SessionLocal() as db:
+        total = db.query(Article).count()
+        sources = db.query(Source).count()
+    return {
+        "status": "ok",
+        "service": "metaview",
+        "version": APP_VERSION,
+        "db": "postgres" if "postgres" in DATABASE_URL else "sqlite",
+        "db_path": DB_PATH if "sqlite" in DATABASE_URL else None,
+        "rows": int(total),
+        "sources": int(sources),
+        "faiss_loaded": _faiss_index is not None,
+        "faiss_size": int(_faiss_index.ntotal) if _faiss_index is not None else 0,
+    }
 
+
+# -------------------------
+# Sources (Dynamic)
+# -------------------------
+@app.get("/sources")
+def list_sources():
+    with SessionLocal() as db:
+        rows = db.query(Source).all()
+        return [{
+            "id": r.id,
+            "type": r.type,
+            "url": r.url,
+            "enabled": bool(r.enabled),
+            "meta": json.loads(r.meta_json or "{}")
+        } for r in rows]
+
+
+@app.post("/sources")
+def upsert_source(body: SourceUpsert):
+    with SessionLocal() as db:
+        existing = db.query(Source).filter(Source.id == body.id).first()
+        if existing:
+            existing.type = body.type
+            existing.url = body.url
+            existing.enabled = 1 if body.enabled else 0
+            existing.meta_json = json.dumps(body.meta or {})
+        else:
+            db.add(Source(
+                id=body.id,
+                type=body.type,
+                url=body.url,
+                enabled=1 if body.enabled else 0,
+                meta_json=json.dumps(body.meta or {})
+            ))
+        db.commit()
+    return {"ok": True, "id": body.id}
+
+
+@app.delete("/sources/{source_id}")
+def delete_source(source_id: str):
+    with SessionLocal() as db:
+        row = db.query(Source).filter(Source.id == source_id).first()
+        if not row:
+            raise HTTPException(status_code=404, detail="Source not found")
+        db.delete(row)
+        db.commit()
+    return {"ok": True, "deleted": source_id}
+
+
+@app.on_event("startup")
+def seed_sources():
+    """
+    Seed DEFAULT_SOURCES once (if not exist).
+    """
+    with SessionLocal() as db:
+        for sid, cfg in DEFAULT_SOURCES.items():
+            exist = db.query(Source).filter(Source.id == sid).first()
+            if not exist:
+                db.add(Source(
+                    id=sid,
+                    type=cfg["type"],
+                    url=cfg["url"],
+                    enabled=1,
+                    meta_json=json.dumps({})
+                ))
+        db.commit()
+
+
+# -------------------------
+# Ingestion (Live)
+# -------------------------
 @app.post("/ingest/run")
-def run_ingestion(body: IngestRequest):
-    """
-    Run ingestion now (call it from n8n/cron to make it live)
-    """
-    start = time.time()
-    chosen = body.sources if body.sources else list(RSS_SOURCES.keys())
+async def ingest_run(body: IngestRequest):
+    started = time.time()
+    since_dt = now_utc() - timedelta(minutes=int(body.since_minutes))
 
-    report = []
-    total_inserted = 0
-    for src in chosen:
-        feed_url = RSS_SOURCES.get(src)
-        if not feed_url:
-            report.append({"source": src, "inserted": 0, "error": "unknown source"})
+    with SessionLocal() as db:
+        q = db.query(Source).filter(Source.enabled == 1)
+        if body.sources:
+            q = q.filter(Source.id.in_(body.sources))
+        sources = q.all()
+
+    if not sources:
+        return {"ok": True, "inserted_total": 0, "took_sec": round(time.time() - started, 3), "details": []}
+
+    details = []
+    inserted_total = 0
+    to_index = []  # for FAISS
+
+    for s in sources:
+        sid = s.id
+        meta = json.loads(s.meta_json or "{}")
+
+        # RSS ingest
+        try:
+            feed_xml = await fetch_url(s.url)
+            feed = feedparser.parse(feed_xml)
+            entries = feed.entries[: int(body.limit_per_source)]
+        except Exception as e:
+            details.append({"source": sid, "inserted": 0, "error": f"rss_fetch_failed: {str(e)}"})
             continue
 
-        try:
-            items = rss_to_items(src, feed_url, limit=body.limit_per_source)
-            inserted = 0
-            for it in items:
-                it = enrich_item_with_content(it)
-                it["id"] = make_id(it["source"], it["url"])
-                if upsert_article(it):
+        inserted = 0
+        for entry in entries:
+            title = clean_text(getattr(entry, "title", "") or "")
+            link = clean_text(getattr(entry, "link", "") or "")
+            published = parse_published(entry)
+
+            if published and published < since_dt:
+                continue
+
+            uid = make_uid(link, title, published)
+
+            # try fetch full text from article URL
+            content = ""
+            if link:
+                try:
+                    html = await fetch_url(link)
+                    content = extract_full_text(html, link)
+                except Exception:
+                    content = ""  # blocked / paywall / forbidden
+
+            summary = clean_text(getattr(entry, "summary", "") or "")
+
+            # fallback: if content empty use summary
+            final_content = content if len(content) >= 200 else summary
+
+            domain = str(meta.get("domain", "") or "")
+            country = str(meta.get("country", "") or "")
+
+            row = {
+                "uid": uid,
+                "source": sid,
+                "domain": domain,
+                "country": country,
+                "headline": title,
+                "url": link,
+                "published_at": published,
+                "content": final_content,
+                "summary": ""  # keep empty for now (bonus later)
+            }
+
+            with SessionLocal() as db:
+                try:
+                    art = Article(
+                        uid=row["uid"],
+                        source=row["source"],
+                        domain=row["domain"],
+                        country=row["country"],
+                        headline=row["headline"],
+                        url=row["url"],
+                        published_at=row["published_at"],
+                        content=row["content"],
+                        summary=row["summary"],
+                    )
+                    db.add(art)
+                    db.commit()
+                    db.refresh(art)
+
                     inserted += 1
-            total_inserted += inserted
-            report.append({"source": src, "inserted": inserted, "error": ""})
-        except Exception as e:
-            report.append({"source": src, "inserted": 0, "error": str(e)})
+                    inserted_total += 1
+
+                    # prepare for semantic indexing
+                    to_index.append({"id": art.id, "text": to_article_text({
+                        "headline": art.headline,
+                        "content": art.content,
+                        "summary": art.summary
+                    })})
+
+                except IntegrityError:
+                    db.rollback()  # duplicate uid
+                except Exception as e:
+                    db.rollback()
+                    # skip this entry
+                    continue
+
+        details.append({"source": sid, "inserted": inserted, "error": ""})
+
+    # update FAISS for newly inserted items
+    indexed = 0
+    try:
+        indexed = build_or_update_index(to_index)
+    except Exception:
+        indexed = 0
 
     return {
         "ok": True,
-        "inserted_total": total_inserted,
-        "took_sec": round(time.time() - start, 2),
-        "details": report
+        "inserted_total": inserted_total,
+        "indexed_new": indexed,
+        "took_sec": round(time.time() - started, 3),
+        "details": details,
     }
 
+
+# -------------------------
+# Filters
+# -------------------------
 @app.get("/filters")
 def filters():
-    conn = db()
-    cur = conn.cursor()
+    with SessionLocal() as db:
+        sources = [r[0] for r in db.query(Article.source).distinct().all()]
+        domains = [r[0] for r in db.query(Article.domain).distinct().all() if r[0]]
+        countries = [r[0] for r in db.query(Article.country).distinct().all() if r[0]]
+    return {
+        "sources": sorted([s for s in sources if s]),
+        "domains": sorted(domains),
+        "countries": sorted(countries)
+    }
 
-    def uniq(col: str):
-        cur.execute(f"SELECT DISTINCT {col} FROM articles WHERE {col} IS NOT NULL AND TRIM({col}) != '' LIMIT 200")
-        return sorted([r[0] for r in cur.fetchall() if r[0]])
 
-    sources = uniq("source")
-    domains = uniq("domain")
-    countries = uniq("country")
-
-    conn.close()
-    return {"sources": sources, "domains": domains, "countries": countries}
-
+# -------------------------
+# Text Search (Advanced)
+# -------------------------
 @app.get("/search-text")
 def search_text(
     q: str,
@@ -244,71 +538,166 @@ def search_text(
     max_date: Optional[str] = None,
     top_k: int = 20
 ):
-    conn = db()
-    cur = conn.cursor()
+    with SessionLocal() as db:
+        query = db.query(Article)
 
-    where = []
-    params: List[Any] = []
+        if domain:
+            query = query.filter(Article.domain.ilike(domain))
+        if country:
+            query = query.filter(Article.country.ilike(country))
+        if source:
+            query = query.filter(Article.source.ilike(source))
 
-    # text match (SQLite LIKE)
-    where.append("(LOWER(headline) LIKE ? OR LOWER(content) LIKE ?)")
-    qn = f"%{q.strip().lower()}%"
-    params.extend([qn, qn])
+        def parse_dt(s: str) -> Optional[datetime]:
+            try:
+                dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                return dt
+            except Exception:
+                return None
 
-    if domain:
-        where.append("LOWER(domain) = ?")
-        params.append(domain.strip().lower())
-    if country:
-        where.append("LOWER(country) = ?")
-        params.append(country.strip().lower())
-    if source:
-        where.append("LOWER(source) = ?")
-        params.append(source.strip().lower())
+        if min_date:
+            md = parse_dt(min_date)
+            if md:
+                query = query.filter(Article.published_at >= md)
+        if max_date:
+            xd = parse_dt(max_date)
+            if xd:
+                query = query.filter(Article.published_at <= xd)
 
-    if min_date:
-        where.append("published_at >= ?")
-        params.append(min_date)
-    if max_date:
-        where.append("published_at <= ?")
-        params.append(max_date)
+        qlow = (q or "").strip().lower()
+        if not qlow:
+            raise HTTPException(status_code=400, detail="q is required")
 
-    where_sql = " AND ".join(where)
+        # Simple contains (headline/content)
+        # NOTE: For full-text search later you can move to Postgres tsvector.
+        rows = query.order_by(Article.published_at.desc().nullslast()).all()
 
-    cur.execute(f"""
-        SELECT source, url, headline, summary, published_at, domain, country, lang
-        FROM articles
-        WHERE {where_sql}
-        ORDER BY published_at DESC
-        LIMIT ?
-    """, (*params, int(top_k)))
+        hits = []
+        for r in rows:
+            hay = f"{r.headline} {r.content}".lower()
+            if qlow in hay:
+                hits.append(r)
+                if len(hits) >= int(top_k):
+                    break
 
-    rows = cur.fetchall()
-    conn.close()
+        return {
+            "count": len(hits),
+            "results": [
+                {
+                    "published_at": r.published_at.isoformat() if r.published_at else None,
+                    "source": r.source,
+                    "domain": r.domain,
+                    "country": r.country,
+                    "headline": r.headline,
+                    "article_summary": r.summary,
+                    "sentiment_score": r.sentiment_score,
+                    "cluster_id": r.cluster_id,
+                    "cluster_summary": r.cluster_summary,
+                    "url": r.url,
+                } for r in hits
+            ]
+        }
 
+
+# -------------------------
+# Semantic Search (FAISS)
+# -------------------------
+@app.post("/semantic-search")
+def semantic_search(body: SearchRequest):
+    if _faiss_index is None or not _faiss_meta.get("ids"):
+        return {"count": 0, "results": [], "message": "semantic index not built yet, run /ingest/run first"}
+
+    # parse date filters
+    def parse_dt(s: str) -> Optional[datetime]:
+        try:
+            dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt
+        except Exception:
+            return None
+
+    md = parse_dt(body.min_date) if body.min_date else None
+    xd = parse_dt(body.max_date) if body.max_date else None
+
+    embedder = get_embedder()
+    q_emb = embedder.encode([body.query], show_progress_bar=False)
+    q_emb = np.array(q_emb).astype("float32")
+    q_emb = normalize(q_emb)
+
+    k = min(int(body.top_k) * 5, 1000)  # pull more then filter down
+    D, I = _faiss_index.search(q_emb, k)
+
+    # map faiss rows -> article_id
+    candidates = []
+    for score, idx in zip(D[0], I[0]):
+        if idx < 0:
+            continue
+        try:
+            article_id = int(_faiss_meta["ids"][idx])
+        except Exception:
+            continue
+        candidates.append((article_id, float(score)))
+
+    # fetch from DB and apply filters
     results = []
-    for r in rows:
-        results.append({
-            "source": r[0],
-            "url": r[1],
-            "headline": r[2],
-            "article_summary": r[3],
-            "published_at": r[4],
-            "domain": r[5],
-            "country": r[6],
-            "lang": r[7],
-        })
+    with SessionLocal() as db:
+        for aid, score in candidates:
+            r = db.query(Article).filter(Article.id == aid).first()
+            if not r:
+                continue
+
+            if body.source and r.source.lower() != body.source.lower():
+                continue
+            if body.domain and (r.domain or "").lower() != body.domain.lower():
+                continue
+            if body.country and (r.country or "").lower() != body.country.lower():
+                continue
+            if md and r.published_at and r.published_at < md:
+                continue
+            if xd and r.published_at and r.published_at > xd:
+                continue
+
+            results.append({
+                "semantic_score": score,
+                "published_at": r.published_at.isoformat() if r.published_at else None,
+                "source": r.source,
+                "domain": r.domain,
+                "country": r.country,
+                "headline": r.headline,
+                "article_summary": r.summary,
+                "sentiment_score": r.sentiment_score,
+                "cluster_id": r.cluster_id,
+                "cluster_summary": r.cluster_summary,
+                "url": r.url,
+            })
+            if len(results) >= int(body.top_k):
+                break
 
     return {"count": len(results), "results": results}
 
-@app.post("/semantic-search")
-def semantic_search(body: SearchRequest):
-    # اليوم نخليه نفس text search، وبعدين نربطه FAISS
-    return search_text(
-        q=body.query,
-        domain=body.domain,
-        country=body.country,
-        source=body.source,
-        min_date=body.min_date,
-        max_date=body.max_date,
-        top_k=body.top_k
-    )
+
+# -------------------------
+# Utility: Force rebuild FAISS from DB
+# -------------------------
+@app.post("/index/rebuild")
+def rebuild_index():
+    started = time.time()
+    global _faiss_index, _faiss_meta
+    _faiss_index = None
+    _faiss_meta = {"ids": []}
+
+    rows_to_add = []
+    with SessionLocal() as db:
+        rows = db.query(Article).all()
+        for r in rows:
+            rows_to_add.append({"id": r.id, "text": to_article_text({
+                "headline": r.headline,
+                "content": r.content,
+                "summary": r.summary
+            })})
+
+    added = build_or_update_index(rows_to_add)
+    return {"ok": True, "added": added, "took_sec": round(time.time() - started, 3)}
