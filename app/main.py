@@ -1,3 +1,16 @@
+import os
+import pandas as pd
+
+DATA_PATH = os.getenv("DATA_PATH", "data/news_latest.csv")
+
+df = pd.read_csv(DATA_PATH)
+
+# نظافة بسيطة
+if "published_at" in df.columns:
+    df["published_at"] = pd.to_datetime(df["published_at"], errors="coerce", utc=True)
+
+df["headline"] = df.get("headline", "").fillna("").astype(str)
+df["content"] = df.get("content", "").fillna("").astype(str)
 from fastapi import FastAPI
 from pydantic import BaseModel
 from typing import Optional
