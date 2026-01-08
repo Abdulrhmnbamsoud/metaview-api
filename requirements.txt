@@ -1,50 +1,16 @@
-# ===== Web / API =====
-fastapi==0.115.0
+fastapi==0.115.6
 uvicorn[standard]==0.30.6
-pydantic==2.8.2
+pydantic==2.10.3
 
-# ===== Data handling =====
-pandas==2.2.2
+SQLAlchemy==2.0.36
+
+httpx==0.27.2
+feedparser==6.0.11
+beautifulsoup4==4.12.3
+trafilatura==1.12.2
+
 numpy==1.26.4
+pandas==2.2.3
 
-# ===== HTTP & scraping =====
-requests==2.32.3
-beautifulsoup4==4.12.3
-html5lib==1.1
-feedparser==6.0.11
-
-# ===== NLP & Search (جاهز للخطوة الجاية) =====
-scikit-learn==1.5.1
-
-# ===== Optional (للمستقبل القريب) =====
-# sentence-transformers==3.0.1
-# faiss-cpu==1.8.0.post1
-# transformers==4.44.2
-# torch==2.4.0
-
-
-# ===============================
-# Web API
-# ===============================
-fastapi==0.115.0
-uvicorn[standard]==0.30.6
-pydantic==2.8.2
-
-# ===============================
-# Data Processing & Storage
-# ===============================
-pandas==2.2.2
-
-# ===============================
-# Ingestion (RSS + Scraping)
-# ===============================
-requests==2.32.3
-feedparser==6.0.11
-beautifulsoup4==4.12.3
-lxml==5.3.0
-html5lib==1.1
-
-# ===============================
-# Utilities
-# ===============================
-python-dateutil==2.9.0.post0
+sentence-transformers==3.3.1
+faiss-cpu==1.8.0.post1
