@@ -67,7 +67,26 @@ httptools==0.6.4
 # =========================
 rich==13.9.4
 
+# Scraping
 beautifulsoup4==4.12.3
 readability-lxml==0.8.1
 trafilatura==1.9.0
 lxml==5.1.0
+
+# Text utils (light)
+langdetect==1.0.9
+regex==2024.11.6
+
+# DB
+sqlite-utils==3.37
+
+# Logging
+loguru==0.7.2
+rich==13.9.4
+
+# Performance (Linux only)
+uvloop==0.21.0; platform_system != "Windows"
+httptools==0.6.4; platform_system != "Windows"
+
+# Forms (optional)
+python-multipart==0.0.12
