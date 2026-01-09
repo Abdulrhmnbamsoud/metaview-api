@@ -1,10 +1,22 @@
-# app/schemas.py
 from pydantic import BaseModel
-from typing import Optional, List, Dict, Any
+from typing import List, Optional, Dict, Any
 
-class IngestRequest(BaseModel):
-    feeds: Optional[List[str]] = None
+class ArticleOut(BaseModel):
+    headline: str
+    content: Optional[str] = None
+    article_summary: Optional[str] = None
+    published_at: Optional[str] = None
+    source: Optional[str] = None
+    domain: Optional[str] = None
+    country: Optional[str] = None
+    url: Optional[str] = None
+    category: Optional[str] = None
+    entities: Optional[str] = None  # نخليها نص/JSON string
 
 class SearchResponse(BaseModel):
+    total: int
+    page: int
+    page_size: int
+    sort: str
     count: int
-    results: List[Dict[str, Any]]
+    results: List[ArticleOut]
