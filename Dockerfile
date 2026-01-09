@@ -1,10 +1,45 @@
+# =========================
+# Base Image
+# =========================
 FROM python:3.11-slim
 
+# =========================
+# Environment
+# =========================
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# =========================
+# Workdir
+# =========================
 WORKDIR /app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# =========================
+# System deps (خفيف + ضروري)
+# =========================
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
+# =========================
+# Install Python deps
+# =========================
+COPY requirements.txt .
+
+RUN pip install --upgrade pip \
+    && pip install --no-cache-dir -r requirements.txt
+
+# =========================
+# Copy Project
+# =========================
 COPY app ./app
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# =========================
+# Expose Port
+# =========================
+EXPOSE 8000
+
+# =========================
+# Start FastAPI (Railway uses PORT)
+# =========================
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
