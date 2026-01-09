@@ -30,3 +30,4 @@ python-multipart==0.0.12
 # Performance (Linux only)
 uvloop==0.21.0; platform_system != "Windows"
 httptools==0.6.4; platform_system != "Windows"
+readability-lxml
