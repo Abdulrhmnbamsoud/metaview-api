@@ -1,45 +1,50 @@
 # app/utils.py
-import time
-from datetime import datetime, timezone
-from typing import Any
+import re
+from typing import Optional, Tuple
 
-def normalize_source_name(feed_url: str) -> str:
-    u = feed_url.lower()
-    if "reuters" in u: return "reuters"
-    if "bloomberg" in u: return "bloomberg"
-    if "dj.com" in u or "wsj" in u: return "wsj"
-    if "nytimes" in u: return "nyt"
-    if "economist" in u: return "economist"
-    if "cnn" in u: return "cnn"
-    if "ft.com" in u: return "financial_times"
-    if "washingtonpost" in u: return "washington_post"
-    if "theatlantic" in u: return "the_atlantic"
-    if "foreignaffairs" in u: return "foreign_affairs"
-    if "alarabiya" in u: return "alarabiya"
-    if "apnews" in u: return "ap_news"
-    if "politico" in u: return "politico"
-    if "axios" in u: return "axios"
-    if "bbci" in u or "bbc" in u: return "bbc"
-    if "cbsnews" in u: return "cbs"
-    if "newsweek" in u: return "newsweek"
-    if "theguardian" in u: return "the_guardian"
-    if "businessinsider" in u: return "business_insider"
-    if "thehill" in u: return "the_hill"
-    if "nbcnews" in u: return "nbc"
-    if "abcnews" in u: return "abc"
-    if "dw.com" in u: return "dw"
-    if "france24" in u: return "france24"
-    if "lemonde" in u: return "le_monde"
-    return "other"
+CATEGORY_KEYWORDS = {
+    "Politics": ["election", "parliament", "president", "minister", "government", "vote", "sanction", "diplomat"],
+    "Economy": ["inflation", "gdp", "interest rate", "stocks", "market", "recession", "trade", "tariff", "bank"],
+    "Security": ["attack", "terror", "military", "missile", "war", "explosion", "hostage", "security"],
+    "Energy": ["oil", "gas", "opec", "barrel", "crude", "pipeline", "lng", "energy"],
+    "Tech": ["ai", "artificial intelligence", "chip", "semiconductor", "cyber", "software", "cloud", "startup"],
+}
 
-def safe_dt_to_iso(entry: Any) -> str:
-    try:
-        if getattr(entry, "published_parsed", None):
-            ts = time.mktime(entry.published_parsed)
-            return datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
-        if getattr(entry, "updated_parsed", None):
-            ts = time.mktime(entry.updated_parsed)
-            return datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
-    except Exception:
-        pass
-    return ""
+# Entities: يلتقط أسماء إنجليزية (كلمات Capitalized) + كيانات شائعة
+COMMON_ENTITIES = ["United States", "China", "Russia", "Ukraine", "Israel", "Gaza", "Iran", "Saudi Arabia", "EU", "NATO"]
+
+def classify_category(text: str) -> Optional[str]:
+    t = (text or "").lower()
+    best = None
+    best_score = 0
+    for cat, kws in CATEGORY_KEYWORDS.items():
+        score = sum(1 for kw in kws if kw in t)
+        if score > best_score:
+            best_score = score
+            best = cat
+    return best
+
+def extract_entity(text: str) -> Optional[str]:
+    if not text:
+        return None
+
+    # 1) common entities
+    for ent in COMMON_ENTITIES:
+        if ent.lower() in text.lower():
+            return ent
+
+    # 2) capitalized phrases (e.g., "Donald Trump", "Apple Inc")
+    # يلتقط جملتين أو ثلاث كلمات كبيرة
+    matches = re.findall(r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})\b", text)
+    if matches:
+        # اختار الأكثر تكرارًا
+        cand = max(set(matches), key=matches.count)
+        return cand
+
+    return None
+
+def enrich(headline: str, summary: str, content: str) -> Tuple[Optional[str], Optional[str]]:
+    blob = " ".join([headline or "", summary or "", content or ""]).strip()
+    category = classify_category(blob)
+    entity = extract_entity(blob)
+    return category, entity
