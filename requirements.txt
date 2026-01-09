@@ -19,6 +19,11 @@ feedparser==6.0.11
 python-dateutil==2.9.0.post0
 
 # =========================
+# HTML Parsing (خفيف بدون lxml)
+# =========================
+beautifulsoup4==4.12.3
+
+# =========================
 # Text / Language
 # =========================
 langdetect==1.0.9
@@ -36,6 +41,6 @@ loguru==0.7.2
 rich==13.9.4
 
 # =========================
-# Forms (FastAPI)
+# Forms
 # =========================
 python-multipart==0.0.12
