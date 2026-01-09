@@ -19,8 +19,6 @@ from pydantic import BaseModel, Field
 HAS_SEMANTIC = True
 try:
     import numpy as np
-    import faiss  # faiss-cpu
-    from sentence_transformers import SentenceTransformer
 except Exception:
     HAS_SEMANTIC = False
 
