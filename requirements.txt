@@ -67,4 +67,6 @@ tenacity==8.2.3
 # Optional (Future / Safe)
 # =========================
 orjson==3.9.15
-ujson==5.9.0
+ujson==5.9.0beautifulsoup4==4.12.3
+readability-lxml==0.8.1
+lxml==5.2.2
