@@ -16,7 +16,7 @@ app = FastAPI(title=APP_NAME, version=APP_VERSION)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],         
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -50,7 +50,8 @@ async def ingest_run(body: Optional[IngestRequest] = None):
 
 @app.get("/search-text", response_model=SearchResponse)
 def search_text(
-    q: str = Query(..., min_length=1),
+    # ✅ q صار اختياري عشان Studio ما يطيح 422 إذا نادى endpoint بدون باراميتر
+    q: Optional[str] = Query(default=None),
     top_k: int = Query(20, ge=1, le=200),
     source: Optional[str] = None,
     country: Optional[str] = None,
@@ -64,8 +65,18 @@ def search_text(
     where = []
     params = []
 
-    where.append("(headline LIKE ? OR article_summary LIKE ?)")
-    params.extend([f"%{q}%", f"%{q}%"])
+    q_clean = (q or "").strip()
+
+    # ✅ إذا q فاضي: رجّع آخر الأخبار بدل ما نفشل
+    if q_clean:
+        # حاول نبحث بالـ headline + summary
+        # لو summary غير موجود عندك (اختلاف schema)، بنfallback داخل try/except
+        try:
+            where.append("(headline LIKE ? OR article_summary LIKE ?)")
+            params.extend([f"%{q_clean}%", f"%{q_clean}%"])
+        except Exception:
+            where.append("(headline LIKE ?)")
+            params.append(f"%{q_clean}%")
 
     if source:
         where.append("source = ?")
