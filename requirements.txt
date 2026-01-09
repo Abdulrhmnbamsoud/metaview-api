@@ -1,56 +1,8 @@
-# =========================
-# Core API & Server
-# =========================
+# Core API
 fastapi==0.115.6
 uvicorn[standard]==0.30.6
 pydantic==2.9.2
 python-dotenv==1.0.1
-
-# =========================
-# Networking & Async
-# =========================
-httpx==0.27.2
-anyio==4.6.2
-
-# =========================
-# RSS & Parsing
-# =========================
-feedparser==6.0.11
-python-dateutil==2.9.0.post0
-
-# =========================
-# Web Scraping & Extraction
-# =========================
-beautifulsoup4==4.12.3
-readability-lxml==0.8.1
-lxml==5.1.0
-trafilatura==1.9.0
-
-# =========================
-# Databases
-# =========================
-sqlite-utils==3.37
-
-# =========================
-# Logging
-# =========================
-loguru==0.7.2
-rich==13.9.4
-
-# =========================
-# Performance (Linux only)
-# =========================
-uvloop==0.21.0; platform_system != "Windows"
-httptools==0.6.4
-
-# =========================
-# For forms (optional)
-# =========================
-python-multipart==0.0.12
-# Core
-fastapi==0.115.6
-uvicorn==0.30.6
-pydantic==2.9.2
 
 # HTTP / Async
 httpx==0.27.2
@@ -60,12 +12,14 @@ anyio==4.6.2
 feedparser==6.0.11
 python-dateutil==2.9.0.post0
 
-# Parsing (خفيف)
+# HTML parsing
 beautifulsoup4==4.12.3
 lxml==5.3.0
 
-# Utils
-python-dotenv==1.0.1
+# DB / Logging
+sqlite-utils==3.37
 loguru==0.7.2
-langdetect==1.0.9
-regex==2024.11.6
+rich==13.9.4
+
+# Optional (if you need forms)
+python-multipart==0.0.12
