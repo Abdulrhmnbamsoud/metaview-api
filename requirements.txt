@@ -1,82 +1,68 @@
 # =========================
-# Core API
+# Core API & Server
 # =========================
-fastapi==0.110.0
-uvicorn[standard]==0.27.1
-
-# =========================
-# Data Models & Validation
-# =========================
-pydantic>=2.5,<3
-
-# =========================
-# HTTP & Networking
-# =========================
-httpx==0.27.0
-requests==2.31.0
-
-# =========================
-# RSS / Scraping
-# =========================
-feedparser==6.0.11
-beautifulsoup4==4.12.3
-lxml==5.1.0
-
-# =========================
-# Text Processing
-# =========================
-regex==2023.12.25
-langdetect==1.0.9
-
-# =========================
-# Sentiment Analysis (خفيف + ثابت)
-# =========================
-vaderSentiment==3.3.2
-textblob==0.17.1
-
-# =========================
-# Translation (خفيف – بدون مودل ثقيل)
-# =========================
-deep-translator==1.11.4
-
-# =========================
-# Embeddings (جاهز للمستقبل – لا يُستخدم الآن)
-# =========================
-sentence-transformers==2.6.1
-numpy==1.26.4
-scipy==1.12.0
-scikit-learn==1.4.1.post1
-
-# =========================
-# Storage
-# =========================
-sqlite-utils==3.36
-
-# =========================
-# Env & Config
-# =========================
-python-dotenv==1.0.1
-
-# =========================
-# Logging & Stability
-# =========================
-loguru==0.7.2
-tenacity==8.2.3
-
-# =========================
-# Optional (Future / Safe)
-# =========================
-orjson==3.9.15
-ujson==5.9.0
 fastapi==0.115.6
 uvicorn[standard]==0.30.6
 pydantic==2.9.2
+python-dotenv==1.0.1
+
+# =========================
+# Networking & Async
+# =========================
 httpx==0.27.2
+anyio==4.6.2
+async-timeout==4.0.3
+
+# =========================
+# RSS & Parsing
+# =========================
 feedparser==6.0.11
 python-dateutil==2.9.0.post0
 
-# Full-text extraction
-trafilatura==1.12.2
+# =========================
+# Web Scraping & Extraction
+# =========================
+trafilatura==1.9.0
 beautifulsoup4==4.12.3
 lxml==5.3.0
+readability-lxml==0.8.1
 
+# =========================
+# Text Processing & NLP (أساس)
+# =========================
+regex==2024.11.6
+langdetect==1.0.9
+nltk==3.9.1
+
+# =========================
+# Optional AI / NLP (جاهزية ستديو AI)
+# (لن تُستخدم الآن لكنها تمنع الكراش لو أضفتها)
+# =========================
+numpy==1.26.4
+scipy==1.14.1
+
+# =========================
+# Databases & Storage
+# =========================
+sqlite-utils==3.37
+
+# =========================
+# Logging & Monitoring
+# =========================
+loguru==0.7.2
+
+# =========================
+# Security / CORS / Headers
+# =========================
+python-multipart==0.0.12
+
+# =========================
+# Performance / Stability
+# =========================
+uvloop==0.21.0; platform_system != "Windows"
+httptools==0.6.4
+
+# =========================
+# Dev / Debug (آمن حتى بالإنتاج)
+# =========================
+rich==13.9.4
