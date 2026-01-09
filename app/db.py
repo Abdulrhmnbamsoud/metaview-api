@@ -8,11 +8,12 @@ def get_db() -> sqlite3.Connection:
     con.row_factory = sqlite3.Row
     return con
 
-def _has_column(con: sqlite3.Connection, table: str, col: str) -> bool:
+def _ensure_column(con: sqlite3.Connection, table: str, column: str, col_type: str) -> None:
     cur = con.cursor()
     cur.execute(f"PRAGMA table_info({table})")
-    cols = [r[1] for r in cur.fetchall()]
-    return col in cols
+    cols = [r["name"] for r in cur.fetchall()]
+    if column not in cols:
+        cur.execute(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}")
 
 def init_db() -> None:
     con = get_db()
@@ -28,19 +29,13 @@ def init_db() -> None:
         article_summary TEXT,
         url TEXT UNIQUE,
         published_at TEXT,
-        created_at TEXT,
-
-        -- ✅ new (may be added via migration)
-        category TEXT,
-        entity TEXT
+        created_at TEXT
     )
     """)
 
-    # ✅ migrations (لو الجدول قديم)
-    if not _has_column(con, "articles", "category"):
-        cur.execute("ALTER TABLE articles ADD COLUMN category TEXT")
-    if not _has_column(con, "articles", "entity"):
-        cur.execute("ALTER TABLE articles ADD COLUMN entity TEXT")
+    # ✅ add required columns safely
+    _ensure_column(con, "articles", "category", "TEXT")
+    _ensure_column(con, "articles", "entity", "TEXT")
 
     cur.execute("CREATE INDEX IF NOT EXISTS idx_articles_published ON articles(published_at)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_articles_source ON articles(source)")
