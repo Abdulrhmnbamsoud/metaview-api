@@ -1,7 +1,7 @@
 # app/main.py
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from typing import Optional
+from typing import Optional, Literal
 import time
 import threading
 from datetime import datetime, timezone
@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from .config import APP_NAME, APP_VERSION, AUTO_INGEST, AUTO_INGEST_EVERY_MIN, DB_PATH
 from .sources import DEFAULT_SOURCES
 from .db import init_db, get_db, row_count
-from .schemas import IngestRequest, SearchResponse
+from .schemas import IngestRequest
 from .ingest import ingest_once
 
 app = FastAPI(title=APP_NAME, version=APP_VERSION)
@@ -30,6 +30,7 @@ def _fetch(sql: str, params: list):
     cur.execute(sql, params)
     rows = cur.fetchall()
     con.close()
+
     results = []
     for r in rows:
         results.append({
@@ -41,8 +42,19 @@ def _fetch(sql: str, params: list):
             "domain": r["domain"],
             "country": r["country"],
             "url": r["url"],
+            "category": r.get("category") if hasattr(r, "get") else r["category"],
+            "entities": r.get("entities") if hasattr(r, "get") else r["entities"],
         })
     return results
+
+def _count(where_sql: str, params: list) -> int:
+    con = get_db()
+    cur = con.cursor()
+    cur.execute(f"SELECT COUNT(1) as total FROM articles WHERE {where_sql}", params)
+    total = int(cur.fetchone()["total"])
+    con.close()
+    return total
+
 
 @app.get("/")
 def home():
@@ -67,16 +79,24 @@ async def ingest_run(body: Optional[IngestRequest] = None):
     feeds = DEFAULT_SOURCES if not body or not body.feeds else body.feeds
     return await ingest_once(feeds)
 
-# ✅ جديد: endpoint واضح للـ Studio (Latest بدون q)
+# ✅ Latest/Articles endpoint (Studio-friendly)
 @app.get("/articles")
 def list_articles(
-    top_k: int = Query(50, ge=1, le=500),
-    offset: int = Query(0, ge=0),
+    # pagination style
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=500),
+
+    # filters
     source: Optional[str] = None,
     country: Optional[str] = None,
     domain: Optional[str] = None,
+    category: Optional[str] = None,
+    entity: Optional[str] = None,
     min_date: Optional[str] = None,
     max_date: Optional[str] = None,
+
+    # sort
+    sort: Literal["newest", "oldest"] = "newest",
 ):
     where = []
     params = []
@@ -90,6 +110,12 @@ def list_articles(
     if domain:
         where.append("domain = ?")
         params.append(domain)
+    if category:
+        where.append("category = ?")
+        params.append(category)
+    if entity:
+        where.append("(entities LIKE ? OR headline LIKE ? OR content LIKE ?)")
+        params.extend([f"%{entity}%", f"%{entity}%", f"%{entity}%"])
     if min_date:
         where.append("published_at >= ?")
         params.append(min_date)
@@ -98,46 +124,63 @@ def list_articles(
         params.append(max_date)
 
     where_sql = " AND ".join(where) if where else "1=1"
+    total = _count(where_sql, params)
+
+    offset = (page - 1) * page_size
+    if total > 0 and offset >= total:
+        raise HTTPException(status_code=422, detail="page is out of range")
+
+    order_sql = "published_at DESC" if sort == "newest" else "published_at ASC"
 
     sql = f"""
-    SELECT headline, content, article_summary, published_at, source, domain, country, url
+    SELECT headline, content, article_summary, published_at, source, domain, country, url, category, entities
     FROM articles
     WHERE {where_sql}
-    ORDER BY published_at DESC
+    ORDER BY {order_sql}
     LIMIT ? OFFSET ?
     """
-    params.extend([int(top_k), int(offset)])
+    results = _fetch(sql, params + [int(page_size), int(offset)])
 
-    results = _fetch(sql, params)
     return {
-        "total_rows": row_count(),
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "sort": sort,
         "returned": len(results),
-        "top_k": top_k,
-        "offset": offset,
         "results": results
     }
 
-# ✅ محسّن: search-text مع offset + fallback إذا q فاضي
-@app.get("/search-text", response_model=SearchResponse)
+# ✅ Search endpoint (category/entity/sort/pagination)
+@app.get("/search-text")
 def search_text(
     q: Optional[str] = Query(default=None),
-    top_k: int = Query(20, ge=1, le=200),
-    offset: int = Query(0, ge=0),
+
+    # pagination
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=200),
+
+    # filters
     source: Optional[str] = None,
     country: Optional[str] = None,
     domain: Optional[str] = None,
+    category: Optional[str] = None,
+    entity: Optional[str] = None,
     min_date: Optional[str] = None,
     max_date: Optional[str] = None,
+
+    # sort
+    sort: Literal["newest", "oldest", "relevance"] = "newest",
 ):
     where = []
     params = []
+    order_params = []
 
     q_clean = (q or "").strip()
 
-    # إذا فيه q ابحث، إذا ما فيه رجّع latest
+    # إذا فيه q نبحث
     if q_clean:
-        where.append("(headline LIKE ? OR article_summary LIKE ?)")
-        params.extend([f"%{q_clean}%", f"%{q_clean}%"])
+        where.append("(headline LIKE ? OR article_summary LIKE ? OR content LIKE ?)")
+        params.extend([f"%{q_clean}%", f"%{q_clean}%", f"%{q_clean}%"])
 
     if source:
         where.append("source = ?")
@@ -148,6 +191,12 @@ def search_text(
     if domain:
         where.append("domain = ?")
         params.append(domain)
+    if category:
+        where.append("category = ?")
+        params.append(category)
+    if entity:
+        where.append("(entities LIKE ? OR headline LIKE ? OR content LIKE ?)")
+        params.extend([f"%{entity}%", f"%{entity}%", f"%{entity}%"])
     if min_date:
         where.append("published_at >= ?")
         params.append(min_date)
@@ -156,18 +205,47 @@ def search_text(
         params.append(max_date)
 
     where_sql = " AND ".join(where) if where else "1=1"
+    total = _count(where_sql, params)
+
+    offset = (page - 1) * page_size
+    if total > 0 and offset >= total:
+        raise HTTPException(status_code=422, detail="page is out of range")
+
+    # sort
+    if sort == "newest":
+        order_sql = "published_at DESC"
+    elif sort == "oldest":
+        order_sql = "published_at ASC"
+    else:
+        # relevance بسيط (بدون FTS)
+        order_sql = """
+        (CASE
+            WHEN headline LIKE ? THEN 3
+            WHEN article_summary LIKE ? THEN 2
+            WHEN content LIKE ? THEN 1
+            ELSE 0
+         END) DESC,
+         published_at DESC
+        """
+        order_params = [f"%{q_clean}%", f"%{q_clean}%", f"%{q_clean}%"]
 
     sql = f"""
-    SELECT headline, content, article_summary, published_at, source, domain, country, url
+    SELECT headline, content, article_summary, published_at, source, domain, country, url, category, entities
     FROM articles
     WHERE {where_sql}
-    ORDER BY published_at DESC
+    ORDER BY {order_sql}
     LIMIT ? OFFSET ?
     """
-    params.extend([int(top_k), int(offset)])
+    results = _fetch(sql, params + order_params + [int(page_size), int(offset)])
 
-    results = _fetch(sql, params)
-    return {"count": len(results), "results": results}
+    return {
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "sort": sort,
+        "returned": len(results),
+        "results": results
+    }
 
 # =========================
 # Auto ingest loop (optional)
