@@ -11,7 +11,7 @@ class ArticleOut(BaseModel):
     country: Optional[str] = None
     url: Optional[str] = None
     category: Optional[str] = None
-    entities: Optional[str] = None  # نخليها نص/JSON string
+    entities: Optional[str] = None
 
 class SearchResponse(BaseModel):
     total: int
