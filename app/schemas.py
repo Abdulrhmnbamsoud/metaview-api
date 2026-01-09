@@ -1,22 +1,37 @@
-from pydantic import BaseModel
-from typing import List, Optional, Dict, Any
+# app/schemas.py
+from pydantic import BaseModel, Field
+from typing import Optional, List, Literal
+# =========================
+# Ingest
+# =========================
+class IngestRequest(BaseModel):
+    feeds: Optional[List[str]] = Field(default=None, description="Optional custom feed list")
+    limit_per_feed: int = Field(default=30, ge=1, le=200, description="Max items per feed")
 
-class ArticleOut(BaseModel):
+# =========================
+# Core Article Model
+# =========================
+class Article(BaseModel):
     headline: str
     content: Optional[str] = None
     article_summary: Optional[str] = None
     published_at: Optional[str] = None
+
     source: Optional[str] = None
     domain: Optional[str] = None
     country: Optional[str] = None
     url: Optional[str] = None
-    category: Optional[str] = None
-    entities: Optional[str] = None
 
+    category: Optional[str] = None   
+    entity: Optional[str] = None    
+# =========================
+# Responses
+# =========================
 class SearchResponse(BaseModel):
-    total: int
-    page: int
-    page_size: int
-    sort: str
     count: int
-    results: List[ArticleOut]
+    results: List[Article]
+    total_rows: Optional[int] = None
+    returned: Optional[int] = None
+    top_k: Optional[int] = None
+    offset: Optional[int] = None
+    sort: Optional[str] = None
