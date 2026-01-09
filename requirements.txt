@@ -1,37 +1,73 @@
-# Core API
+# =========================
+# Core API & Server
+# =========================
 fastapi==0.115.6
 uvicorn[standard]==0.30.6
 pydantic==2.9.2
 python-dotenv==1.0.1
 
-# HTTP / Async
+# =========================
+# Networking & Async
+# =========================
 httpx==0.27.2
 anyio==4.6.2
+async-timeout==4.0.3
 
-# RSS
+# =========================
+# RSS & Parsing
+# =========================
 feedparser==6.0.11
 python-dateutil==2.9.0.post0
 
-# Scraping
+# =========================
+# Web Scraping & Extraction
+# =========================
+trafilatura==1.9.0
+beautifulsoup4==4.12.3
+lxml==5.3.0
+readability-lxml==0.8.1
+
+# =========================
+# Text Processing & NLP (أساس)
+# =========================
+regex==2024.11.6
+langdetect==1.0.9
+nltk==3.9.1
+
+# =========================
+# Optional AI / NLP (جاهزية ستديو AI)
+# (لن تُستخدم الآن لكنها تمنع الكراش لو أضفتها)
+# =========================
+numpy==1.26.4
+scipy==1.14.1
+
+# =========================
+# Databases & Storage
+# =========================
+sqlite-utils==3.37
+
+# =========================
+# Logging & Monitoring
+# =========================
+loguru==0.7.2
+
+# =========================
+# Security / CORS / Headers
+# =========================
+python-multipart==0.0.12
+
+# =========================
+# Performance / Stability
+# =========================
+uvloop==0.21.0; platform_system != "Windows"
+httptools==0.6.4
+
+# =========================
+# Dev / Debug (آمن حتى بالإنتاج)
+# =========================
+rich==13.9.4
+
 beautifulsoup4==4.12.3
 readability-lxml==0.8.1
 trafilatura==1.9.0
 lxml==5.1.0
-
-# Text utils (light)
-langdetect==1.0.9
-regex==2024.11.6
-
-# DB
-sqlite-utils==3.37
-
-# Logging
-loguru==0.7.2
-rich==13.9.4
-
-# Performance (Linux only)
-uvloop==0.21.0; platform_system != "Windows"
-httptools==0.6.4; platform_system != "Windows"
-
-# Forms (optional)
-python-multipart==0.0.12
