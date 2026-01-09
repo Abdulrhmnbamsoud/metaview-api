@@ -1,68 +1,38 @@
 # =========================
-# Core API & Server
+# MetaView API - requirements.txt (Railway stable)
 # =========================
+
+# --- FastAPI stack ---
 fastapi==0.115.6
 uvicorn[standard]==0.30.6
 pydantic==2.9.2
-python-dotenv==1.0.1
+starlette==0.41.3
 
-# =========================
-# Networking & Async
-# =========================
+# --- Networking / async ---
 httpx==0.27.2
-anyio==4.6.2
-async-timeout==4.0.3
+anyio==4.7.0
+sniffio==1.3.1
 
-# =========================
-# RSS & Parsing
-# =========================
+# --- RSS parsing ---
 feedparser==6.0.11
-python-dateutil==2.9.0.post0
 
-# =========================
-# Web Scraping & Extraction
-# =========================
+# --- Scraping / HTML extraction ---
 trafilatura==1.9.0
 beautifulsoup4==4.12.3
 lxml==5.3.0
 readability-lxml==0.8.1
 
-# =========================
-# Text Processing & NLP (أساس)
-# =========================
-regex==2024.11.6
-langdetect==1.0.9
-nltk==3.9.1
-
-# =========================
-# Optional AI / NLP (جاهزية ستديو AI)
-# (لن تُستخدم الآن لكنها تمنع الكراش لو أضفتها)
-# =========================
-numpy==1.26.4
-scipy==1.14.1
-
-# =========================
-# Databases & Storage
-# =========================
-sqlite-utils==3.37
-
-# =========================
-# Logging & Monitoring
-# =========================
-loguru==0.7.2
-
-# =========================
-# Security / CORS / Headers
-# =========================
+# --- Utilities ---
+python-dotenv==1.0.1
 python-multipart==0.0.12
+certifi==2024.12.14
+charset-normalizer==3.4.0
+idna==3.10
 
-# =========================
-# Performance / Stability
-# =========================
+# --- Optional performance (Linux only on Railway) ---
 uvloop==0.21.0; platform_system != "Windows"
-httptools==0.6.4
+httptools==0.6.4; platform_system != "Windows"
+watchfiles==0.24.0; platform_system != "Windows"
 
-# =========================
-# Dev / Debug (آمن حتى بالإنتاج)
-# =========================
-rich==13.9.4
+# --- Logging (optional but useful) ---
+loguru==0.7.2
