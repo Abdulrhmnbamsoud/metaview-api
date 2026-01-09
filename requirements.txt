@@ -1,33 +1,41 @@
+# =========================
 # Core API
+# =========================
 fastapi==0.115.6
-uvicorn[standard]==0.30.6
+uvicorn==0.30.6
 pydantic==2.9.2
 python-dotenv==1.0.1
 
+# =========================
 # HTTP / Async
+# =========================
 httpx==0.27.2
 anyio==4.6.2
 
+# =========================
 # RSS
+# =========================
 feedparser==6.0.11
 python-dateutil==2.9.0.post0
 
-# Parsing / Extraction
-beautifulsoup4==4.12.3
-trafilatura==1.9.0
-lxml==5.1.0
+# =========================
+# Text / Language
+# =========================
+langdetect==1.0.9
+regex==2024.11.6
 
+# =========================
 # DB
+# =========================
 sqlite-utils==3.37
 
+# =========================
 # Logging
+# =========================
 loguru==0.7.2
 rich==13.9.4
 
-# Optional (forms)
+# =========================
+# Forms (FastAPI)
+# =========================
 python-multipart==0.0.12
-
-# Performance (Linux only)
-uvloop==0.21.0; platform_system != "Windows"
-httptools==0.6.4; platform_system != "Windows"
-readability-lxml
