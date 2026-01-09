@@ -12,7 +12,9 @@ import asyncio
 import httpx
 import feedparser
 
-import trafilatura
+from bs4 import BeautifulSoup
+from readability import Document
+import httpx
 from bs4 import BeautifulSoup
 
 # =========================
