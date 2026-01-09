@@ -1,5 +1,4 @@
 from fastapi import FastAPI, Query
-from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 import os
@@ -16,7 +15,15 @@ from bs4 import BeautifulSoup
 from readability import Document
 import httpx
 from bs4 import BeautifulSoup
+from fastapi.middleware.cors import CORSMiddleware
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # لاحقًا نحدد Studio AI فقط
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 # =========================
 # Config
 # =========================
