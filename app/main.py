@@ -17,11 +17,10 @@ app = FastAPI(title=APP_NAME, version=APP_VERSION)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,   
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 init_db()
 
 
@@ -150,7 +149,6 @@ async def ingest_run(body: Optional[IngestRequest] = None):
     return await ingest_once(feeds)
 
 
-# ✅ Latest articles endpoint (Studio يحب هذا)
 @app.get("/articles")
 def list_articles(
     page: int = Query(1, ge=1),
@@ -201,7 +199,7 @@ def list_articles(
     }
 
 
-# ✅ Search endpoint: يدعم q (ولو فاضي يرجع latest)
+
 @app.get("/search-text", response_model=SearchResponse)
 def search_text(
     q: Optional[str] = Query(default=None),
