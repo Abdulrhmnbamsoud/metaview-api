@@ -200,6 +200,88 @@ def list_articles(
 
 
 
+@app.get("/articles")
+def list_articles(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=500),
+
+    source: Optional[str] = None,
+    country: Optional[str] = None,
+    domain: Optional[str] = None,
+    category: Optional[str] = None,
+    entity: Optional[str] = None,
+    min_date: Optional[str] = None,
+    max_date: Optional[str] = None,
+
+    sort_by: str = Query("published_at"),
+    sort_dir: str = Query("desc"),
+):
+    offset = (page - 1) * page_size
+    sb, sd = _normalize_sort(sort_by, sort_dir)
+
+    where_sql, params = _build_where(
+        q=None,
+        source=source, country=country, domain=domain,
+        category=category, entity=entity,
+        min_date=min_date, max_date=max_date
+    )
+
+    total = _count_where(where_sql, params)
+
+    sql = f"""
+    SELECT headline, content, article_summary, published_at, source, domain, country, url, category, entity
+    FROM articles
+    WHERE {where_sql}
+    ORDER BY {sb} {sd}
+    LIMIT ? OFFSET ?
+    """
+    results = _fetch(sql, params + [int(page_size), int(offset)])
+
+    return {
+        "count": len(results),
+        "results": results,
+        "total_rows": total,
+        "returned": len(results),
+        "page": page,
+        "page_size": page_size,
+        "offset": offset,
+        "sort_by": sb,
+        "sort_dir": sd,
+    }
+
+
+
+@app.get("/articles/")
+def list_articles_slash(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=500),
+
+    source: Optional[str] = None,
+    country: Optional[str] = None,
+    domain: Optional[str] = None,
+    category: Optional[str] = None,
+    entity: Optional[str] = None,
+    min_date: Optional[str] = None,
+    max_date: Optional[str] = None,
+
+    sort_by: str = Query("published_at"),
+    sort_dir: str = Query("desc"),
+):
+    return list_articles(
+        page=page,
+        page_size=page_size,
+        source=source,
+        country=country,
+        domain=domain,
+        category=category,
+        entity=entity,
+        min_date=min_date,
+        max_date=max_date,
+        sort_by=sort_by,
+        sort_dir=sort_dir,
+    )
+
+
 @app.get("/search-text", response_model=SearchResponse)
 def search_text(
     q: Optional[str] = Query(default=None),
@@ -249,7 +331,6 @@ def search_text(
         "sort_by": sb,
         "sort_dir": sd,
     }
-
 
 # =========================
 # Auto ingest loop (optional)
