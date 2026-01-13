@@ -14,7 +14,7 @@ This project was built as a full working system (not a mock/demo), including:
 ## 🚀 Live Deployment
 
 ✅ **Live API URL:**  
-https://metaview-693041094858.us-west1.run.app/
+https://metaview-s-693041094858.us-west1.run.app/
 
 ✅ **Swagger Docs (API UI):**  
 https://metaview-693041094858.us-west1.run.app/docs
