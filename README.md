@@ -82,7 +82,6 @@ This makes MetaView suitable for dashboards and monitoring systems.
 ### 5) Production Ready Deployment
 MetaView is deployed and running with:
 - Docker build
-- Cloud deployment
 - Environment config
 - Health monitoring endpoint
 
