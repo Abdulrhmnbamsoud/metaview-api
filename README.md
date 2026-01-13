@@ -98,17 +98,3 @@ MetaView is deployed and running with:
 
 ---
 
-## 📌 API Endpoints
-
-### ✅ GET `/health`
-Checks API status and returns DB statistics.
-
-Response example:
-```json
-{
-  "status": "ok",
-  "service": "metaview",
-  "rows": 29,
-  "db_path": "/app/app/data/metaview.db",
-  "semantic_enabled": true
-}
