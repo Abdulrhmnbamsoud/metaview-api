@@ -1,7 +1,7 @@
 # app/main.py
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
-from typing import Optional, Tuple
+from typing import Optional, List, Tuple
 import time
 import threading
 from datetime import datetime, timezone
@@ -14,16 +14,15 @@ from .ingest import ingest_once
 
 app = FastAPI(title=APP_NAME, version=APP_VERSION)
 
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=False,
+    allow_credentials=False,   
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 init_db()
+
 
 ALLOWED_SORT_BY = {"published_at", "source", "country", "domain", "category", "entity"}
 ALLOWED_SORT_DIR = {"asc", "desc"}
@@ -125,7 +124,7 @@ def _normalize_sort(sort_by: str, sort_dir: str) -> Tuple[str, str]:
 
 @app.get("/")
 def home():
-    return {"service": "metaview", "status": "ok", "docs": "/docs", "openapi": "/openapi.json"}
+    return {"service": "metaview", "status": "ok", "docs": "/docs"}
 
 
 @app.get("/health")
@@ -135,7 +134,7 @@ def health():
         "service": "metaview",
         "rows": row_count(),
         "db_path": DB_PATH,
-        "time": datetime.now(timezone.utc).isoformat(),
+        "time": datetime.now(timezone.utc).isoformat()
     }
 
 
@@ -146,10 +145,8 @@ def list_sources():
 
 @app.post("/ingest/run")
 async def ingest_run(body: Optional[IngestRequest] = None):
-    feeds = DEFAULT_SOURCES if (not body or not body.feeds) else body.feeds
-    limit = 30 if (not body) else int(body.limit_per_feed or 30)
-
-    return await ingest_once(feeds, limit_per_feed=limit)
+    feeds = DEFAULT_SOURCES if not body or not body.feeds else body.feeds
+    return await ingest_once(feeds)
 
 
 @app.get("/articles")
@@ -200,6 +197,59 @@ def list_articles(
         "sort_by": sb,
         "sort_dir": sd,
     }
+
+
+
+@app.get("/articles")
+def list_articles(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=500),
+
+    source: Optional[str] = None,
+    country: Optional[str] = None,
+    domain: Optional[str] = None,
+    category: Optional[str] = None,
+    entity: Optional[str] = None,
+    min_date: Optional[str] = None,
+    max_date: Optional[str] = None,
+
+    sort_by: str = Query("published_at"),
+    sort_dir: str = Query("desc"),
+):
+    offset = (page - 1) * page_size
+    sb, sd = _normalize_sort(sort_by, sort_dir)
+
+    where_sql, params = _build_where(
+        q=None,
+        source=source, country=country, domain=domain,
+        category=category, entity=entity,
+        min_date=min_date, max_date=max_date
+    )
+
+    total = _count_where(where_sql, params)
+
+    sql = f"""
+    SELECT headline, content, article_summary, published_at, source, domain, country, url, category, entity
+    FROM articles
+    WHERE {where_sql}
+    ORDER BY {sb} {sd}
+    LIMIT ? OFFSET ?
+    """
+    results = _fetch(sql, params + [int(page_size), int(offset)])
+
+    return {
+        "count": len(results),
+        "results": results,
+        "total_rows": total,
+        "returned": len(results),
+        "page": page,
+        "page_size": page_size,
+        "offset": offset,
+        "sort_by": sb,
+        "sort_dir": sd,
+    }
+
+
 
 @app.get("/articles/")
 def list_articles_slash(
@@ -282,7 +332,6 @@ def search_text(
         "sort_dir": sd,
     }
 
-
 # =========================
 # Auto ingest loop (optional)
 # =========================
@@ -291,11 +340,10 @@ def _auto_ingest_loop():
     while True:
         try:
             import asyncio
-            asyncio.run(ingest_once(DEFAULT_SOURCES, limit_per_feed=30))
+            asyncio.run(ingest_once(DEFAULT_SOURCES))
         except Exception:
             pass
         time.sleep(max(60, AUTO_INGEST_EVERY_MIN * 60))
-
 
 if AUTO_INGEST:
     t = threading.Thread(target=_auto_ingest_loop, daemon=True)
