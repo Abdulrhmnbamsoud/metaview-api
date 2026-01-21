@@ -25,7 +25,6 @@ class Article(BaseModel):
     country: Optional[str] = None
     url: Optional[str] = None
 
-    # مطلوبات اللجنة
     category: Optional[str] = None 
     entity: Optional[str] = None     
 
@@ -40,13 +39,11 @@ class SearchResponse(BaseModel):
     count: int
     results: List[Article]
 
-    # Pagination meta
     total_rows: Optional[int] = None
     returned: Optional[int] = None
     page: Optional[int] = None
     page_size: Optional[int] = None
     offset: Optional[int] = None
 
-    # Sort meta
     sort_by: Optional[str] = None
     sort_dir: Optional[str] = None
