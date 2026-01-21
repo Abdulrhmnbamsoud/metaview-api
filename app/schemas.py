@@ -7,9 +7,18 @@ from typing import Optional, List, Literal
 # Ingest
 # =========================
 class IngestRequest(BaseModel):
-    feeds: Optional[List[str]] = Field(default=None, description="Optional custom feed list")
-    limit_per_feed: int = Field(default=30, ge=1, le=200, description="Max items per feed")
-
+    feeds: Optional[List[str]] = Field(
+        default=None,
+        description="Optional custom feed list",
+        examples=[[]]
+    )
+    limit_per_feed: int = Field(
+        default=30,
+        ge=1,
+        le=200,
+        description="Max items per feed",
+        examples=[30]
+    )
 
 # =========================
 # Core Article Model
