@@ -145,7 +145,7 @@ def list_sources():
 
 @app.post("/ingest/run")
 async def ingest_run(body: Optional[IngestRequest] = None):
-    feeds = DEFAULT_SOURCES if not body or not body.feeds else body.feeds
+    feeds = DEFAULT_SOURCES if (not body or not body.feeds) else body.feeds
     return await ingest_once(feeds)
 
 
