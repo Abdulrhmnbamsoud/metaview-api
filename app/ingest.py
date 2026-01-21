@@ -39,7 +39,6 @@ async def ingest_once(feed_urls: List[str], limit_per_feed: int = MAX_ITEMS_PER_
                 entries = (data["parsed"].entries or [])
                 count = len(entries)
 
-                # حماية: ما نسحب فوق الحد
                 for e in entries[:MAX_ITEMS_PER_FEED]:
                     headline = getattr(e, "title", "") or ""
                     link = getattr(e, "link", "") or ""
@@ -51,7 +50,7 @@ async def ingest_once(feed_urls: List[str], limit_per_feed: int = MAX_ITEMS_PER_
                         "domain": "",
                         "country": "",
                         "headline": headline.strip(),
-                        "content": "",  # النص الكامل خلّه لستديو AI
+                        "content": "", 
                         "article_summary": summary.strip(),
                         "url": link.strip(),
                         "published_at": published_at,
