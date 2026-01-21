@@ -145,8 +145,9 @@ def list_sources():
 
 @app.post("/ingest/run")
 async def ingest_run(body: Optional[IngestRequest] = None):
-    feeds = DEFAULT_SOURCES if (not body or not body.feeds) else body.feeds
-    return await ingest_once(feeds)
+    feeds = DEFAULT_SOURCES if not body or not body.feeds else body.feeds
+    limit = MAX_ITEMS_PER_FEED if not body else body.limit_per_feed
+    return await ingest_once(feeds, limit_per_feed=limit)
 
 
 @app.get("/articles")
