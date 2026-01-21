@@ -75,7 +75,7 @@ async def ingest_once(
                         "domain": "",
                         "country": "",
                         "headline": headline,
-                        "content": "",          # خفيف (Studio AI يجيب النص الكامل)
+                        "content": "",          
                         "article_summary": summary,
                         "url": link,
                         "published_at": published_at,
