@@ -15,9 +15,7 @@ async def fetch_feed(client: httpx.AsyncClient, url: str) -> Dict[str, Any]:
     parsed = feedparser.parse(r.text)
     return {"url": url, "parsed": parsed}
 
-async def ingest_once(feed_urls: List[str], limit_per_feed: int = MAX_ITEMS_PER_FEED) -> Dict[str, Any]:
-    max_items = min(int(limit_per_feed), int(MAX_ITEMS_PER_FEED))
-                for e in entries[:max_items]:
+async def ingest_once(feed_urls: List[str]) -> Dict[str, Any]:
     headers = {"User-Agent": USER_AGENT, "Accept": "*/*"}
     result = {
         "started_at": datetime.now(timezone.utc).isoformat(),
@@ -39,6 +37,7 @@ async def ingest_once(feed_urls: List[str], limit_per_feed: int = MAX_ITEMS_PER_
                 entries = (data["parsed"].entries or [])
                 count = len(entries)
 
+                # حماية: ما نسحب فوق الحد
                 for e in entries[:MAX_ITEMS_PER_FEED]:
                     headline = getattr(e, "title", "") or ""
                     link = getattr(e, "link", "") or ""
