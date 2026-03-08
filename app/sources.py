@@ -18,7 +18,9 @@ DEFAULT_SOURCES = [
     "https://www.axios.com/feeds/feed.rss",
     "https://www.newsweek.com/rss",
     "https://www.businessinsider.com/rss",
-    "https://feeds.a.dj.com/rss/RSSWorldNews.xml",  # WSJ: غالبًا paywall
-    "https://www.bloomberg.com/feed/podcast/etf-report.xml",  # Bloomberg: غالبًا paywall
-    "https://www.ft.com/world/rss",  # FT: sometimes 404
+    "https://feeds.a.dj.com/rss/RSSWorldNews.xml", 
+    "https://www.bloomberg.com/feed/podcast/etf-report.xml", 
+    "https://www.ft.com/world/rss", 
+    "https://x.com/KSAMOFA",
+    "https://x.com/modgovksa",
 ]
