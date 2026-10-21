@@ -1,0 +1,61 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --royal-black: #050508;
+  --royal-charcoal: #0c0e14;
+  --royal-subcard: #12151e;
+  --brand-gold: #c5a059;
+  --brand-gold-light: #e0c58a;
+  --brand-gold-dark: #8e6d2f;
+}
+
+body {
+  font-family: 'Cairo', 'Outfit', sans-serif;
+  background-color: var(--royal-black);
+  background-image: 
+    radial-gradient(circle at 50% 0%, rgba(197, 160, 89, 0.07) 0%, transparent 60%),
+    radial-gradient(circle at 100% 100%, rgba(197, 160, 89, 0.04) 0%, transparent 40%);
+  background-attachment: fixed;
+  color: #f8fafc;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #08090d;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(197, 160, 89, 0.3);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(197, 160, 89, 0.6);
+}
+
+.royal-gradient-text {
+  background: linear-gradient(135deg, #ffffff 20%, #e0c58a 70%, #c5a059 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.sovereign-card {
+  background: rgba(12, 14, 20, 0.85);
+  border: 1px solid rgba(197, 160, 89, 0.12);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.7);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sovereign-card:hover {
+  border-color: rgba(197, 160, 89, 0.35);
+  box-shadow: 0 15px 35px -10px rgba(0, 0, 0, 0.9), 0 0 20px 1px rgba(197, 160, 89, 0.08);
+}
+
+.gold-glow {
+  box-shadow: 0 0 20px rgba(197, 160, 89, 0.25);
+}
