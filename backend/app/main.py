@@ -21,12 +21,15 @@ app = FastAPI(title=APP_NAME, version=APP_VERSION, description="Global News Inte
 
 origins = os.getenv("CORS_ORIGINS")
 if origins:
-    allow_origins = [origin.strip() for origin in origins.split(",")]
+    allow_origins = [origin.strip() for origin in origins.split(",") if origin.strip()]
 else:
     allow_origins = ["*"]
+# Optional regex for origins whose hostname may vary (e.g. Render adds a random suffix).
+allow_origin_regex = os.getenv("CORS_ORIGIN_REGEX") or None
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allow_origins,
+    allow_origin_regex=allow_origin_regex,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
