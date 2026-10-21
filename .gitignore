@@ -17,3 +17,7 @@ build/
 # OS Metadata
 .DS_Store
 Thumbs.db
+
+# Database files
+backend/data/*.db
+*.db

@@ -2,6 +2,7 @@
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional, Tuple, List, Dict, Any
+import os
 import time
 import threading
 from datetime import datetime, timezone
@@ -18,9 +19,14 @@ from .ingest import ingest_once
 
 app = FastAPI(title=APP_NAME, version=APP_VERSION, description="Global News Intelligence API")
 
+origins = os.getenv("CORS_ORIGINS")
+if origins:
+    allow_origins = [origin.strip() for origin in origins.split(",")]
+else:
+    allow_origins = ["*"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allow_origins,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -17,11 +17,18 @@ import {
 } from '../types';
 
 // Base URL resolution: Environment variable -> Vite Proxy (/api) -> direct localhost
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ||
-  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-    ? '/api'
-    : 'https://metaview-api-production.up.railway.app');
+let API_BASE_URL: string;
+if (import.meta.env.VITE_API_URL) {
+  // Production: use provided URL, strip trailing slash.
+  API_BASE_URL = import.meta.env.VITE_API_URL.replace(/\/$/, '');
+} else if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+  // Local development – proxy through Vite dev server.
+  API_BASE_URL = '/api';
+} else {
+  // Mis‑configuration: no URL supplied.
+  console.error('VITE_API_URL is not defined; API requests will fail.');
+  API_BASE_URL = '';
+}
 
 const DEFAULT_TIMEOUT_MS = 15000;
 
