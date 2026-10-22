@@ -17,6 +17,7 @@ DEFAULT_SOURCES = [
     "https://thehill.com/feed/",
     "https://www.cnbc.com/id/100727362/device/rss/rss.html",
     "https://feeds.reuters.com/reuters/worldNews",
+    "https://www.spa.gov.sa/rss"
 ]
 
 # Source origin country mapping (Publisher origin, NOT event location)
@@ -38,7 +39,7 @@ SOURCE_COUNTRY_MAP: Dict[str, str] = {
     "reuters": "GB",
     "bloomberg": "US",
     "financial_times": "GB",
-}
+    "spa": "SA"}
 
 # Source display labels
 SOURCE_DISPLAY_NAMES: Dict[str, str] = {
@@ -57,4 +58,5 @@ SOURCE_DISPLAY_NAMES: Dict[str, str] = {
     "the_hill": "The Hill",
     "cnbc": "CNBC",
     "reuters": "Reuters",
+    "spa": "SPA (Saudi Press Agency)"
 }
