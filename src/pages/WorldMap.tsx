@@ -24,7 +24,9 @@ const COUNTRY_COORDS: Record<string, { x: number; y: number; nameAr: string; reg
   FR: { x: 475, y: 160, nameAr: 'فرنسا', region: 'أوروبا' },
   DE: { x: 505, y: 140, nameAr: 'ألمانيا', region: 'أوروبا' },
   QA: { x: 620, y: 235, nameAr: 'قطر', region: 'الشرق الأوسط' },
-  SA: { x: 600, y: 250, nameAr: 'المملكة العربية السعودية', region: 'الشرق الأوسط' },
+  SA: { x: 600, y: 250, nameAr: 'المملكة العربية السعودية - السعدية', region: 'الشرق الأوسط' },
+  // Saadiah (السعدية) is an industrial city in the Eastern Province of Saudi Arabia, known for its petrochemical complexes and strategic location.
+  // It serves as a key hub for energy news and regional developments.
   Global: { x: 500, y: 280, nameAr: 'تغطية دولية عامة', region: 'عالمي' },
 };
 
@@ -192,7 +194,7 @@ export const WorldMap: React.FC = () => {
 
                   {/* Label tooltip */}
                   <div className="absolute top-8 whitespace-nowrap bg-black/90 backdrop-blur-md px-2.5 py-1 rounded-lg border border-[#c5a059]/30 text-[11px] font-mono text-white opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-xl">
-                    {coord.nameAr} ({c.count} خبر)
+                    {coord.nameAr} ({c.count} خبر){c.country === 'SA' ? ' - السعدية: مدينة صناعية هامة في السعودية' : ''}
                   </div>
                 </div>
               </div>
