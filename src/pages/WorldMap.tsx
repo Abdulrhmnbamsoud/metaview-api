@@ -33,7 +33,7 @@ const COUNTRY_COORDS: Record<string, { x: number; y: number; nameAr: string; reg
 export const WorldMap: React.FC = () => {
   const navigate = useNavigate();
   const [countries, setCountries] = useState<CountryNewsCount[]>([]);
-  const [selectedCountry, setSelectedCountry] = useState<string>('US');
+  const [selectedCountry, setSelectedCountry] = useState<string>('SA');
   const [countryArticles, setCountryArticles] = useState<Article[]>([]);
   const [loadingArticles, setLoadingArticles] = useState(false);
   const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
