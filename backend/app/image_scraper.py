@@ -19,6 +19,7 @@ import socket
 from urllib.parse import urlparse, urljoin
 from typing import Optional, Dict, Any, List
 import httpx
+import logging
 from bs4 import BeautifulSoup
 
 # Blacklisted keywords indicating logos, tracking pixels, badges, avatars
@@ -27,6 +28,11 @@ BAD_IMAGE_KEYWORDS = [
     "advertisement", "ad-", "banner-ad", "button", "spinner", "placeholder",
     "favicon", "sprite", "1x1", "transparent"
 ]
+
+# User‑Agent header for external HTTP requests (e.g., X profile scraping)
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36 MetaViewBot/2.0"
+}
 
 # Supported image extensions
 VALID_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp", ".avif")
@@ -237,3 +243,66 @@ async def resolve_article_image(entry: Any, article_url: str, client: Optional[h
         return await scrape_article_webpage_image(article_url, client=client)
 
     return None
+
+# ------------------------------------------------------------
+# X (formerly Twitter) profile scraper – fetch recent tweets
+# ------------------------------------------------------------
+
+def fetch_x_profile(url: str, max_pages: int = 1) -> List[Dict]:
+    """Fetch recent tweets from a public X profile page.
+
+    Parameters
+    ----------
+    url: str
+        Base X profile URL (e.g. ``https://x.com/thehackersnews?s=11``).
+    max_pages: int
+        Number of pagination steps to follow (default ``1``).
+
+    Returns
+    -------
+    List[Dict]
+        List of tweet dictionaries containing ``id``, ``text``, ``time`` and ``url``.
+    """
+    logger = logging.getLogger(__name__)
+    tweets: List[Dict] = []
+    next_url = url
+
+    for page in range(max_pages):
+        logger.debug("Fetching X page %s: %s", page + 1, next_url)
+        try:
+            resp = httpx.get(next_url, headers=HEADERS, timeout=10.0)
+        except Exception as e:
+            logger.error("Failed to fetch %s: %s", next_url, e)
+            break
+        if resp.status_code != 200:
+            logger.error("Unexpected status %s for %s", resp.status_code, next_url)
+            break
+        soup = BeautifulSoup(resp.text, "html.parser")
+        for article in soup.select('article[data-testid="tweet"]'):
+            tweet_id = article.get("data-tweet-id")
+            text_elem = article.select_one('div[lang]')
+            tweet_text = text_elem.get_text(separator=" ", strip=True) if text_elem else ""
+            time_elem = article.select_one('time')
+            tweet_time = time_elem["datetime"] if time_elem and time_elem.has_attr("datetime") else ""
+            link_elem = article.select_one('a[href*="/status/"]')
+            tweet_url = f"https://x.com{link_elem['href']}" if link_elem else ""
+            if tweet_id and tweet_text:
+                tweets.append({
+                    "id": tweet_id,
+                    "text": tweet_text,
+                    "time": tweet_time,
+                    "url": tweet_url,
+                })
+        # Find next pagination link (X uses ?s= query param)
+        next_link = soup.select_one('a[role="link"][href*="?s="][rel="next"]')
+        if not next_link:
+            break
+        next_url = f"https://x.com{next_link['href']}"
+    return tweets
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    example_url = "https://x.com/thehackersnews?s=11"
+    recent = fetch_x_profile(example_url, max_pages=2)
+    import json
+    print(json.dumps(recent, indent=2, ensure_ascii=False))

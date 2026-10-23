@@ -83,4 +83,46 @@ class StatsResponse(BaseModel):
     articles_last_24h: int
     last_sync: Optional[str] = None
     source_distribution: List[Dict[str, Any]]
+
+class ThreatIntel(BaseModel):
+    id: int
+    article_id: Optional[int] = None
+    title: str
+    description: str
+    threat_type: str
+    event_type: Optional[str] = None
+    evidence_confidence: Optional[float] = None
+    analysis_confidence: Optional[float] = None
+    verified_facts: Optional[str] = None
+    analytical_assessment: Optional[str] = None
+    detection_indicators: Optional[str] = None
+    preventive_recommendations: Optional[str] = None
+    evidence_urls: Optional[str] = None
+    confidence: Optional[float] = None
+    original_url: Optional[str] = None
+    related_links: Optional[str] = None
+    is_saudi: Optional[bool] = None
+    is_financial: Optional[bool] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+class SourceTrust(BaseModel):
+    source_id: int
+    trust_score: Optional[float] = None
+    last_checked: Optional[str] = None
+    notes: Optional[str] = None
+
+class CVEReference(BaseModel):
+    cve_id: str
+    description: Optional[str] = None
+    severity: Optional[str] = None
+    published_at: Optional[str] = None
+    reference_url: Optional[str] = None
+
+class IncidentLink(BaseModel):
+    id: int
+    threat_id: int
+    related_threat_id: int
+    relation_type: Optional[str] = None
+
     country_distribution: List[Dict[str, Any]]

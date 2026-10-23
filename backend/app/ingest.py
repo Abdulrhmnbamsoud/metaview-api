@@ -98,9 +98,14 @@ async def ingest_once(
                         "image_url": img_url or "",
                     }
 
-                    ok = upsert_article(item)
-                    if ok:
+                    article_id = upsert_article(item)
+                    if article_id:
                         inserted += 1
+                        # Process threat intelligence for the newly inserted article
+                        from .intel import process_article_for_intel
+                        article_dict = item.copy()
+                        article_dict["article_id"] = article_id
+                        process_article_for_intel(article_dict)
                     else:
                         skipped_dup += 1
 

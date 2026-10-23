@@ -1,7 +1,7 @@
 # backend/app/db.py
 import sqlite3
 from typing import Dict, Any, List
-from .config import DB_PATH
+from config import DB_PATH
 
 def get_db() -> sqlite3.Connection:
     con = sqlite3.connect(DB_PATH, check_same_thread=False)
@@ -18,7 +18,7 @@ def _ensure_column(con: sqlite3.Connection, table: str, column: str, col_type: s
 def init_db() -> None:
     con = get_db()
     cur = con.cursor()
-    cur.execute("""
+cur.execute("""
     CREATE TABLE IF NOT EXISTS articles (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         source TEXT,
@@ -30,7 +30,57 @@ def init_db() -> None:
         url TEXT UNIQUE,
         published_at TEXT,
         created_at TEXT
-    )
+    );
+
+    CREATE TABLE IF NOT EXISTS threat_intel (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        article_id INTEGER NOT NULL,
+        title TEXT NOT NULL,
+        description TEXT NOT NULL,
+        threat_type TEXT NOT NULL,
+        event_type TEXT,
+        evidence_confidence REAL,
+        analysis_confidence REAL,
+        verified_facts TEXT,
+        analytical_assessment TEXT,
+        detection_indicators TEXT,
+        preventive_recommendations TEXT,
+        evidence_urls TEXT,
+        confidence REAL,
+        original_url TEXT,
+        related_links TEXT,
+        is_saudi INTEGER,
+        is_financial INTEGER,
+        created_at TEXT,
+        updated_at TEXT,
+        FOREIGN KEY(article_id) REFERENCES articles(id),
+        UNIQUE(article_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS source_trust (
+        source_id INTEGER PRIMARY KEY,
+        trust_score REAL,
+        last_checked TEXT,
+        notes TEXT,
+        FOREIGN KEY(source_id) REFERENCES articles(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS cve_reference (
+        cve_id TEXT PRIMARY KEY,
+        description TEXT,
+        severity TEXT,
+        published_at TEXT,
+        reference_url TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS incident_links (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        threat_id INTEGER,
+        related_threat_id INTEGER,
+        relation_type TEXT,
+        FOREIGN KEY(threat_id) REFERENCES threat_intel(id),
+        FOREIGN KEY(related_threat_id) REFERENCES threat_intel(id)
+    );
     """)
 
     # Ensure additional columns safely
@@ -59,32 +109,46 @@ def row_count() -> int:
     con.close()
     return c
 
-def upsert_article(item: Dict[str, Any]) -> bool:
+def upsert_article(item: Dict[str, Any]) -> Optional[int]:
+    """Insert article if new and return its id.
+    Returns the newly inserted row id, or the existing article id if the URL
+    already exists. Returns None on failure.
+    """
     con = get_db()
     cur = con.cursor()
     try:
-        cur.execute("""
-        INSERT OR IGNORE INTO articles
-        (source, domain, country, headline, content, article_summary, url, published_at, created_at, category, entity, image_url)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            item.get("source", ""),
-            item.get("domain", ""),
-            item.get("country", ""),
-            item.get("headline", ""),
-            item.get("content", ""),
-            item.get("article_summary", ""),
-            item.get("url", ""),
-            item.get("published_at", ""),
-            item.get("created_at", ""),
-            item.get("category", ""),
-            item.get("entity", ""),
-            item.get("image_url", ""),
-        ))
-        con.commit()
-        return cur.rowcount > 0
-    finally:
-        con.close()
+        cur.execute(
+            """
+            INSERT INTO articles (
+                source, domain, country, headline, content, article_summary, url,
+                published_at, created_at, category, entity, image_url
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                item.get("source", ""),
+                item.get("domain", ""),
+                item.get("country", ""),
+                item.get("headline", ""),
+                item.get("content", ""),
+                item.get("article_summary", ""),
+                item.get("url", ""),
+                item.get("published_at", ""),
+                item.get("created_at", ""),
+                item.get("category", ""),
+                item.get("entity", None),
+                item.get("image_url", ""),
+            ),
+        )
+        article_id = cur.lastrowid
+    except Exception:
+        # Assume unique constraint violation – fetch existing id
+        cur.execute("SELECT id FROM articles WHERE url = ?", (item.get("url", ""),))
+        row = cur.fetchone()
+        article_id = row["id"] if row else None
+    con.commit()
+    con.close()
+    return article_id
+
 
 def get_stats_summary() -> Dict[str, Any]:
     con = get_db()

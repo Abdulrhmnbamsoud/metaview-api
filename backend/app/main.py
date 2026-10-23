@@ -14,7 +14,7 @@ from .config import (
 )
 from .sources import DEFAULT_SOURCES, SOURCE_DISPLAY_NAMES, SOURCE_COUNTRY_MAP
 from .db import init_db, get_db, row_count, get_stats_summary
-from .schemas import IngestRequest, SearchResponse, HealthResponse, StatsResponse
+from .schemas import IngestRequest, SearchResponse, HealthResponse, StatsResponse, ThreatIntel
 from .ingest import ingest_once
 
 app = FastAPI(title=APP_NAME, version=APP_VERSION, description="Global News Intelligence API")
@@ -338,3 +338,83 @@ def _auto_ingest_loop():
 if AUTO_INGEST:
     t = threading.Thread(target=_auto_ingest_loop, daemon=True)
     t.start()
+
+# Threat Intelligence Endpoints
+
+@app.get("/threats", response_model=Dict[str, Any])
+def list_threats(page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=200)):
+    """List threat intelligence records with pagination."""
+    offset = (page - 1) * page_size
+    con = get_db()
+    cur = con.cursor()
+    cur.execute(
+        """
+        SELECT * FROM threat_intel ORDER BY id DESC LIMIT ? OFFSET ?
+        """,
+        (page_size, offset),
+    )
+    rows = cur.fetchall()
+    con.close()
+    results = []
+    for r in rows:
+        results.append({
+            "id": r["id"],
+            "article_id": r.get("article_id"),
+            "title": r["title"],
+            "description": r["description"],
+            "threat_type": r["threat_type"],
+            "event_type": r.get("event_type"),
+            "evidence_confidence": r.get("evidence_confidence"),
+            "analysis_confidence": r.get("analysis_confidence"),
+            "verified_facts": r.get("verified_facts"),
+            "analytical_assessment": r.get("analytical_assessment"),
+            "detection_indicators": r.get("detection_indicators"),
+            "preventive_recommendations": r.get("preventive_recommendations"),
+            "evidence_urls": r.get("evidence_urls"),
+            "confidence": r.get("confidence"),
+            "original_url": r.get("original_url"),
+            "related_links": r.get("related_links"),
+            "is_saudi": bool(r.get("is_saudi")),
+            "is_financial": bool(r.get("is_financial")),
+            "created_at": r.get("created_at"),
+            "updated_at": r.get("updated_at"),
+        })
+    return {
+        "page": page,
+        "page_size": page_size,
+        "total": len(results),
+        "threats": results,
+    }
+
+@app.get("/threats/{threat_id}", response_model=ThreatIntel)
+def get_threat(threat_id: int):
+    """Retrieve a single threat intelligence record by its ID."""
+    con = get_db()
+    cur = con.cursor()
+    cur.execute("SELECT * FROM threat_intel WHERE id = ?", (threat_id,))
+    row = cur.fetchone()
+    con.close()
+    if not row:
+        raise HTTPException(status_code=404, detail="Threat not found")
+    return {
+        "id": row["id"],
+        "article_id": row.get("article_id"),
+        "title": row["title"],
+        "description": row["description"],
+        "threat_type": row["threat_type"],
+        "event_type": row.get("event_type"),
+        "evidence_confidence": row.get("evidence_confidence"),
+        "analysis_confidence": row.get("analysis_confidence"),
+        "verified_facts": row.get("verified_facts"),
+        "analytical_assessment": row.get("analytical_assessment"),
+        "detection_indicators": row.get("detection_indicators"),
+        "preventive_recommendations": row.get("preventive_recommendations"),
+        "evidence_urls": row.get("evidence_urls"),
+        "confidence": row.get("confidence"),
+        "original_url": row.get("original_url"),
+        "related_links": row.get("related_links"),
+        "is_saudi": bool(row.get("is_saudi")),
+        "is_financial": bool(row.get("is_financial")),
+        "created_at": row.get("created_at"),
+        "updated_at": row.get("updated_at"),
+    }
