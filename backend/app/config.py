@@ -17,3 +17,11 @@ AUTO_INGEST = os.getenv("AUTO_INGEST", "false").lower() == "true"
 AUTO_INGEST_EVERY_MIN = int(os.getenv("AUTO_INGEST_EVERY_MIN", "15"))
 
 MAX_ITEMS_PER_FEED = int(os.getenv("MAX_ITEMS_PER_FEED", "40"))
+
+# --- Saudi Fraud Intelligence pipeline ---
+SAUDI_AUTO_INGEST = os.getenv("SAUDI_AUTO_INGEST", "false").lower() == "true"
+SAUDI_INGEST_EVERY_HOURS = float(os.getenv("SAUDI_INGEST_EVERY_HOURS", "6"))
+SAUDI_MAX_DECODE_PER_RUN = int(os.getenv("SAUDI_MAX_DECODE_PER_RUN", "150"))
+SAUDI_MAX_BODY_FETCH = int(os.getenv("SAUDI_MAX_BODY_FETCH", "80"))
+# Optional: protects POST /saudi-fraud/ingest/run when set
+ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")

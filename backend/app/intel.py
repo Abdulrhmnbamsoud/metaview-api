@@ -1,55 +1,36 @@
 # backend/app/intel.py
 """Threat Intelligence Engine
 
-This module provides simple keyword‑based extraction of threat information
-from article headlines/content. It is deliberately lightweight – the goal is
-to have a working prototype that can be expanded later.
+This module turns news articles into threat-intelligence records. Classification is
+delegated to :mod:`fraud_intel`, a deterministic keyword/heuristic engine for Arabic
+and English fraud news (see that module for the taxonomy and the facts-vs-inference
+split).
 
 Key responsibilities:
-- Classify an article into a threat type (e.g. phishing, ransomware, fraud).
-- Identify the attack method / technique.
-- Determine affected entities/sectors.
+- Classify an article into a fraud/threat type (e.g. financial_fraud, link_phishing).
+  A bank or money mention alone never qualifies an article.
+- Identify the attack method / technique and channels.
+- Determine affected targets and relevance to the Saudi banking sector.
 - Extract any CVE identifiers present in the text.
-- Produce a `ThreatIntel` Pydantic model instance and persist it to the
-  `threat_intel` table.
+- Persist the result to the existing `threat_intel` table (one row per article).
 - Optionally create links between related threat records.
 """
 
 from __future__ import annotations
 
+import json
 import re
+import sqlite3
 from datetime import datetime, timezone
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 
+from . import fraud_intel
 from .db import get_db
-from .schemas import ThreatIntel, SourceTrust, CVEReference, IncidentLink
-
-# Simple keyword mapping – can be extended later
-THREAT_KEYWORDS = {
-    "phishing": "phishing",
-    "ransomware": "ransomware",
-    "malware": "malware",
-    "fraud": "financial_fraud",
-    "scam": "financial_fraud",
-    "bank": "banking_fraud",
-    "cyber": "cyber_attack",
-    "attack": "cyber_attack",
-    "exploit": "exploit",
-    "vulnerability": "vulnerability",
-}
+from .utils import extract_domain
 
 CVE_PATTERN = re.compile(r"CVE-\d{4}-\d{4,7}", re.IGNORECASE)
 
-
-def _detect_threat_type(text: str) -> str:
-    """Return a threat type based on keyword matches.
-    The first matching keyword wins; fallback to "Other".
-    """
-    lowered = text.lower()
-    for kw, tt in THREAT_KEYWORDS.items():
-        if kw in lowered:
-            return tt
-    return "Other"
+_SAUDI_COUNTRY_VALUES = {"SA", "SAUDI ARABIA", "KSA", "السعودية"}
 
 
 def _extract_cves(text: str) -> List[str]:
@@ -57,54 +38,51 @@ def _extract_cves(text: str) -> List[str]:
     return list({m.upper() for m in CVE_PATTERN.findall(text)})
 
 
-def _store_threat_intel(record: Dict[str, Any]) -> int:
-    """Insert a threat_intel row and return its generated id.
-    The caller must provide a dict matching the ThreatIntel schema fields.
+def _j(value: Any) -> Optional[str]:
+    """JSON-encode structured analysis fields (Arabic preserved)."""
+    if value is None:
+        return None
+    return json.dumps(value, ensure_ascii=False)
+
+
+def _store_threat_intel(record: Dict[str, Any]) -> Optional[int]:
+    """Insert (or refresh) the threat_intel row of an article and return its id.
+
+    ``threat_intel.article_id`` is UNIQUE, so re-analysing an article updates its
+    existing row instead of creating a duplicate.
     """
     con = get_db()
     cur = con.cursor()
+    cols = [
+        "article_id", "title", "description", "threat_type", "event_type",
+        "evidence_confidence", "analysis_confidence", "verified_facts",
+        "analytical_assessment", "detection_indicators",
+        "preventive_recommendations", "evidence_urls",
+        "confidence", "original_url", "related_links", "is_saudi", "is_financial",
+        "created_at", "updated_at",
+        "fraud_category", "fraud_category_ar", "modus_operandi", "channels", "target_group",
+        "bank_relevance", "detection_rule", "required_data", "matched_terms",
+    ]
+    values = [record.get(c) for c in cols]
+    placeholders = ", ".join("?" for _ in cols)
+    update_cols = [c for c in cols if c not in ("article_id", "created_at")]
+    update_sql = ", ".join(f"{c} = excluded.{c}" for c in update_cols)
+    threat_id: Optional[int] = None
     try:
         cur.execute(
-            """
-            INSERT INTO threat_intel (
-                article_id, title, description, threat_type, event_type,
-                evidence_confidence, analysis_confidence, verified_facts,
-                analytical_assessment, detection_indicators,
-                preventive_recommendations, evidence_urls,
-                confidence, original_url, related_links, is_saudi, is_financial,
-                created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                record.get("article_id"),
-                record.get("title"),
-                record.get("description"),
-                record.get("threat_type"),
-                record.get("event_type"),
-                record.get("evidence_confidence"),
-                record.get("analysis_confidence"),
-                record.get("verified_facts"),
-                record.get("analytical_assessment"),
-                record.get("detection_indicators"),
-                record.get("preventive_recommendations"),
-                record.get("evidence_urls"),
-                record.get("confidence"),
-                record.get("original_url"),
-                record.get("related_links"),
-                record.get("is_saudi"),
-                record.get("is_financial"),
-                record.get("created_at"),
-                record.get("updated_at"),
-            ),
+            f"INSERT INTO threat_intel ({', '.join(cols)}) VALUES ({placeholders}) "
+            f"ON CONFLICT(article_id) DO UPDATE SET {update_sql}",
+            values,
         )
-        threat_id = cur.lastrowid
-    except Exception:
-        # Duplicate article_id or other constraint violation – fetch existing
         cur.execute("SELECT id FROM threat_intel WHERE article_id = ?", (record.get("article_id"),))
         row = cur.fetchone()
         threat_id = row["id"] if row else None
-    con.commit()
-    con.close()
+        con.commit()
+    except sqlite3.Error:
+        con.rollback()
+        threat_id = None
+    finally:
+        con.close()
     return threat_id
 
 
@@ -123,6 +101,74 @@ def _store_cve_references(cve_ids: List[str]) -> None:
     con.close()
 
 
+def analyze_and_store(
+    article: Dict[str, Any],
+    require_saudi: bool = False,
+) -> Tuple[Optional[int], Optional[str]]:
+    """Analyse an article and persist the threat-intel record.
+
+    Returns ``(threat_id, None)`` when the article qualifies as fraud intelligence, or
+    ``(None, reason)`` where reason is ``no_fraud_signal`` | ``non_financial_context``
+    | ``not_saudi`` | ``store_failed``.
+    """
+    title = article.get("headline") or ""
+    summary = article.get("article_summary") or ""
+    body = article.get("content") or ""
+    url = article.get("url") or ""
+    country = str(article.get("country") or "").strip().upper()
+    source_meta = {
+        "domain": article.get("domain") or extract_domain(url),
+        "saudi_publisher": bool(article.get("saudi_publisher")) or country in _SAUDI_COUNTRY_VALUES,
+        "saudi_scope": bool(article.get("saudi_scope")) or country in _SAUDI_COUNTRY_VALUES,
+        "official": bool(article.get("official")),
+    }
+    analysis, reason = fraud_intel.analyze(title, summary, body, source=source_meta, require_saudi=require_saudi)
+    if analysis is None:
+        return None, reason
+
+    full_text = f"{title} {summary} {body}"
+    cve_ids = _extract_cves(full_text)
+    _store_cve_references(cve_ids)
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    facts = analysis["verified_facts"]
+    assessment = analysis["analytical_assessment"]
+    record = {
+        "article_id": article.get("article_id"),
+        "title": title or "(no title)",
+        "description": facts.get("incident_summary") or summary or title or "(no description)",
+        "threat_type": analysis["fraud_category"],
+        "event_type": analysis["event_type"],
+        "evidence_confidence": analysis["evidence_confidence"],
+        "analysis_confidence": analysis["analysis_confidence"],
+        "verified_facts": _j(facts),
+        "analytical_assessment": _j(assessment),
+        "detection_indicators": _j(analysis["detection_indicators"]),
+        "preventive_recommendations": _j(analysis["preventive_recommendations"]),
+        "evidence_urls": url or None,
+        "confidence": analysis["confidence"],
+        "original_url": url or None,
+        "related_links": ",".join(cve_ids) if cve_ids else None,
+        "is_saudi": 1 if analysis["is_saudi"] else 0,
+        "is_financial": 1 if analysis["is_financial"] else 0,
+        "created_at": now_iso,
+        "updated_at": now_iso,
+        "fraud_category": analysis["fraud_category"],
+        "fraud_category_ar": analysis["fraud_category_ar"],
+        "modus_operandi": assessment["modus_operandi"],
+        "channels": _j(analysis["channels"]),
+        "target_group": _j(analysis["target_group"]),
+        "bank_relevance": analysis["bank_relevance"]["level"],
+        "detection_rule": _j(analysis["detection_rule"]),
+        "required_data": _j(analysis["required_data"]),
+        "matched_terms": _j(analysis["matched_terms"]),
+    }
+    threat_id = _store_threat_intel(record)
+    if threat_id is None:
+        return None, "store_failed"
+    return threat_id, None
+
+
 def process_article_for_intel(article: Dict[str, Any]) -> Optional[int]:
     """Analyse an article and store a threat intelligence record.
 
@@ -137,58 +183,10 @@ def process_article_for_intel(article: Dict[str, Any]) -> Optional[int]:
     -------
     int | None
         The newly created ``threat_intel`` row id, or ``None`` if the article
-        does not qualify as a threat record.
+        does not qualify as a fraud-intelligence record.
     """
-    # Combine headline and summary for analysis
-    text_to_analyse = f"{article.get('headline', '')} {article.get('article_summary', '')}"
-    threat_type = _detect_threat_type(text_to_analyse)
-    if threat_type == "Other":
-        return None
-
-    # Extract CVE identifiers (if any) and store them separately
-    cve_ids = _extract_cves(text_to_analyse)
-    _store_cve_references(cve_ids)
-
-    # Determine event type based on heuristics – differentiate incident certainty and guidance
-    lowered = text_to_analyse.lower()
-    if any(word in lowered for word in ["confirmed", "detected", "breach", "compromise", "attack"]):
-        event_type = "confirmed_incident"
-    elif any(word in lowered for word in ["reported", "suspected", "possible"]):
-        event_type = "reported_incident"
-    elif cve_ids:
-        event_type = "vulnerability"
-    elif threat_type != "Other":
-        # If we have a threat type but no strong incident wording, treat as warning
-        event_type = "warning"
-    elif any(word in lowered for word in ["recommend", "prevent", "guidance", "advice"]):
-        event_type = "guidance"
-    else:
-        event_type = "research"
-
-    now_iso = datetime.now(timezone.utc).isoformat()
-    record = {
-        "article_id": article.get("article_id"),
-        "title": article.get("headline"),
-        "description": article.get("article_summary") or article.get("content", ""),
-        "threat_type": threat_type,
-        "event_type": event_type,
-        # Confidence fields – static placeholders for now; could be refined later
-        "evidence_confidence": 0.9,
-        "analysis_confidence": 0.9,
-        "verified_facts": None,
-        "analytical_assessment": None,
-        "detection_indicators": None,
-        "preventive_recommendations": None,
-        "evidence_urls": ",".join(cve_ids) if cve_ids else None,
-        "confidence": 0.9,
-        "original_url": article.get("url"),
-        "related_links": ",".join(cve_ids) if cve_ids else None,
-        "is_saudi": 1 if article.get("country") == "SA" else 0,
-        "is_financial": 1 if "bank" in lowered else 0,
-        "created_at": now_iso,
-        "updated_at": now_iso,
-    }
-    return _store_threat_intel(record)
+    threat_id, _reason = analyze_and_store(article, require_saudi=False)
+    return threat_id
 
 
 def link_related_threats(threat_id: int, related_ids: List[int]) -> None:
@@ -206,4 +204,4 @@ def link_related_threats(threat_id: int, related_ids: List[int]) -> None:
     con.commit()
     con.close()
 
-__all__ = ["process_article_for_intel", "link_related_threats"]
+__all__ = ["process_article_for_intel", "analyze_and_store", "link_related_threats"]

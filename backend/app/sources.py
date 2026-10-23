@@ -17,9 +17,8 @@ DEFAULT_SOURCES = [
     "https://thehill.com/feed/",
     "https://www.cnbc.com/id/100727362/device/rss/rss.html",
     "https://feeds.reuters.com/reuters/worldNews",
-    "https://www.spa.gov.sa/rss",
-    "https://www.sama.gov.sa/en-us/rss",  # Saudi Arabian Monetary Authority (banking)
-    "https://www.alriyadh.com/rss",  # Saudi business news
+    # Saudi sources (SPA, SAMA, Alriyadh, ...) have no working RSS at the old URLs;
+    # they are handled by the Saudi Fraud Intelligence pipeline (saudi_sources.py).
     "https://feeds.feedburner.com/TheHackersNews",  # Cybersecurity news
     "https://securelist.com/feed/"  # Kaspersky threat intel
 ]

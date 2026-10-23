@@ -9,6 +9,7 @@ import { Operations } from './pages/Operations';
 import { Repository } from './pages/Repository';
 import { Sources } from './pages/Sources';
 import { AiLayer } from './pages/AiLayer';
+import { SaudiFraud } from './pages/SaudiFraud';
 
 export const App: React.FC = () => {
   return (
@@ -22,6 +23,7 @@ export const App: React.FC = () => {
           <Route path="/repository" element={<Repository />} />
           <Route path="/sources" element={<Sources />} />
           <Route path="/ai-layer" element={<AiLayer />} />
+          <Route path="/saudi-fraud" element={<SaudiFraud />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Layout>

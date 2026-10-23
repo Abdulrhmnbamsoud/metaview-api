@@ -16,6 +16,8 @@ from .sources import DEFAULT_SOURCES, SOURCE_DISPLAY_NAMES, SOURCE_COUNTRY_MAP
 from .db import init_db, get_db, row_count, get_stats_summary
 from .schemas import IngestRequest, SearchResponse, HealthResponse, StatsResponse, ThreatIntel
 from .ingest import ingest_once
+from .saudi_api import router as saudi_router
+from .saudi_ingest import start_scheduler as start_saudi_scheduler
 
 app = FastAPI(title=APP_NAME, version=APP_VERSION, description="Global News Intelligence API")
 
@@ -36,6 +38,9 @@ app.add_middleware(
 )
 
 init_db()
+app.include_router(saudi_router)
+# Saudi Fraud Intelligence: periodic ingestion (enabled with SAUDI_AUTO_INGEST=true)
+start_saudi_scheduler()
 
 ALLOWED_SORT_BY = {"published_at", "source", "country", "domain", "category", "entity"}
 ALLOWED_SORT_DIR = {"asc", "desc"}
@@ -347,6 +352,7 @@ def list_threats(page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le
     offset = (page - 1) * page_size
     con = get_db()
     cur = con.cursor()
+    total_count = cur.execute("SELECT COUNT(*) FROM threat_intel").fetchone()[0]
     cur.execute(
         """
         SELECT * FROM threat_intel ORDER BY id DESC LIMIT ? OFFSET ?
@@ -382,7 +388,7 @@ def list_threats(page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le
     return {
         "page": page,
         "page_size": page_size,
-        "total": len(results),
+        "total": total_count,
         "threats": results,
     }
 

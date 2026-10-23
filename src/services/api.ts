@@ -15,6 +15,15 @@ import {
   IngestRunResult,
   CountryNewsCount,
 } from '../types';
+import {
+  SaudiOverview,
+  SaudiNewsResponse,
+  SaudiNewsParams,
+  SaudiFraudItem,
+  SaudiSourceInfo,
+  SaudiPatternsResponse,
+  SaudiRulesResponse,
+} from '../types/saudi';
 
 // Base URL resolution: Environment variable -> Vite Proxy (/api) -> direct localhost
 let API_BASE_URL: string;
@@ -195,6 +204,46 @@ export const apiService = {
         allow_web_scrape: allowWebScrape,
       }),
       timeoutMs: 60000, // 60 seconds for ingestion
+      retries: 0,
+    });
+  },
+
+  // ---- Saudi Fraud Intelligence ----
+  async getSaudiOverview(): Promise<SaudiOverview> {
+    return await requestWithRetry<SaudiOverview>('/saudi-fraud/overview');
+  },
+
+  async getSaudiNews(params: SaudiNewsParams = {}): Promise<SaudiNewsResponse> {
+    const query = new URLSearchParams();
+    if (params.category) query.append('category', params.category);
+    if (params.source) query.append('source', params.source);
+    if (params.q) query.append('q', params.q);
+    if (params.bank_relevance) query.append('bank_relevance', params.bank_relevance);
+    query.append('page', String(params.page || 1));
+    query.append('page_size', String(params.page_size || 20));
+    return await requestWithRetry<SaudiNewsResponse>(`/saudi-fraud/news?${query.toString()}`);
+  },
+
+  async getSaudiNewsItem(id: number): Promise<SaudiFraudItem> {
+    return await requestWithRetry<SaudiFraudItem>(`/saudi-fraud/news/${id}`);
+  },
+
+  async getSaudiSources(): Promise<{ sources: SaudiSourceInfo[] }> {
+    return await requestWithRetry<{ sources: SaudiSourceInfo[] }>('/saudi-fraud/sources');
+  },
+
+  async getSaudiPatterns(): Promise<SaudiPatternsResponse> {
+    return await requestWithRetry<SaudiPatternsResponse>('/saudi-fraud/patterns');
+  },
+
+  async getSaudiRules(): Promise<SaudiRulesResponse> {
+    return await requestWithRetry<SaudiRulesResponse>('/saudi-fraud/rules');
+  },
+
+  async runSaudiIngest(adminToken?: string): Promise<{ status: string; run_id?: string }> {
+    return await requestWithRetry<{ status: string; run_id?: string }>('/saudi-fraud/ingest/run', {
+      method: 'POST',
+      headers: adminToken ? { 'X-Admin-Token': adminToken } : {},
       retries: 0,
     });
   },

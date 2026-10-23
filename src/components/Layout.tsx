@@ -16,6 +16,7 @@ import {
   Server,
   ShieldCheck,
   Zap,
+  ShieldAlert,
 } from 'lucide-react';
 import { apiService } from '../services/api';
 import { HealthStatus } from '../types';
@@ -72,6 +73,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   const navLinks = [
     { to: '/', label: 'لوحة القيادة العالمية', icon: LayoutDashboard, exact: true },
+    { to: '/saudi-fraud', label: 'استخبارات الاحتيال السعودية', icon: ShieldAlert },
     { to: '/explorer', label: 'مستكشف الأخبار', icon: Compass },
     { to: '/map', label: 'الخريطة العالمية', icon: MapPin },
     { to: '/operations', label: 'مركز العمليات', icon: Activity },
