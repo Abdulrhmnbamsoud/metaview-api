@@ -26,16 +26,16 @@ from .schemas import ThreatIntel, SourceTrust, CVEReference, IncidentLink
 
 # Simple keyword mapping – can be extended later
 THREAT_KEYWORDS = {
-    "phishing": "Phishing",
-    "ransomware": "Ransomware",
-    "malware": "Malware",
-    "fraud": "Financial Fraud",
-    "scam": "Financial Fraud",
-    "bank": "Banking Fraud",
-    "cyber": "Cyber Attack",
-    "attack": "Cyber Attack",
-    "exploit": "Exploit",
-    "vulnerability": "Vulnerability",
+    "phishing": "phishing",
+    "ransomware": "ransomware",
+    "malware": "malware",
+    "fraud": "financial_fraud",
+    "scam": "financial_fraud",
+    "bank": "banking_fraud",
+    "cyber": "cyber_attack",
+    "attack": "cyber_attack",
+    "exploit": "exploit",
+    "vulnerability": "vulnerability",
 }
 
 CVE_PATTERN = re.compile(r"CVE-\d{4}-\d{4,7}", re.IGNORECASE)
