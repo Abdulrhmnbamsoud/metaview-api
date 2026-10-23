@@ -133,6 +133,14 @@ def init_db() -> None:
             first_seen_at TEXT,
             last_seen_at TEXT
         );
+
+        -- Cross-process mutual exclusion for the Saudi ingestion (one row, expiring lease)
+        CREATE TABLE IF NOT EXISTS ingest_lease (
+            name TEXT PRIMARY KEY,
+            holder TEXT,
+            acquired_at TEXT,
+            expires_at TEXT
+        );
         """
     )
     try:

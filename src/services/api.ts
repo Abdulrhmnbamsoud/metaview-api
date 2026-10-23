@@ -240,14 +240,6 @@ export const apiService = {
     return await requestWithRetry<SaudiRulesResponse>('/saudi-fraud/rules');
   },
 
-  async runSaudiIngest(adminToken?: string): Promise<{ status: string; run_id?: string }> {
-    return await requestWithRetry<{ status: string; run_id?: string }>('/saudi-fraud/ingest/run', {
-      method: 'POST',
-      headers: adminToken ? { 'X-Admin-Token': adminToken } : {},
-      retries: 0,
-    });
-  },
-
   /**
    * Get the active base URL for transparency in Operations Center
    */

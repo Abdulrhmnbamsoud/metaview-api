@@ -26,6 +26,8 @@ services:
         value: "true"
       - key: SAUDI_INGEST_EVERY_HOURS
         value: "6"
+      - key: ADMIN_TOKEN   # protects POST /saudi-fraud/ingest/run; set the value in the Render dashboard
+        sync: false
     disk:
       name: metaview-data
       mountPath: /var/app/data

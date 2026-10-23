@@ -2,12 +2,16 @@
 """REST API for the Saudi Fraud Intelligence section (read endpoints + manual ingest trigger)."""
 from __future__ import annotations
 
+import hmac
 import json
+import os
+import shutil
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Header, HTTPException, Query
 
-from .config import ADMIN_TOKEN, SAUDI_AUTO_INGEST, SAUDI_INGEST_EVERY_HOURS
+from .config import ADMIN_TOKEN, DATA_DIR, DB_PATH, SAUDI_AUTO_INGEST, SAUDI_INGEST_EVERY_HOURS
 from .db import get_db
 from . import saudi_ingest
 from .fraud_intel import CATEGORY_AR, CATEGORY_ORDER
@@ -139,7 +143,7 @@ def overview() -> Dict[str, Any]:
         "sources_total": all_sources,
         "refresh_every_hours": SAUDI_INGEST_EVERY_HOURS,
         "auto_ingest_enabled": SAUDI_AUTO_INGEST,
-        "ingest_running": bool(saudi_ingest.RUN_STATE.get("running")),
+        "ingest_running": bool(saudi_ingest.RUN_STATE.get("running")) or bool(saudi_ingest.lease_status().get("active")),
     }
 
 
@@ -262,9 +266,63 @@ def ingest_runs(limit: int = Query(20, ge=1, le=200)) -> Dict[str, Any]:
     }
 
 
+MANUAL_COOLDOWN_SECONDS = 600  # min gap between the end of one run and a manual start
+
+
 @router.post("/ingest/run")
 def ingest_run(x_admin_token: Optional[str] = Header(None)) -> Dict[str, Any]:
-    """Manual pull. Runs in the background; poll /saudi-fraud/ingest/runs for progress."""
-    if ADMIN_TOKEN and x_admin_token != ADMIN_TOKEN:
+    """Manual pull (admin only, fail-closed). Runs in the background; poll /saudi-fraud/ingest/runs."""
+    if not ADMIN_TOKEN:
+        # Never fail open: without a configured token the endpoint is disabled.
+        raise HTTPException(status_code=503, detail="Manual ingest disabled: ADMIN_TOKEN is not configured")
+    if not x_admin_token or not hmac.compare_digest(x_admin_token.encode(), ADMIN_TOKEN.encode()):
         raise HTTPException(status_code=401, detail="Invalid admin token")
+    if saudi_ingest.RUN_STATE.get("running") or saudi_ingest.lease_status().get("active"):
+        return saudi_ingest.start_background_run("manual")  # reports already_running
+    last = saudi_ingest._last_finished()
+    if last is not None:
+        if last.tzinfo is None:
+            last = last.replace(tzinfo=timezone.utc)
+        wait = MANUAL_COOLDOWN_SECONDS - (datetime.now(timezone.utc) - last).total_seconds()
+        if wait > 0:
+            raise HTTPException(
+                status_code=429, headers={"Retry-After": str(int(wait) + 1)},
+                detail=f"Last ingest finished recently; manual runs are rate-limited. Retry in {int(wait) + 1}s")
     return saudi_ingest.start_background_run("manual")
+
+
+@router.get("/runtime")
+def runtime() -> Dict[str, Any]:
+    """Read-only deployment diagnostics (no secrets): deployed commit, DB/disk binding, scheduler state."""
+    db_real = os.path.realpath(DB_PATH)
+    data_real = os.path.realpath(DATA_DIR)
+    in_data = db_real == data_real or db_real.startswith(data_real + os.sep)
+    disk: Dict[str, Any] = {"data_dir": DATA_DIR, "db_path": DB_PATH, "db_inside_data_dir": in_data}
+    try:
+        disk["data_dir_is_mount_point"] = os.path.ismount(data_real)
+        disk["data_dir_device"] = os.stat(data_real).st_dev
+        disk["root_device"] = os.stat("/").st_dev
+        disk["data_dir_on_separate_device"] = disk["data_dir_device"] != disk["root_device"]
+        disk["db_size_bytes"] = os.path.getsize(db_real) if os.path.exists(db_real) else None
+        disk["free_bytes"] = shutil.disk_usage(data_real).free
+    except OSError as e:  # pragma: no cover
+        disk["error"] = str(e)
+    journal = None
+    try:
+        con = get_db()
+        journal = con.execute("PRAGMA journal_mode").fetchone()[0]
+        con.close()
+    except Exception as e:  # pragma: no cover
+        journal = f"error: {e}"
+    return {
+        "commit": os.getenv("RENDER_GIT_COMMIT"),
+        "branch": os.getenv("RENDER_GIT_BRANCH"),
+        "service": os.getenv("RENDER_SERVICE_NAME"),
+        "on_render": bool(os.getenv("RENDER")),
+        "disk": disk,
+        "sqlite_journal_mode": journal,
+        "scheduler": saudi_ingest.scheduler_info(),
+        "lease": saudi_ingest.lease_status(),
+        "admin_token_configured": bool(ADMIN_TOKEN),
+        "manual_cooldown_seconds": MANUAL_COOLDOWN_SECONDS,
+    }

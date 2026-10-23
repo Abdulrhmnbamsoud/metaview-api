@@ -59,7 +59,6 @@ export const SaudiFraud: React.FC = () => {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [running, setRunning] = useState(false);
   const [selected, setSelected] = useState<SaudiFraudItem | null>(null);
   const [patterns, setPatterns] = useState<SaudiPatternsResponse | null>(null);
   const [rules, setRules] = useState<SaudiRulesResponse | null>(null);
@@ -110,31 +109,19 @@ export const SaudiFraud: React.FC = () => {
     if (tab === 'sources') apiService.getSaudiSources().then((r) => setSources(r.sources)).catch(() => {});
   }, [tab, patterns, rules]);
 
-  // Poll while a background ingestion is running
+  // Poll (read-only) while a server-side ingestion is running
   useEffect(() => {
-    if (!running && !overview?.ingest_running) return;
+    if (!overview?.ingest_running) return;
     const t = setInterval(async () => {
       const o = await loadOverview();
       if (o && !o.ingest_running) {
-        setRunning(false);
         setPatterns(null);
         setRules(null);
         loadNews();
       }
     }, 5000);
     return () => clearInterval(t);
-  }, [running, overview?.ingest_running, loadOverview, loadNews]);
-
-  const handleRun = async () => {
-    if (running) return;
-    setRunning(true);
-    try {
-      await apiService.runSaudiIngest();
-    } catch (e: any) {
-      setError(e.message || 'فشل بدء السحب');
-      setRunning(false);
-    }
-  };
+  }, [overview?.ingest_running, loadOverview, loadNews]);
 
   const openDetail = async (it: SaudiFraudItem) => {
     setSelected(it);
@@ -160,18 +147,21 @@ export const SaudiFraud: React.FC = () => {
             أخبار احتيال حقيقية من مصادر سعودية، مع روابط المصدر الأصلي وتحليل منفصل بين الحقائق المنقولة واستنتاجات النظام.
           </p>
         </div>
-        <button
-          onClick={handleRun}
-          disabled={running || !!overview?.ingest_running}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold border transition-all ${
-            running || overview?.ingest_running
-              ? 'bg-[#c5a059]/20 border-[#c5a059]/40 text-[#e0c58a] cursor-not-allowed'
-              : 'bg-white/5 hover:bg-[#c5a059]/15 border-white/10 hover:border-[#c5a059]/30 text-gray-200'
+        <div
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold border ${
+            overview?.ingest_running
+              ? 'bg-[#c5a059]/20 border-[#c5a059]/40 text-[#e0c58a]'
+              : 'bg-white/5 border-white/10 text-gray-300'
           }`}
+          title="السحب اليدوي إجراء إداري من الخادم فقط"
         >
-          <RefreshCw className={`w-3.5 h-3.5 text-[#c5a059] ${running || overview?.ingest_running ? 'animate-spin' : ''}`} />
-          {running || overview?.ingest_running ? 'جاري السحب...' : 'سحب يدوي الآن'}
-        </button>
+          <RefreshCw className={`w-3.5 h-3.5 text-[#c5a059] ${overview?.ingest_running ? 'animate-spin' : ''}`} />
+          {overview?.ingest_running
+            ? 'جاري السحب...'
+            : overview?.auto_ingest_enabled
+              ? `تحديث تلقائي كل ${overview.refresh_every_hours} ساعات`
+              : 'التحديث التلقائي متوقف'}
+        </div>
       </div>
 
       {/* Stats */}

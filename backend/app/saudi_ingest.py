@@ -25,11 +25,13 @@ import hashlib
 import html as html_lib
 import json
 import logging
+import random
 import re
 import threading
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 from typing import Any, Dict, List, Optional, Tuple
 from urllib import robotparser
 from urllib.parse import parse_qsl, quote, unquote, urlencode, urlsplit, urlunsplit
@@ -126,16 +128,131 @@ def is_saudi_outlet(domain: str) -> bool:
 # --------------------------------------------------------------------------- #
 # Network helpers
 # --------------------------------------------------------------------------- #
-def _http_get(client: httpx.Client, url: str, tries: int = 2) -> Tuple[Optional[httpx.Response], Optional[str]]:
-    last = None
-    for i in range(tries):
+MAX_RETRY_WAIT = 60.0          # never sleep longer than this for a single Retry-After / backoff
+BACKOFF_BUDGET_PER_RUN = 240.0  # total seconds a run may spend sleeping on 429/503
+MIN_COOLDOWN = 300.0           # after giving up on a host, leave it alone for at least this long
+MAX_COOLDOWN = 3600.0
+HOST_MIN_INTERVAL = {"news.google.com": 2.0}  # polite pacing per host (seconds between requests)
+DEFAULT_MIN_INTERVAL = 0.25
+
+
+def parse_retry_after(value: Optional[str], now: Optional[datetime] = None) -> Optional[float]:
+    """Parse a Retry-After header (delta-seconds or HTTP-date) into seconds, or None."""
+    if not value:
+        return None
+    value = value.strip()
+    try:
+        return max(0.0, float(value))
+    except ValueError:
+        pass
+    try:
+        dt = parsedate_to_datetime(value)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return max(0.0, (dt - (now or datetime.now(timezone.utc))).total_seconds())
+    except Exception:
+        return None
+
+
+class NetPolicy:
+    """Per-host pacing, backoff budget and cooldowns shared by every request of the pipeline."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._last: Dict[str, float] = {}
+        self.cooldown_until: Dict[str, float] = {}   # host -> monotonic deadline (persists across runs)
+        self.backoff_budget = BACKOFF_BUDGET_PER_RUN
+        self.events: List[Dict[str, Any]] = []
+
+    def new_run(self) -> None:
+        with self._lock:
+            self.backoff_budget = BACKOFF_BUDGET_PER_RUN
+            self.events = []
+
+    def wait_turn(self, host: str) -> None:
+        gap = HOST_MIN_INTERVAL.get(host, DEFAULT_MIN_INTERVAL)
+        with self._lock:
+            delay = self._last.get(host, 0.0) + gap - time.monotonic()
+            self._last[host] = time.monotonic() + max(0.0, delay)
+        if delay > 0:
+            time.sleep(delay)
+
+    def cooling(self, host: str) -> float:
+        return max(0.0, self.cooldown_until.get(host, 0.0) - time.monotonic())
+
+    def set_cooldown(self, host: str, seconds: float) -> None:
+        seconds = min(MAX_COOLDOWN, max(MIN_COOLDOWN, seconds))
+        self.cooldown_until[host] = time.monotonic() + seconds
+        self.events.append({"host": host, "cooldown_sec": int(seconds), "at": now_iso()})
+
+    def take_budget(self, seconds: float) -> bool:
+        with self._lock:
+            if seconds > self.backoff_budget:
+                return False
+            self.backoff_budget -= seconds
+            return True
+
+
+_NET = NetPolicy()
+RATE_LIMITED_PREFIX = "RATE_LIMITED"
+
+
+def _backoff_seconds(attempt: int, retry_after: Optional[float]) -> float:
+    if retry_after is not None:
+        return retry_after
+    return min(MAX_RETRY_WAIT, 2.0 * (2 ** attempt)) + random.uniform(0.0, 1.0)
+
+
+def _http_get(client: httpx.Client, url: str, tries: int = 3) -> Tuple[Optional[httpx.Response], Optional[str]]:
+    """GET with pacing and 429/503 handling.
+
+    * waits for the host's minimum interval before every request;
+    * on 429/503 honours ``Retry-After`` (capped at MAX_RETRY_WAIT per wait) else exponential
+      backoff with jitter, within a per-run backoff budget;
+    * when it has to give up it puts the host in cooldown (>= Retry-After, 5-60 min) so no other
+      request to that host is made until then, and returns the last response (429/503).
+    """
+    host = urlsplit(url).netloc.lower()
+    remaining = _NET.cooling(host)
+    if remaining > 0:
+        return None, f"{RATE_LIMITED_PREFIX}: {host} is cooling down for {int(remaining)}s after HTTP 429/503"
+    last_err: Optional[str] = None
+    for i in range(max(1, tries)):
+        _NET.wait_turn(host)
         try:
-            return client.get(url), None
+            r = client.get(url)
         except httpx.HTTPError as exc:
-            last = f"{type(exc).__name__}: {str(exc)[:200]}"
+            last_err = f"{type(exc).__name__}: {str(exc)[:200]}"
             if i + 1 < tries:
-                time.sleep(0.6)
-    return None, last
+                time.sleep(0.6 * (2 ** i))
+            continue
+        if r.status_code not in (429, 503):
+            return r, None
+        ra = parse_retry_after(r.headers.get("retry-after"))
+        wait = _backoff_seconds(i, ra)
+        can_wait = wait <= MAX_RETRY_WAIT and i + 1 < tries and _NET.take_budget(wait)
+        log.warning("HTTP %s from %s (Retry-After=%s) attempt %d/%d -> %s", r.status_code, host,
+                    r.headers.get("retry-after"), i + 1, tries, f"waiting {wait:.1f}s" if can_wait else "giving up")
+        if can_wait:
+            time.sleep(wait)
+            continue
+        _NET.set_cooldown(host, ra if ra is not None else MIN_COOLDOWN)
+        return r, None
+    return None, last_err
+
+
+def _bad_status(r: httpx.Response) -> Dict[str, Any]:
+    """Source result for a non-200 response. 429 (or 503 + Retry-After) is *rate_limited*, not *failed*."""
+    ra = r.headers.get("retry-after")
+    if r.status_code == 429 or (r.status_code == 503 and ra):
+        return {"state": "rate_limited", "http_status": r.status_code, "entries": [],
+                "error": f"HTTP {r.status_code} rate limited (Retry-After: {ra or 'n/a'}); host in cooldown, retried next run"}
+    return {"state": "failed", "http_status": r.status_code, "error": f"HTTP {r.status_code}", "entries": []}
+
+
+def _net_failure(err: Optional[str]) -> Dict[str, Any]:
+    state = "rate_limited" if (err or "").startswith(RATE_LIMITED_PREFIX) else "failed"
+    return {"state": state, "http_status": None, "error": err, "entries": []}
 
 
 class RobotsCache:
@@ -239,9 +356,9 @@ def _entry_image(e: Any) -> str:
 def fetch_rss(client: httpx.Client, src: SaudiSource) -> Dict[str, Any]:
     r, err = _http_get(client, src.url)
     if r is None:
-        return {"state": "failed", "http_status": None, "error": err, "entries": []}
+        return _net_failure(err)
     if r.status_code != 200:
-        return {"state": "failed", "http_status": r.status_code, "error": f"HTTP {r.status_code}", "entries": []}
+        return _bad_status(r)
     parsed = feedparser.parse(r.content)
     if not parsed.entries:
         if parsed.bozo:
@@ -277,9 +394,9 @@ def fetch_rss(client: httpx.Client, src: SaudiSource) -> Dict[str, Any]:
 def fetch_nextdata(client: httpx.Client, src: SaudiSource) -> Dict[str, Any]:
     r, err = _http_get(client, src.url)
     if r is None:
-        return {"state": "failed", "http_status": None, "error": err, "entries": []}
+        return _net_failure(err)
     if r.status_code != 200:
-        return {"state": "failed", "http_status": r.status_code, "error": f"HTTP {r.status_code}", "entries": []}
+        return _bad_status(r)
     m = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', r.text, re.S)
     if not m:
         return {"state": "failed", "http_status": 200, "error": "__NEXT_DATA__ not found (site layout changed?)", "entries": []}
@@ -313,9 +430,9 @@ def probe_source(client: httpx.Client, src: SaudiSource) -> Dict[str, Any]:
         reason = err or "connection failed"
         if "CERTIFICATE_VERIFY_FAILED" in reason:
             reason = "TLS certificate verification failed (server sends an incomplete certificate chain) - " + reason
-        return {"state": "failed", "http_status": None, "error": reason, "entries": []}
+        return _net_failure(reason)
     if r.status_code >= 400:
-        return {"state": "failed", "http_status": r.status_code, "error": f"HTTP {r.status_code}", "entries": []}
+        return _bad_status(r)
     return {"state": "no_feed", "http_status": r.status_code, "entries": [],
             "error": "reachable but exposes no RSS/API (content is JavaScript-rendered or HTML only)"}
 
@@ -376,7 +493,8 @@ def _record_source(src: SaudiSource, run_id: str, started: str, res: Dict[str, A
         "last_success_at=COALESCE(excluded.last_success_at, source_registry.last_success_at), "
         "last_failure_at=COALESCE(excluded.last_failure_at, source_registry.last_failure_at), "
         "last_error=excluded.last_error, last_entries=excluded.last_entries, "
-        "consecutive_failures=CASE WHEN excluded.last_status='failed' THEN source_registry.consecutive_failures+1 ELSE 0 END",
+        "consecutive_failures=CASE WHEN excluded.last_status='failed' THEN source_registry.consecutive_failures+1 "
+        "WHEN excluded.last_status='rate_limited' THEN source_registry.consecutive_failures ELSE 0 END",
         (src.code, src.name, src.url, src.kind, "SA", src.lang, int(src.official), int(src.enabled), state,
          finished if state in ("ok", "empty", "no_feed") else None, finished if failed else None,
          res.get("error"), len(res.get("entries", [])), 1 if failed else 0),
@@ -406,27 +524,52 @@ class RunContext:
         self.recent = _recent_title_tokens()
         self.excluded_by_reason: Dict[str, int] = {}
         self.decode_failures: List[str] = []
+        self.decode_blocked = False  # circuit breaker: Google throttled the decoder in this run
         self.examples: List[Dict[str, Any]] = []
 
     def exclude(self, reason: str) -> None:
         self.excluded_by_reason[reason] = self.excluded_by_reason.get(reason, 0) + 1
 
 
+DECODE_INTERVAL = 1.0
+DECODE_THROTTLE_STREAK = 3
+_THROTTLE_HINTS = ("429", "too many", "rate limit", "ratelimit", "quota", "unusual traffic", "sorry")
+
+
 def _decode_google_links(ctx: RunContext, links: List[str]) -> List[Optional[str]]:
-    """Decode Google-News redirect links to the original article URLs."""
+    """Decode Google-News redirect links to the original article URLs.
+
+    Paced at DECODE_INTERVAL; after DECODE_THROTTLE_STREAK consecutive throttled responses the
+    circuit breaker opens (``ctx.decode_blocked``) and the remaining links are left for the next run.
+    """
     from googlenewsdecoder import gnewsdecoder
     out: List[Optional[str]] = []
-    for link in links:
+    streak = 0
+    for idx, link in enumerate(links):
+        if ctx.decode_blocked:
+            out.extend([None] * (len(links) - idx))
+            break
+        msg = ""
         try:
-            res = gnewsdecoder(link, interval=0.2)
+            res = gnewsdecoder(link, interval=DECODE_INTERVAL)
             if res.get("success") and res.get("decoded_url"):
                 out.append(res["decoded_url"])
-            else:
-                out.append(None)
-                ctx.decode_failures.append(str(res.get("message", "decode failed"))[:120])
-        except Exception as exc:  # network / library error - keep the run going
+                streak = 0
+                continue
+            msg = str(res.get("message", "decode failed"))
             out.append(None)
-            ctx.decode_failures.append(f"{type(exc).__name__}: {str(exc)[:100]}")
+        except Exception as exc:  # network / library error - keep the run going
+            msg = f"{type(exc).__name__}: {str(exc)[:100]}"
+            out.append(None)
+        ctx.decode_failures.append(msg[:120])
+        if any(h in msg.lower() for h in _THROTTLE_HINTS):
+            streak += 1
+            if streak >= DECODE_THROTTLE_STREAK:
+                ctx.decode_blocked = True
+                _NET.set_cooldown("news.google.com", MIN_COOLDOWN)
+                log.warning("Google News decoder throttled (%d in a row): pausing decoding for this run", streak)
+        else:
+            streak = 0
     return out
 
 
@@ -550,7 +693,10 @@ def _process_source(ctx: RunContext, src: SaudiSource, res: Dict[str, Any]) -> D
         todo.append(e)
 
     resolved: List[Optional[str]]
-    if src.kind == "gnews" and todo:
+    if src.kind == "gnews" and todo and ctx.decode_blocked:
+        c["deferred"] = len(todo)  # Google is throttling us: leave unseen, retry next run
+        todo, resolved = [], []
+    elif src.kind == "gnews" and todo:
         allowed = todo[: max(0, ctx.decode_budget)]
         c["deferred"] = len(todo) - len(allowed)  # left unseen -> handled by a later run
         ctx.decode_budget -= len(allowed)
@@ -577,14 +723,86 @@ def _process_source(ctx: RunContext, src: SaudiSource, res: Dict[str, Any]) -> D
 _RUN_LOCK = threading.Lock()
 RUN_STATE: Dict[str, Any] = {"running": False, "run_id": None, "started_at": None, "last_report": None, "trigger": None}
 
+LEASE_NAME = "saudi_ingest"
+LEASE_TTL_MIN = 20  # a crashed run frees the lease after this long; every source extends it
+
+
+# --- cross-process lease ---------------------------------------------------- #
+# A threading.Lock only protects one Python process. The CLI, the API server (and, briefly, an
+# old+new instance during a deploy) are different processes sharing one SQLite file, so mutual
+# exclusion is enforced through an expiring row in ``ingest_lease``.
+def _acquire_lease(holder: str) -> Tuple[bool, Optional[str], Optional[str]]:
+    """Try to take the lease. Returns (acquired, current_holder, expires_at)."""
+    now = datetime.now(timezone.utc)
+    expires = (now + timedelta(minutes=LEASE_TTL_MIN)).isoformat()
+    con = get_db()
+    try:
+        con.execute("BEGIN IMMEDIATE")  # serialises competing processes
+        row = con.execute("SELECT holder, expires_at FROM ingest_lease WHERE name = ?", (LEASE_NAME,)).fetchone()
+        if row and row["holder"] != holder and row["expires_at"] > now.isoformat():
+            con.execute("ROLLBACK")
+            return False, row["holder"], row["expires_at"]
+        con.execute(
+            "INSERT INTO ingest_lease (name, holder, acquired_at, expires_at) VALUES (?,?,?,?) "
+            "ON CONFLICT(name) DO UPDATE SET holder=excluded.holder, acquired_at=excluded.acquired_at, "
+            "expires_at=excluded.expires_at", (LEASE_NAME, holder, now.isoformat(), expires))
+        con.execute("COMMIT")
+        return True, holder, expires
+    except Exception:
+        try:
+            con.execute("ROLLBACK")
+        except Exception:
+            pass
+        raise
+    finally:
+        con.close()
+
+
+def _heartbeat_lease(holder: str) -> None:
+    expires = (datetime.now(timezone.utc) + timedelta(minutes=LEASE_TTL_MIN)).isoformat()
+    con = get_db()
+    con.execute("UPDATE ingest_lease SET expires_at = ? WHERE name = ? AND holder = ?", (expires, LEASE_NAME, holder))
+    con.commit()
+    con.close()
+
+
+def _release_lease(holder: str) -> None:
+    con = get_db()
+    con.execute("DELETE FROM ingest_lease WHERE name = ? AND holder = ?", (LEASE_NAME, holder))
+    con.commit()
+    con.close()
+
+
+def lease_status() -> Dict[str, Any]:
+    """Is an ingestion currently running anywhere (any process/instance)?"""
+    try:
+        con = get_db()
+        row = con.execute("SELECT holder, acquired_at, expires_at FROM ingest_lease WHERE name = ?", (LEASE_NAME,)).fetchone()
+        con.close()
+    except Exception:
+        return {"active": False}
+    if row and row["expires_at"] > datetime.now(timezone.utc).isoformat():
+        return {"active": True, "holder": row["holder"], "acquired_at": row["acquired_at"], "expires_at": row["expires_at"]}
+    return {"active": False}
+
 
 def run_saudi_ingest(trigger: str = "manual", only: Optional[List[str]] = None) -> Dict[str, Any]:
     """Execute one full ingestion run synchronously and return a detailed report."""
     if not _RUN_LOCK.acquire(blocking=False):
-        return {"status": "already_running", "run_id": RUN_STATE.get("run_id")}
+        return {"status": "already_running", "scope": "this_process", "run_id": RUN_STATE.get("run_id")}
     run_id = uuid.uuid4().hex[:12]
+    try:
+        acquired, owner, until = _acquire_lease(run_id)
+    except Exception:
+        _RUN_LOCK.release()
+        raise
+    if not acquired:
+        _RUN_LOCK.release()
+        log.warning("ingest %s skipped: lease held by %s until %s", run_id, owner, until)
+        return {"status": "already_running", "scope": "other_process", "holder": owner, "lease_expires_at": until}
     started = now_iso()
     t0 = time.time()
+    _NET.new_run()
     RUN_STATE.update(running=True, run_id=run_id, started_at=started, trigger=trigger)
     try:
         sources = [s for s in SAUDI_SOURCES if s.enabled and (not only or s.code in only)]
@@ -596,6 +814,7 @@ def run_saudi_ingest(trigger: str = "manual", only: Optional[List[str]] = None) 
             ctx = RunContext(client)
             for src in sources:
                 s_started = now_iso()
+                _heartbeat_lease(run_id)
                 try:
                     res = fetch_source(client, src)
                     c = _process_source(ctx, src, res) if res["state"] == "ok" else {
@@ -616,7 +835,7 @@ def run_saudi_ingest(trigger: str = "manual", only: Optional[List[str]] = None) 
                     "entries_found": len(res.get("entries", [])), **{k: c[k] for k in (
                         "unseen", "duplicates", "excluded", "new_articles", "fraud_matched", "errors", "deferred")},
                 })
-                log.info("source %-26s %-8s entries=%-3d new=%-3d dup=%-3d excl=%-3d err=%s", src.code, res["state"],
+                log.info("source %-26s %-12s entries=%-3d new=%-3d dup=%-3d excl=%-3d err=%s", src.code, res["state"],
                          len(res.get("entries", [])), c["new_articles"], c["duplicates"], c["excluded"], res.get("error"))
 
         con = get_db()
@@ -628,6 +847,7 @@ def run_saudi_ingest(trigger: str = "manual", only: Optional[List[str]] = None) 
             "finished_at": now_iso(), "duration_sec": round(time.time() - t0, 1),
             "sources_tested": len(per_source),
             "sources_ok": states.count("ok"), "sources_failed": states.count("failed"),
+            "sources_rate_limited": states.count("rate_limited"),
             "sources_empty": states.count("empty"), "sources_no_feed": states.count("no_feed"),
             "entries_found": totals["entries_found"],
             "entries_already_seen_or_duplicate": totals["duplicates"],
@@ -637,6 +857,8 @@ def run_saudi_ingest(trigger: str = "manual", only: Optional[List[str]] = None) 
             "deferred_for_next_run": totals["deferred"],
             "errors": totals["errors"], "decode_failures": len(ctx.decode_failures),
             "decode_failure_samples": ctx.decode_failures[:5],
+            "decode_rate_limited": ctx.decode_blocked,
+            "rate_limit_events": list(_NET.events),
             "saudi_fraud_total_in_db": saudi_total,
             "new_examples": ctx.examples[:25],
             "sources": per_source,
@@ -645,13 +867,21 @@ def run_saudi_ingest(trigger: str = "manual", only: Optional[List[str]] = None) 
         return report
     finally:
         RUN_STATE.update(running=False)
+        try:
+            _release_lease(run_id)
+        except Exception:
+            log.exception("could not release ingest lease %s", run_id)
         _RUN_LOCK.release()
 
 
 def start_background_run(trigger: str = "manual", only: Optional[List[str]] = None) -> Dict[str, Any]:
     """Start a run in a background thread (used by the API); returns immediately."""
     if RUN_STATE.get("running"):
-        return {"status": "already_running", "run_id": RUN_STATE.get("run_id")}
+        return {"status": "already_running", "scope": "this_process", "run_id": RUN_STATE.get("run_id")}
+    lease = lease_status()
+    if lease.get("active"):
+        return {"status": "already_running", "scope": "other_process", "holder": lease.get("holder"),
+                "lease_expires_at": lease.get("expires_at")}
     t = threading.Thread(target=run_saudi_ingest, args=(trigger, only), daemon=True, name="saudi-ingest")
     t.start()
     time.sleep(0.2)
@@ -662,6 +892,14 @@ def start_background_run(trigger: str = "manual", only: Optional[List[str]] = No
 # Scheduler (every SAUDI_INGEST_EVERY_HOURS, survives restarts via fetch_log)
 # --------------------------------------------------------------------------- #
 _SCHED_STARTED = False
+_SCHED_THREAD: Optional[threading.Thread] = None
+SCHED_STATE: Dict[str, Any] = {"enabled": SAUDI_AUTO_INGEST, "interval_hours": SAUDI_INGEST_EVERY_HOURS,
+                               "started_at": None, "last_tick_at": None, "last_decision": None,
+                               "last_run_started_at": None, "last_error": None}
+
+
+def scheduler_info() -> Dict[str, Any]:
+    return {**SCHED_STATE, "thread_alive": bool(_SCHED_THREAD and _SCHED_THREAD.is_alive())}
 
 
 def _last_finished() -> Optional[datetime]:
@@ -683,20 +921,25 @@ def _scheduler_loop() -> None:
         try:
             last = _last_finished()
             due = last is None or datetime.now(timezone.utc) - last >= interval
+            SCHED_STATE.update(last_tick_at=now_iso(), last_decision="due" if due else "not_due", last_error=None)
             if due:
+                SCHED_STATE["last_run_started_at"] = now_iso()
                 run_saudi_ingest("scheduled")
-        except Exception:
+        except Exception as exc:
+            SCHED_STATE["last_error"] = f"{type(exc).__name__}: {exc}"
             log.exception("scheduled Saudi ingest failed")
         time.sleep(300)
 
 
 def start_scheduler() -> bool:
     """Start the periodic ingestion thread once (no-op if disabled or already running)."""
-    global _SCHED_STARTED
+    global _SCHED_STARTED, _SCHED_THREAD
     if not SAUDI_AUTO_INGEST or _SCHED_STARTED:
         return False
     _SCHED_STARTED = True
-    threading.Thread(target=_scheduler_loop, daemon=True, name="saudi-scheduler").start()
+    _SCHED_THREAD = threading.Thread(target=_scheduler_loop, daemon=True, name="saudi-scheduler")
+    _SCHED_THREAD.start()
+    SCHED_STATE["started_at"] = now_iso()
     log.info("Saudi fraud ingest scheduler started (every %sh)", SAUDI_INGEST_EVERY_HOURS)
     return True
 

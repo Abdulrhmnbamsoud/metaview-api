@@ -17,6 +17,8 @@ class ThreatIntelTestCase(unittest.TestCase):
         os.environ["DB_PATH"] = str(db_file)
         # Reinitialize the database schema
         from backend.app import db as db_module
+        cls._orig_db_path = db_module.DB_PATH
+        db_module.DB_PATH = str(db_file)  # config is read once at import; env var alone is not enough
         if db_file.exists():
             db_file.unlink()
         db_module.init_db()
@@ -28,6 +30,8 @@ class ThreatIntelTestCase(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        from backend.app import db as db_module
+        db_module.DB_PATH = cls._orig_db_path
         if cls.db_file.exists():
             cls.db_file.unlink()
         shutil.rmtree(cls.temp_dir, ignore_errors=True)
