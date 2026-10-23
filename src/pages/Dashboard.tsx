@@ -33,7 +33,7 @@ import { NewsGridSkeleton } from '../components/LoadingSkeleton';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { formatDate, timeAgo } from '../utils/formatDate';
 
-const GOLD_PALETTE = ['#c5a059', '#e0c58a', '#8e6d2f', '#a8813a', '#dfc377', '#f5efd5', '#6f4e29'];
+const GOLD_PALETTE = ['#4cd7f6', '#acedff', '#06b6d4', '#a8813a', '#dfc377', '#f5efd5', '#6f4e29'];
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -110,11 +110,11 @@ export const Dashboard: React.FC = () => {
   return (
     <div className="space-y-8 animate-fadeIn">
       {/* Top Welcome & Mission Banner */}
-      <div className="sovereign-card rounded-3xl p-6 md:p-8 border border-[#c5a059]/20 relative overflow-hidden bg-gradient-to-l from-[#0e111a] via-[#090b12] to-[#06070a]">
-        <div className="absolute top-0 left-0 w-96 h-96 bg-[#c5a059]/5 rounded-full blur-3xl pointer-events-none" />
+      <div className="sovereign-card rounded-3xl p-6 md:p-8 border border-[#4cd7f6]/20 relative overflow-hidden bg-gradient-to-l from-[#0e111a] via-[#090b12] to-[#06070a]">
+        <div className="absolute top-0 left-0 w-96 h-96 bg-[#4cd7f6]/5 rounded-full blur-3xl pointer-events-none" />
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-[#c5a059]/15 border border-[#c5a059]/30 text-[#e0c58a] text-xs font-mono font-semibold">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-[#4cd7f6]/15 border border-[#4cd7f6]/30 text-[#acedff] text-xs font-mono font-semibold">
               <Sparkles className="w-3.5 h-3.5" />
               <span>GLOBAL INTELLIGENCE & MONITORING OPERATIONS</span>
             </div>
@@ -129,7 +129,7 @@ export const Dashboard: React.FC = () => {
           <div className="flex items-center gap-3">
             <button
               onClick={() => navigate('/explorer')}
-              className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-[#c5a059] hover:bg-[#dfc377] text-black font-bold text-xs shadow-lg transition-all"
+              className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-[#4cd7f6] hover:bg-[#dfc377] text-black font-bold text-xs shadow-lg transition-all"
             >
               <Compass className="w-4 h-4" />
               <span>فتح مستكشف الأخبار</span>
@@ -140,7 +140,7 @@ export const Dashboard: React.FC = () => {
               className="p-3 rounded-2xl bg-white/5 hover:bg-white/10 text-gray-300 border border-white/10 transition-all"
               title="تحديث البيانات الآن"
             >
-              <RefreshCw className={`w-4 h-4 text-[#c5a059] ${loading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`w-4 h-4 text-[#4cd7f6] ${loading ? 'animate-spin' : ''}`} />
             </button>
           </div>
         </div>
@@ -151,7 +151,7 @@ export const Dashboard: React.FC = () => {
       {/* Global Overview Cards (4 Key Metrics) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         {/* Metric 1: Total Articles */}
-        <div className="sovereign-card rounded-2xl p-5 border border-[#c5a059]/15 flex items-center justify-between">
+        <div className="sovereign-card rounded-2xl p-5 border border-[#4cd7f6]/15 flex items-center justify-between">
           <div>
             <span className="text-xs text-gray-400 font-mono block mb-1">إجمالي المقالات المتاحة</span>
             <span className="text-2xl font-black text-white font-mono">
@@ -161,13 +161,13 @@ export const Dashboard: React.FC = () => {
               ● REAL DB REPOSITORY
             </span>
           </div>
-          <div className="w-12 h-12 rounded-xl bg-[#c5a059]/10 border border-[#c5a059]/20 flex items-center justify-center text-[#c5a059]">
+          <div className="w-12 h-12 rounded-xl bg-[#4cd7f6]/10 border border-[#4cd7f6]/20 flex items-center justify-center text-[#4cd7f6]">
             <Database className="w-6 h-6" />
           </div>
         </div>
 
         {/* Metric 2: Active Sources */}
-        <div className="sovereign-card rounded-2xl p-5 border border-[#c5a059]/15 flex items-center justify-between">
+        <div className="sovereign-card rounded-2xl p-5 border border-[#4cd7f6]/15 flex items-center justify-between">
           <div>
             <span className="text-xs text-gray-400 font-mono block mb-1">المصادر الإخبارية النشطة</span>
             <span className="text-2xl font-black text-white font-mono">
@@ -177,29 +177,29 @@ export const Dashboard: React.FC = () => {
               REUTERS, BBC, CNN, DW...
             </span>
           </div>
-          <div className="w-12 h-12 rounded-xl bg-[#c5a059]/10 border border-[#c5a059]/20 flex items-center justify-center text-[#c5a059]">
+          <div className="w-12 h-12 rounded-xl bg-[#4cd7f6]/10 border border-[#4cd7f6]/20 flex items-center justify-center text-[#4cd7f6]">
             <Radio className="w-6 h-6" />
           </div>
         </div>
 
         {/* Metric 3: Last 24 Hours */}
-        <div className="sovereign-card rounded-2xl p-5 border border-[#c5a059]/15 flex items-center justify-between">
+        <div className="sovereign-card rounded-2xl p-5 border border-[#4cd7f6]/15 flex items-center justify-between">
           <div>
             <span className="text-xs text-gray-400 font-mono block mb-1">أخبار آخر 24 ساعة</span>
             <span className="text-2xl font-black text-white font-mono">
               {stats?.articles_last_24h || '—'}
             </span>
-            <span className="text-[10px] text-[#e0c58a] block mt-1 font-mono">
+            <span className="text-[10px] text-[#acedff] block mt-1 font-mono">
               LIVE CADENCE
             </span>
           </div>
-          <div className="w-12 h-12 rounded-xl bg-[#c5a059]/10 border border-[#c5a059]/20 flex items-center justify-center text-[#c5a059]">
+          <div className="w-12 h-12 rounded-xl bg-[#4cd7f6]/10 border border-[#4cd7f6]/20 flex items-center justify-center text-[#4cd7f6]">
             <Clock className="w-6 h-6" />
           </div>
         </div>
 
         {/* Metric 4: Last Sync */}
-        <div className="sovereign-card rounded-2xl p-5 border border-[#c5a059]/15 flex items-center justify-between">
+        <div className="sovereign-card rounded-2xl p-5 border border-[#4cd7f6]/15 flex items-center justify-between">
           <div>
             <span className="text-xs text-gray-400 font-mono block mb-1">آخر توقيت لتحديث البيانات</span>
             <span className="text-sm font-bold text-white block mt-1">
@@ -209,7 +209,7 @@ export const Dashboard: React.FC = () => {
               {stats?.last_sync ? formatDate(stats.last_sync) : 'متزامن'}
             </span>
           </div>
-          <div className="w-12 h-12 rounded-xl bg-[#c5a059]/10 border border-[#c5a059]/20 flex items-center justify-center text-[#c5a059]">
+          <div className="w-12 h-12 rounded-xl bg-[#4cd7f6]/10 border border-[#4cd7f6]/20 flex items-center justify-center text-[#4cd7f6]">
             <Calendar className="w-6 h-6" />
           </div>
         </div>
@@ -218,10 +218,10 @@ export const Dashboard: React.FC = () => {
       {/* Analytics Charts Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Timeline Chart (2 Cols) */}
-        <div className="lg:col-span-2 sovereign-card rounded-3xl p-6 border border-[#c5a059]/15 flex flex-col justify-between">
+        <div className="lg:col-span-2 sovereign-card rounded-3xl p-6 border border-[#4cd7f6]/15 flex flex-col justify-between">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-xl bg-[#c5a059]/10 text-[#c5a059]">
+              <div className="p-2 rounded-xl bg-[#4cd7f6]/10 text-[#4cd7f6]">
                 <TrendingUp className="w-4 h-4" />
               </div>
               <div>
@@ -239,16 +239,16 @@ export const Dashboard: React.FC = () => {
               <AreaChart data={timelineData}>
                 <defs>
                   <linearGradient id="goldGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#c5a059" stopOpacity={0.4} />
-                    <stop offset="95%" stopColor="#c5a059" stopOpacity={0.0} />
+                    <stop offset="5%" stopColor="#4cd7f6" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="#4cd7f6" stopOpacity={0.0} />
                   </linearGradient>
                 </defs>
                 <XAxis dataKey="time" stroke="#475569" fontSize={11} tickLine={false} />
                 <YAxis stroke="#475569" fontSize={11} tickLine={false} axisLine={false} />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: '#0c0e16',
-                    borderColor: 'rgba(197, 160, 89, 0.3)',
+                    backgroundColor: '#0F172A',
+                    borderColor: 'rgba(76, 215, 246, 0.3)',
                     borderRadius: '12px',
                     color: '#fff',
                     fontSize: '12px',
@@ -259,7 +259,7 @@ export const Dashboard: React.FC = () => {
                 <Area
                   type="monotone"
                   dataKey="count"
-                  stroke="#c5a059"
+                  stroke="#4cd7f6"
                   strokeWidth={2.5}
                   fillOpacity={1}
                   fill="url(#goldGradient)"
@@ -270,10 +270,10 @@ export const Dashboard: React.FC = () => {
         </div>
 
         {/* Source Distribution (1 Col) */}
-        <div className="sovereign-card rounded-3xl p-6 border border-[#c5a059]/15 flex flex-col justify-between">
+        <div className="sovereign-card rounded-3xl p-6 border border-[#4cd7f6]/15 flex flex-col justify-between">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-xl bg-[#c5a059]/10 text-[#c5a059]">
+              <div className="p-2 rounded-xl bg-[#4cd7f6]/10 text-[#4cd7f6]">
                 <PieIcon className="w-4 h-4" />
               </div>
               <div>
@@ -303,8 +303,8 @@ export const Dashboard: React.FC = () => {
                   </Pie>
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: '#0c0e16',
-                      borderColor: 'rgba(197, 160, 89, 0.3)',
+                      backgroundColor: '#0F172A',
+                      borderColor: 'rgba(76, 215, 246, 0.3)',
                       borderRadius: '12px',
                       color: '#fff',
                       fontSize: '12px',
@@ -335,8 +335,8 @@ export const Dashboard: React.FC = () => {
 
       {/* Trending Topics Bar */}
       {trendingWords.length > 0 && (
-        <div className="sovereign-card rounded-2xl p-4 border border-[#c5a059]/15 flex items-center gap-3 overflow-x-auto">
-          <span className="text-xs font-mono text-[#c5a059] shrink-0 font-bold flex items-center gap-1.5">
+        <div className="sovereign-card rounded-2xl p-4 border border-[#4cd7f6]/15 flex items-center gap-3 overflow-x-auto">
+          <span className="text-xs font-mono text-[#4cd7f6] shrink-0 font-bold flex items-center gap-1.5">
             <Layers className="w-3.5 h-3.5" />
             <span>الكلمات الأكثر تكراراً:</span>
           </span>
@@ -345,7 +345,7 @@ export const Dashboard: React.FC = () => {
               <button
                 key={i}
                 onClick={() => navigate(`/explorer?q=${encodeURIComponent(word)}`)}
-                className="px-3 py-1 rounded-xl bg-white/5 hover:bg-[#c5a059]/20 text-gray-300 hover:text-[#e0c58a] text-xs font-medium border border-white/5 transition-all shrink-0"
+                className="px-3 py-1 rounded-xl bg-white/5 hover:bg-[#4cd7f6]/20 text-gray-300 hover:text-[#acedff] text-xs font-medium border border-white/5 transition-all shrink-0"
               >
                 #{word}
               </button>
@@ -358,12 +358,12 @@ export const Dashboard: React.FC = () => {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#c5a059] shadow-[0_0_10px_#c5a059]" />
+            <span className="w-2.5 h-2.5 rounded-full bg-[#4cd7f6] shadow-[0_0_10px_#4cd7f6]" />
             <h2 className="text-lg font-bold text-white">آخر المستجدات الإخبارية (Latest Feed)</h2>
           </div>
           <button
             onClick={() => navigate('/explorer')}
-            className="flex items-center gap-1 text-xs font-semibold text-[#c5a059] hover:text-[#e0c58a] transition-colors"
+            className="flex items-center gap-1 text-xs font-semibold text-[#4cd7f6] hover:text-[#acedff] transition-colors"
           >
             <span>استعراض كافة الأخبار</span>
             <ChevronLeft className="w-4 h-4" />

@@ -276,3 +276,32 @@ export interface SaudiIncidentReport {
   unclassified: number;
   pending_merge_suggestions: number;
 }
+
+export interface SaudiRuntime {
+  commit: string | null;
+  branch: string | null;
+  service: string | null;
+  on_render: boolean;
+  disk: {
+    data_dir: string;
+    db_path: string;
+    db_inside_data_dir: boolean;
+    data_dir_is_mount_point?: boolean;
+    data_dir_on_separate_device?: boolean;
+    db_size_bytes?: number | null;
+    free_bytes?: number;
+    error?: string;
+  };
+  sqlite_journal_mode: string | null;
+  scheduler: {
+    last_tick_at?: string | null;
+    last_decision?: string | null;
+    last_error?: string | null;
+    last_run_started_at?: string | null;
+    thread_alive?: boolean;
+    [k: string]: any;
+  };
+  lease: { active: boolean; holder?: string; acquired_at?: string; expires_at?: string };
+  admin_token_configured: boolean;
+  manual_cooldown_seconds: number;
+}

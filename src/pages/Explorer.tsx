@@ -130,14 +130,14 @@ export const Explorer: React.FC = () => {
         </div>
         <div className="flex items-center gap-2 font-mono text-xs">
           <span className="text-gray-400">إجمالي السجلات:</span>
-          <span className="px-3 py-1 rounded-lg bg-[#c5a059]/15 text-[#e0c58a] font-bold border border-[#c5a059]/30">
+          <span className="px-3 py-1 rounded-lg bg-[#4cd7f6]/15 text-[#acedff] font-bold border border-[#4cd7f6]/30">
             {totalRows.toLocaleString()}
           </span>
         </div>
       </div>
 
       {/* Filter and Search Control Bar */}
-      <div className="sovereign-card rounded-2xl p-5 border border-[#c5a059]/15 space-y-4">
+      <div className="sovereign-card rounded-2xl p-5 border border-[#4cd7f6]/15 space-y-4">
         {/* Search Row */}
         <form onSubmit={handleSearchSubmit} className="flex gap-3">
           <div className="flex-1 relative">
@@ -146,7 +146,7 @@ export const Explorer: React.FC = () => {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="ابحث بالكلمات المفتاحية في العنوان، الملخص، أو المحتوى..."
-              className="w-full bg-[#0a0c14] border border-[#c5a059]/20 focus:border-[#c5a059]/60 py-3 pr-11 pl-4 rounded-xl text-sm text-white placeholder-gray-500 outline-none transition-all shadow-inner"
+              className="w-full bg-[#0a0c14] border border-[#4cd7f6]/20 focus:border-[#4cd7f6]/60 py-3 pr-11 pl-4 rounded-xl text-sm text-white placeholder-gray-500 outline-none transition-all shadow-inner"
             />
             <Search className="w-4 h-4 text-gray-500 absolute top-1/2 -translate-y-1/2 right-4 pointer-events-none" />
             {query && (
@@ -162,7 +162,7 @@ export const Explorer: React.FC = () => {
 
           <button
             type="submit"
-            className="px-6 py-3 rounded-xl bg-[#c5a059] hover:bg-[#dfc377] text-black font-bold text-xs shrink-0 shadow-lg transition-all"
+            className="px-6 py-3 rounded-xl bg-[#4cd7f6] hover:bg-[#dfc377] text-black font-bold text-xs shrink-0 shadow-lg transition-all"
           >
             بحث
           </button>
@@ -173,7 +173,7 @@ export const Explorer: React.FC = () => {
           {/* Source Filter */}
           <div className="flex flex-col gap-1">
             <label className="text-[10px] font-mono text-gray-400 flex items-center gap-1">
-              <Building2 className="w-3 h-3 text-[#c5a059]" />
+              <Building2 className="w-3 h-3 text-[#4cd7f6]" />
               <span>المصدر</span>
             </label>
             <select
@@ -182,7 +182,7 @@ export const Explorer: React.FC = () => {
                 setSelectedSource(e.target.value);
                 setPage(1);
               }}
-              className="bg-[#0a0c14] border border-white/10 rounded-xl px-3 py-2 text-xs text-gray-200 outline-none focus:border-[#c5a059]/40"
+              className="bg-[#0a0c14] border border-white/10 rounded-xl px-3 py-2 text-xs text-gray-200 outline-none focus:border-[#4cd7f6]/40"
             >
               <option value="all">كافة المصادر</option>
               {availableSources.map((src) => (
@@ -196,7 +196,7 @@ export const Explorer: React.FC = () => {
           {/* Country Filter */}
           <div className="flex flex-col gap-1">
             <label className="text-[10px] font-mono text-gray-400 flex items-center gap-1">
-              <Globe className="w-3 h-3 text-[#c5a059]" />
+              <Globe className="w-3 h-3 text-[#4cd7f6]" />
               <span>بلد المصدر</span>
             </label>
             <select
@@ -205,7 +205,7 @@ export const Explorer: React.FC = () => {
                 setSelectedCountry(e.target.value);
                 setPage(1);
               }}
-              className="bg-[#0a0c14] border border-white/10 rounded-xl px-3 py-2 text-xs text-gray-200 outline-none focus:border-[#c5a059]/40"
+              className="bg-[#0a0c14] border border-white/10 rounded-xl px-3 py-2 text-xs text-gray-200 outline-none focus:border-[#4cd7f6]/40"
             >
               <option value="all">كافة الدول</option>
               {availableCountries.map((c) => (
@@ -219,7 +219,7 @@ export const Explorer: React.FC = () => {
           {/* Date Range: Min Date */}
           <div className="flex flex-col gap-1">
             <label className="text-[10px] font-mono text-gray-400 flex items-center gap-1">
-              <Calendar className="w-3 h-3 text-[#c5a059]" />
+              <Calendar className="w-3 h-3 text-[#4cd7f6]" />
               <span>من تاريخ</span>
             </label>
             <input
@@ -229,14 +229,14 @@ export const Explorer: React.FC = () => {
                 setMinDate(e.target.value);
                 setPage(1);
               }}
-              className="bg-[#0a0c14] border border-white/10 rounded-xl px-3 py-1.5 text-xs text-gray-200 outline-none focus:border-[#c5a059]/40"
+              className="bg-[#0a0c14] border border-white/10 rounded-xl px-3 py-1.5 text-xs text-gray-200 outline-none focus:border-[#4cd7f6]/40"
             />
           </div>
 
           {/* Date Range: Max Date */}
           <div className="flex flex-col gap-1">
             <label className="text-[10px] font-mono text-gray-400 flex items-center gap-1">
-              <Calendar className="w-3 h-3 text-[#c5a059]" />
+              <Calendar className="w-3 h-3 text-[#4cd7f6]" />
               <span>إلى تاريخ</span>
             </label>
             <input
@@ -246,14 +246,14 @@ export const Explorer: React.FC = () => {
                 setMaxDate(e.target.value);
                 setPage(1);
               }}
-              className="bg-[#0a0c14] border border-white/10 rounded-xl px-3 py-1.5 text-xs text-gray-200 outline-none focus:border-[#c5a059]/40"
+              className="bg-[#0a0c14] border border-white/10 rounded-xl px-3 py-1.5 text-xs text-gray-200 outline-none focus:border-[#4cd7f6]/40"
             />
           </div>
 
           {/* Sort By / Sort Dir */}
           <div className="flex flex-col gap-1">
             <label className="text-[10px] font-mono text-gray-400 flex items-center gap-1">
-              <ArrowUpDown className="w-3 h-3 text-[#c5a059]" />
+              <ArrowUpDown className="w-3 h-3 text-[#4cd7f6]" />
               <span>الترتيب</span>
             </label>
             <div className="flex gap-1.5">
@@ -282,7 +282,7 @@ export const Explorer: React.FC = () => {
         <div className="flex justify-end pt-2">
           <button
             onClick={handleResetFilters}
-            className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-[#e0c58a] transition-colors"
+            className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-[#acedff] transition-colors"
           >
             <RotateCcw className="w-3.5 h-3.5" />
             <span>إعادة تعيين الفلاتر</span>
@@ -326,7 +326,7 @@ export const Explorer: React.FC = () => {
               <span>السابق</span>
             </button>
 
-            <span className="px-3 py-1 text-xs font-mono font-bold text-[#e0c58a] bg-[#c5a059]/15 rounded-lg border border-[#c5a059]/30">
+            <span className="px-3 py-1 text-xs font-mono font-bold text-[#acedff] bg-[#4cd7f6]/15 rounded-lg border border-[#4cd7f6]/30">
               {page}
             </span>
 

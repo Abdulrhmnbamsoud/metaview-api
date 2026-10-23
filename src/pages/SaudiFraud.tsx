@@ -141,7 +141,7 @@ export const SaudiFraud: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-white/5">
         <div>
           <h1 className="text-2xl font-black text-white royal-gradient-text flex items-center gap-3">
-            <ShieldAlert className="w-7 h-7 text-[#c5a059]" />
+            <ShieldAlert className="w-7 h-7 text-[#4cd7f6]" />
             استخبارات الاحتيال السعودية (Saudi Fraud Intelligence)
           </h1>
           <p className="text-xs text-gray-400 mt-1">
@@ -151,12 +151,12 @@ export const SaudiFraud: React.FC = () => {
         <div
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold border ${
             overview?.ingest_running
-              ? 'bg-[#c5a059]/20 border-[#c5a059]/40 text-[#e0c58a]'
+              ? 'bg-[#4cd7f6]/20 border-[#4cd7f6]/40 text-[#acedff]'
               : 'bg-white/5 border-white/10 text-gray-300'
           }`}
           title="السحب اليدوي إجراء إداري من الخادم فقط"
         >
-          <RefreshCw className={`w-3.5 h-3.5 text-[#c5a059] ${overview?.ingest_running ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`w-3.5 h-3.5 text-[#4cd7f6] ${overview?.ingest_running ? 'animate-spin' : ''}`} />
           {overview?.ingest_running
             ? 'جاري السحب...'
             : overview?.auto_ingest_enabled
@@ -182,7 +182,7 @@ export const SaudiFraud: React.FC = () => {
             <div key={s.label} className="sovereign-card rounded-2xl p-4 border border-white/10">
               <div className="flex items-center justify-between text-gray-400 text-[11px]">
                 <span>{s.label}</span>
-                <Icon className="w-4 h-4 text-[#c5a059]" />
+                <Icon className="w-4 h-4 text-[#4cd7f6]" />
               </div>
               <div className="text-2xl font-black text-white mt-2 font-mono">{s.value}</div>
             </div>
@@ -216,7 +216,7 @@ export const SaudiFraud: React.FC = () => {
             key={k}
             onClick={() => setTab(k)}
             className={`px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors ${
-              tab === k ? 'border-[#c5a059] text-[#e0c58a]' : 'border-transparent text-gray-400 hover:text-white'
+              tab === k ? 'border-[#4cd7f6] text-[#acedff]' : 'border-transparent text-gray-400 hover:text-white'
             }`}
           >
             {label}
@@ -231,7 +231,7 @@ export const SaudiFraud: React.FC = () => {
             <button
               onClick={() => { setCategory(''); setPage(1); }}
               className={`px-3 py-1.5 rounded-lg text-[11px] border ${
-                !category ? 'bg-[#c5a059]/20 border-[#c5a059]/50 text-[#e0c58a]' : 'bg-white/5 border-white/10 text-gray-300'
+                !category ? 'bg-[#4cd7f6]/20 border-[#4cd7f6]/50 text-[#acedff]' : 'bg-white/5 border-white/10 text-gray-300'
               }`}
             >
               الكل ({overview?.total_items ?? 0})
@@ -242,8 +242,8 @@ export const SaudiFraud: React.FC = () => {
                 onClick={() => { setCategory(c.key); setPage(1); }}
                 className={`px-3 py-1.5 rounded-lg text-[11px] border ${
                   category === c.key
-                    ? 'bg-[#c5a059]/20 border-[#c5a059]/50 text-[#e0c58a]'
-                    : 'bg-white/5 border-white/10 text-gray-300 hover:border-[#c5a059]/30'
+                    ? 'bg-[#4cd7f6]/20 border-[#4cd7f6]/50 text-[#acedff]'
+                    : 'bg-white/5 border-white/10 text-gray-300 hover:border-[#4cd7f6]/30'
                 }`}
               >
                 {c.label_ar} ({c.count})
@@ -259,14 +259,14 @@ export const SaudiFraud: React.FC = () => {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="بحث في عناوين وملخصات الاحتيال..."
-                className="w-full bg-[#0d0f18] border border-[#c5a059]/20 focus:border-[#c5a059]/60 py-2.5 pr-10 pl-3 rounded-xl text-xs text-white placeholder-gray-500 outline-none"
+                className="w-full bg-[#0F172A] border border-[#4cd7f6]/20 focus:border-[#4cd7f6]/60 py-2.5 pr-10 pl-3 rounded-xl text-xs text-white placeholder-gray-500 outline-none"
               />
               <Search className="w-4 h-4 text-gray-500 absolute right-3 top-1/2 -translate-y-1/2" />
             </form>
             <select
               value={bank}
               onChange={(e) => { setBank(e.target.value); setPage(1); }}
-              className="bg-[#0d0f18] border border-white/10 rounded-xl text-xs text-gray-200 px-3 py-2.5"
+              className="bg-[#0F172A] border border-white/10 rounded-xl text-xs text-gray-200 px-3 py-2.5"
             >
               <option value="">كل مستويات الصلة البنكية</option>
               <option value="high">عالية</option>
@@ -289,10 +289,10 @@ export const SaudiFraud: React.FC = () => {
                 return (
                   <article
                     key={it.id}
-                    className="sovereign-card rounded-2xl p-5 border border-white/10 hover:border-[#c5a059]/40 transition-colors"
+                    className="sovereign-card rounded-2xl p-5 border border-white/10 hover:border-[#4cd7f6]/40 transition-colors"
                   >
                     <div className="flex flex-wrap items-center gap-2 mb-3">
-                      <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-[#c5a059]/15 text-[#e0c58a] border border-[#c5a059]/30">
+                      <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-[#4cd7f6]/15 text-[#acedff] border border-[#4cd7f6]/30">
                         {it.fraud_category_ar}
                       </span>
                       {it.content_type_ar && (
@@ -313,7 +313,7 @@ export const SaudiFraud: React.FC = () => {
                       {bb && <span className={`px-2.5 py-1 rounded-lg text-[10px] border ${bb.cls}`}>{bb.label}</span>}
                     </div>
                     <h3
-                      className="text-base font-bold text-white leading-snug cursor-pointer hover:text-[#e0c58a]"
+                      className="text-base font-bold text-white leading-snug cursor-pointer hover:text-[#acedff]"
                       onClick={() => openDetail(it)}
                     >
                       {it.headline || it.title}
@@ -328,7 +328,7 @@ export const SaudiFraud: React.FC = () => {
                       <div className="flex gap-2">
                         <button
                           onClick={() => openDetail(it)}
-                          className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-[#c5a059]/15 border border-white/10 text-gray-200"
+                          className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-[#4cd7f6]/15 border border-white/10 text-gray-200"
                         >
                           التحليل الاستخباراتي
                         </button>
@@ -337,7 +337,7 @@ export const SaudiFraud: React.FC = () => {
                             href={it.original_url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#c5a059]/15 border border-[#c5a059]/40 text-[#e0c58a]"
+                            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#4cd7f6]/15 border border-[#4cd7f6]/40 text-[#acedff]"
                           >
                             المصدر الأصلي <ExternalLink className="w-3 h-3" />
                           </a>
@@ -363,7 +363,7 @@ export const SaudiFraud: React.FC = () => {
       {/* PATTERNS */}
       {tab === 'patterns' && (
         <div className="space-y-4">
-          <div className="p-4 rounded-2xl bg-[#0d0f18] border border-[#c5a059]/20 text-xs text-gray-300 leading-relaxed">
+          <div className="p-4 rounded-2xl bg-[#0F172A] border border-[#4cd7f6]/20 text-xs text-gray-300 leading-relaxed">
             {patterns?.note || 'الأنماط أساليب ذُكرت صراحة في المصادر؛ العدّ بالحوادث المستقلة وليس بالمقالات.'}
           </div>
           <div className="grid md:grid-cols-2 gap-6">
@@ -372,13 +372,13 @@ export const SaudiFraud: React.FC = () => {
               {patterns?.patterns.length ? patterns.patterns.map((p) => (
                 <div key={p.key} className="p-3 rounded-xl bg-black/40 border border-white/5 space-y-1">
                   <div className="flex justify-between text-xs">
-                    <b className="text-[#e0c58a]">{p.label_ar}</b>
+                    <b className="text-[#acedff]">{p.label_ar}</b>
                     <span className="font-mono text-gray-300">{p.incident_count} حادثة • {p.warning_article_count} تحذير</span>
                   </div>
                   {p.evidence[0] && (
                     <p className="text-[11px] text-gray-400 leading-relaxed">
                       «{p.evidence[0].quote}»{' '}
-                      <a href={p.evidence[0].url} target="_blank" rel="noopener noreferrer" className="text-[#e0c58a] hover:underline">— {p.evidence[0].source}</a>
+                      <a href={p.evidence[0].url} target="_blank" rel="noopener noreferrer" className="text-[#acedff] hover:underline">— {p.evidence[0].source}</a>
                     </p>
                   )}
                 </div>
@@ -400,8 +400,8 @@ export const SaudiFraud: React.FC = () => {
       {/* RULES */}
       {tab === 'rules' && (
         <div className="space-y-4">
-          <div className="p-4 rounded-2xl bg-[#0d0f18] border border-[#c5a059]/20 flex gap-3 text-xs text-gray-300 leading-relaxed">
-            <FlaskConical className="w-5 h-5 text-[#c5a059] shrink-0" />
+          <div className="p-4 rounded-2xl bg-[#0F172A] border border-[#4cd7f6]/20 flex gap-3 text-xs text-gray-300 leading-relaxed">
+            <FlaskConical className="w-5 h-5 text-[#4cd7f6] shrink-0" />
             {rules?.note || 'قواعد مقترحة من النظام (فرضيات) وغير مُختبرة على بيانات فعلية.'}
           </div>
           {rules?.rules.length ? rules.rules.map((r) => (
@@ -446,7 +446,7 @@ export const SaudiFraud: React.FC = () => {
             <tbody>
               {sources.map((s) => (
                 <tr key={s.code} className="border-b border-white/5">
-                  <td className="p-3 text-gray-200">{s.name}{s.official ? <span className="mr-2 text-[10px] text-[#e0c58a]">رسمي</span> : null}</td>
+                  <td className="p-3 text-gray-200">{s.name}{s.official ? <span className="mr-2 text-[10px] text-[#acedff]">رسمي</span> : null}</td>
                   <td className="p-3 font-mono text-gray-400">{s.kind}</td>
                   <td className="p-3">
                     <span className={`inline-flex items-center gap-1 ${s.last_status === 'ok' ? 'text-emerald-400' : 'text-red-400'}`}>
@@ -468,10 +468,10 @@ export const SaudiFraud: React.FC = () => {
       {/* DETAIL MODAL */}
       {selected && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-start justify-center p-4 overflow-y-auto" onClick={() => setSelected(null)}>
-          <div className="w-full max-w-3xl bg-[#0a0b12] border border-[#c5a059]/30 rounded-2xl p-6 space-y-5 my-8" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-3xl bg-[#0a0b12] border border-[#4cd7f6]/30 rounded-2xl p-6 space-y-5 my-8" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-start justify-between gap-4">
               <div>
-                <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-[#c5a059]/15 text-[#e0c58a] border border-[#c5a059]/30">{selected.fraud_category_ar}</span>
+                <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-[#4cd7f6]/15 text-[#acedff] border border-[#4cd7f6]/30">{selected.fraud_category_ar}</span>
                 <h2 className="text-lg font-bold text-white mt-3 leading-snug">{selected.headline || selected.title}</h2>
                 <p className="text-[11px] text-gray-500 mt-1">{selected.source} • نُشر {fmtDate(selected.published_at)} • سُحب {fmtDate(selected.fetched_at)}</p>
               </div>
@@ -479,7 +479,7 @@ export const SaudiFraud: React.FC = () => {
             </div>
 
             {selected.original_url && (
-              <a href={selected.original_url} target="_blank" rel="noopener noreferrer" dir="ltr" className="flex items-center gap-2 text-[11px] text-[#e0c58a] break-all hover:underline">
+              <a href={selected.original_url} target="_blank" rel="noopener noreferrer" dir="ltr" className="flex items-center gap-2 text-[11px] text-[#acedff] break-all hover:underline">
                 <ExternalLink className="w-3.5 h-3.5 shrink-0" /> {selected.original_url}
               </a>
             )}
@@ -515,7 +515,7 @@ export const SaudiFraud: React.FC = () => {
             {/* Indicators */}
             {selected.detection_indicators && (
               <section className="space-y-2">
-                <h3 className="text-xs font-bold text-white flex items-center gap-2"><ListChecks className="w-4 h-4 text-[#c5a059]" /> مؤشرات المخاطر القابلة للرصد</h3>
+                <h3 className="text-xs font-bold text-white flex items-center gap-2"><ListChecks className="w-4 h-4 text-[#4cd7f6]" /> مؤشرات المخاطر القابلة للرصد</h3>
                 <div className="grid md:grid-cols-2 gap-3 text-[11px]">
                   <div className="p-3 rounded-lg bg-black/40 border border-white/5">
                     <b className="text-gray-200">مذكورة في المصدر</b>

@@ -26,7 +26,7 @@ import { apiService } from '../services/api';
 import { SourcesResponse, SourceInfo, Article, SearchResponse } from '../types';
 import { formatDate, timeAgo } from '../utils/formatDate';
 
-const GOLD_PALETTE = ['#c5a059', '#e0c58a', '#8e6d2f', '#a8813a', '#dfc377', '#f5efd5', '#6f4e29'];
+const GOLD_PALETTE = ['#4cd7f6', '#acedff', '#06b6d4', '#a8813a', '#dfc377', '#f5efd5', '#6f4e29'];
 
 export const Sources: React.FC = () => {
   const navigate = useNavigate();
@@ -81,19 +81,19 @@ export const Sources: React.FC = () => {
       </div>
 
       {/* Methodological Caveat Box */}
-      <div className="p-4 rounded-2xl bg-[#0d0f18] border border-[#c5a059]/20 flex items-start gap-3">
-        <ShieldAlert className="w-5 h-5 text-[#c5a059] shrink-0 mt-0.5" />
+      <div className="p-4 rounded-2xl bg-[#0F172A] border border-[#4cd7f6]/20 flex items-start gap-3">
+        <ShieldAlert className="w-5 h-5 text-[#4cd7f6] shrink-0 mt-0.5" />
         <div className="text-xs text-gray-300 leading-relaxed">
-          <strong className="text-[#e0c58a] block mb-0.5">ضابط الموثوقية (Integrity Principle):</strong>
+          <strong className="text-[#acedff] block mb-0.5">ضابط الموثوقية (Integrity Principle):</strong>
           إن عدد المقالات المنشورة أو حجم التغطية لا يمثل بأي شكل دليلاً منفرداً على مصداقية أو موضوعية المصدر الإخباري، وإنما يعكس فقط وتيرة النشر الرقمي لخدمات الـ RSS الخاصة به.
         </div>
       </div>
 
       {/* Coverage Volume Comparison Bar Chart */}
-      <div className="sovereign-card rounded-3xl p-6 md:p-8 border border-[#c5a059]/20">
+      <div className="sovereign-card rounded-3xl p-6 md:p-8 border border-[#4cd7f6]/20">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-[#c5a059]/10 text-[#c5a059]">
+            <div className="p-2 rounded-xl bg-[#4cd7f6]/10 text-[#4cd7f6]">
               <TrendingUp className="w-4 h-4" />
             </div>
             <div>
@@ -121,8 +121,8 @@ export const Sources: React.FC = () => {
               <YAxis stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} />
               <Tooltip
                 contentStyle={{
-                  backgroundColor: '#0c0e16',
-                  borderColor: 'rgba(197, 160, 89, 0.3)',
+                  backgroundColor: '#0F172A',
+                  borderColor: 'rgba(76, 215, 246, 0.3)',
                   borderRadius: '12px',
                   color: '#fff',
                   fontSize: '12px',
@@ -134,7 +134,7 @@ export const Sources: React.FC = () => {
                 {chartData.map((entry, index) => (
                   <Cell
                     key={`cell-${index}`}
-                    fill={entry.code === selectedSourceCode ? '#e0c58a' : '#c5a059'}
+                    fill={entry.code === selectedSourceCode ? '#acedff' : '#4cd7f6'}
                     cursor="pointer"
                     onClick={() => setSelectedSourceCode(entry.code)}
                   />
@@ -150,7 +150,7 @@ export const Sources: React.FC = () => {
         {/* Source Cards List (2 Cols) */}
         <div className="lg:col-span-2 space-y-3">
           <h3 className="text-sm font-bold text-white flex items-center gap-2">
-            <Building2 className="w-4 h-4 text-[#c5a059]" />
+            <Building2 className="w-4 h-4 text-[#4cd7f6]" />
             <span>قائمة وكالات الأنباء والصحف المعتمدة</span>
           </h3>
 
@@ -163,13 +163,13 @@ export const Sources: React.FC = () => {
                   onClick={() => setSelectedSourceCode(src.code)}
                   className={`sovereign-card rounded-2xl p-5 border cursor-pointer transition-all ${
                     isSelected
-                      ? 'border-[#c5a059] bg-[#121522] shadow-[0_0_20px_rgba(197,160,89,0.15)]'
-                      : 'border-white/5 hover:border-[#c5a059]/30'
+                      ? 'border-[#4cd7f6] bg-[#121522] shadow-[0_0_20px_rgba(76,215,246,0.15)]'
+                      : 'border-white/5 hover:border-[#4cd7f6]/30'
                   }`}
                 >
                   <div className="flex items-center justify-between mb-3">
                     <span className="font-bold text-white text-base">{src.name}</span>
-                    <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-white/5 text-[#e0c58a] border border-white/10 uppercase">
+                    <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-white/5 text-[#acedff] border border-white/10 uppercase">
                       {src.code}
                     </span>
                   </div>
@@ -181,7 +181,7 @@ export const Sources: React.FC = () => {
                     </div>
                     <div className="flex items-center justify-between">
                       <span>إجمالي المقالات:</span>
-                      <strong className="text-[#e0c58a] font-mono">{src.articles_count}</strong>
+                      <strong className="text-[#acedff] font-mono">{src.articles_count}</strong>
                     </div>
                     <div className="flex items-center justify-between">
                       <span>آخر مقال منشور:</span>
@@ -197,18 +197,18 @@ export const Sources: React.FC = () => {
         </div>
 
         {/* Selected Source Deep-Dive Panel (1 Col) */}
-        <div className="sovereign-card rounded-3xl p-6 border border-[#c5a059]/20 flex flex-col justify-between">
+        <div className="sovereign-card rounded-3xl p-6 border border-[#4cd7f6]/20 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between pb-4 border-b border-white/5 mb-4">
               <div>
                 <h3 className="text-lg font-black text-white">{activeSourceInfo?.name}</h3>
-                <span className="text-[11px] font-mono text-[#c5a059]">
+                <span className="text-[11px] font-mono text-[#4cd7f6]">
                   {activeSourceInfo?.code.toUpperCase()} INTELLIGENCE STREAM
                 </span>
               </div>
               <button
                 onClick={() => navigate(`/explorer?source=${activeSourceInfo?.code}`)}
-                className="p-2 rounded-xl bg-white/5 hover:bg-[#c5a059]/20 text-[#e0c58a] transition-colors"
+                className="p-2 rounded-xl bg-white/5 hover:bg-[#4cd7f6]/20 text-[#acedff] transition-colors"
                 title="فتح كافة أخبار هذا المصدر في المستكشف"
               >
                 <ExternalLink className="w-4 h-4" />
@@ -231,13 +231,13 @@ export const Sources: React.FC = () => {
                   {sampleArticles.map((art, idx) => (
                     <div
                       key={idx}
-                      className="p-3 rounded-xl bg-[#0d0f18] border border-white/5 hover:border-[#c5a059]/30 transition-colors"
+                      className="p-3 rounded-xl bg-[#0F172A] border border-white/5 hover:border-[#4cd7f6]/30 transition-colors"
                     >
                       <a
                         href={art.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-xs font-semibold text-white hover:text-[#e0c58a] line-clamp-2 leading-snug"
+                        className="text-xs font-semibold text-white hover:text-[#acedff] line-clamp-2 leading-snug"
                       >
                         {art.headline}
                       </a>
@@ -254,7 +254,7 @@ export const Sources: React.FC = () => {
           <div className="pt-6 border-t border-white/5 mt-6">
             <button
               onClick={() => navigate(`/explorer?source=${activeSourceInfo?.code}`)}
-              className="w-full py-3 rounded-xl bg-[#c5a059] hover:bg-[#dfc377] text-black font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-lg"
+              className="w-full py-3 rounded-xl bg-[#4cd7f6] hover:bg-[#dfc377] text-black font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-lg"
             >
               <span>استكشاف كافة أخبار {activeSourceInfo?.name}</span>
               <ChevronLeft className="w-4 h-4" />

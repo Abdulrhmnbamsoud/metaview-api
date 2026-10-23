@@ -14,8 +14,8 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
   onReset,
 }) => {
   return (
-    <div className="sovereign-card rounded-3xl p-12 text-center flex flex-col items-center justify-center border border-[#c5a059]/15 my-8">
-      <div className="w-16 h-16 rounded-2xl bg-[#c5a059]/10 border border-[#c5a059]/20 flex items-center justify-center mb-4 text-[#c5a059]">
+    <div className="sovereign-card rounded-3xl p-12 text-center flex flex-col items-center justify-center border border-[#4cd7f6]/15 my-8">
+      <div className="w-16 h-16 rounded-2xl bg-[#4cd7f6]/10 border border-[#4cd7f6]/20 flex items-center justify-center mb-4 text-[#4cd7f6]">
         <SearchX className="w-8 h-8" />
       </div>
       <h3 className="text-lg font-bold text-white mb-2">{title}</h3>
@@ -25,7 +25,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
       {onReset && (
         <button
           onClick={onReset}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#c5a059]/15 hover:bg-[#c5a059]/25 text-[#e0c58a] font-semibold text-xs border border-[#c5a059]/30 transition-all"
+          className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#4cd7f6]/15 hover:bg-[#4cd7f6]/25 text-[#acedff] font-semibold text-xs border border-[#4cd7f6]/30 transition-all"
         >
           <RefreshCcw className="w-4 h-4" />
           <span>إعادة تعيين الفلاتر</span>

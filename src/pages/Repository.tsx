@@ -82,7 +82,7 @@ export const Repository: React.FC = () => {
         <div className="flex items-center gap-3">
           <button
             onClick={handleExport}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#c5a059]/15 hover:bg-[#c5a059]/25 text-[#e0c58a] font-semibold text-xs border border-[#c5a059]/30 transition-all shadow-md"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#4cd7f6]/15 hover:bg-[#4cd7f6]/25 text-[#acedff] font-semibold text-xs border border-[#4cd7f6]/30 transition-all shadow-md"
             title="تصدير السجلات المعروضة إلى ملف CSV يدعم اللغة العربية"
           >
             <Download className="w-4 h-4" />
@@ -92,7 +92,7 @@ export const Repository: React.FC = () => {
       </div>
 
       {/* Control Bar: Search and Quick Filter */}
-      <div className="sovereign-card rounded-2xl p-4 border border-[#c5a059]/15 flex flex-col md:flex-row items-center justify-between gap-4">
+      <div className="sovereign-card rounded-2xl p-4 border border-[#4cd7f6]/15 flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="relative w-full md:w-96">
           <input
             type="text"
@@ -102,7 +102,7 @@ export const Repository: React.FC = () => {
               setPage(1);
             }}
             placeholder="البحث الفوري في المستودع..."
-            className="w-full bg-[#0a0c14] border border-[#c5a059]/20 focus:border-[#c5a059]/60 py-2 pr-10 pl-4 rounded-xl text-xs text-white placeholder-gray-500 outline-none"
+            className="w-full bg-[#0a0c14] border border-[#4cd7f6]/20 focus:border-[#4cd7f6]/60 py-2 pr-10 pl-4 rounded-xl text-xs text-white placeholder-gray-500 outline-none"
           />
           <Search className="w-4 h-4 text-gray-500 absolute top-1/2 -translate-y-1/2 right-3 pointer-events-none" />
         </div>
@@ -182,7 +182,7 @@ export const Repository: React.FC = () => {
                   <tr
                     key={`${art.url}-${idx}`}
                     onClick={() => setSelectedArticle(art)}
-                    className="hover:bg-[#c5a059]/5 cursor-pointer transition-colors"
+                    className="hover:bg-[#4cd7f6]/5 cursor-pointer transition-colors"
                   >
                     <td className="p-4 text-center font-mono text-gray-500">
                       {(page - 1) * pageSize + idx + 1}
@@ -204,7 +204,7 @@ export const Repository: React.FC = () => {
                       {art.published_at ? art.published_at.slice(0, 16).replace('T', ' ') : '—'}
                     </td>
                     <td className="p-4">
-                      <span className="px-2 py-0.5 rounded font-mono text-[10px] bg-white/5 border border-white/10 text-[#e0c58a] font-bold uppercase">
+                      <span className="px-2 py-0.5 rounded font-mono text-[10px] bg-white/5 border border-white/10 text-[#acedff] font-bold uppercase">
                         {art.source}
                       </span>
                     </td>
@@ -221,7 +221,7 @@ export const Repository: React.FC = () => {
                       <div className="flex items-center justify-center gap-2">
                         <button
                           onClick={() => setSelectedArticle(art)}
-                          className="p-1.5 rounded-lg bg-white/5 hover:bg-[#c5a059]/20 text-gray-400 hover:text-white"
+                          className="p-1.5 rounded-lg bg-white/5 hover:bg-[#4cd7f6]/20 text-gray-400 hover:text-white"
                           title="فحص السجل"
                         >
                           <Eye className="w-3.5 h-3.5" />
@@ -230,7 +230,7 @@ export const Repository: React.FC = () => {
                           href={art.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="p-1.5 rounded-lg bg-white/5 hover:bg-[#c5a059]/20 text-[#c5a059] hover:text-[#e0c58a]"
+                          className="p-1.5 rounded-lg bg-white/5 hover:bg-[#4cd7f6]/20 text-[#4cd7f6] hover:text-[#acedff]"
                           title="فتح في المصدر"
                         >
                           <ExternalLink className="w-3.5 h-3.5" />

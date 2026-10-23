@@ -11,13 +11,21 @@ import { Sources } from './pages/Sources';
 import { AiLayer } from './pages/AiLayer';
 import { SaudiFraud } from './pages/SaudiFraud';
 import { IncidentRegistry } from './pages/IncidentRegistry';
+import { ExecutiveOverview } from './pages/ExecutiveOverview';
+import { FraudPatterns } from './pages/FraudPatterns';
+import { DetectionRules } from './pages/DetectionRules';
+import { SystemHealth } from './pages/SystemHealth';
 
 export const App: React.FC = () => {
   return (
     <Router>
       <Layout>
         <Routes>
-          <Route path="/" element={<Dashboard />} />
+          <Route path="/" element={<ExecutiveOverview />} />
+          <Route path="/global" element={<Dashboard />} />
+          <Route path="/patterns" element={<FraudPatterns />} />
+          <Route path="/rules" element={<DetectionRules />} />
+          <Route path="/system-health" element={<SystemHealth />} />
           <Route path="/explorer" element={<Explorer />} />
           <Route path="/map" element={<WorldMap />} />
           <Route path="/operations" element={<Operations />} />

@@ -26,6 +26,7 @@ import {
   SaudiIncident,
   SaudiIncidentsResponse,
   SaudiIncidentReport,
+  SaudiRuntime,
   MergeSuggestion,
 } from '../types/saudi';
 
@@ -44,6 +45,30 @@ if (import.meta.env.VITE_API_URL) {
 }
 
 const DEFAULT_TIMEOUT_MS = 15000;
+
+// ---- Arabic-only language filter (persisted; applied to every global list/stat request) ----
+const ARABIC_ONLY_KEY = 'metaview.arabicOnly';
+
+export const getArabicOnly = (): boolean => {
+  try {
+    return localStorage.getItem(ARABIC_ONLY_KEY) === '1';
+  } catch {
+    return false;
+  }
+};
+
+export const setArabicOnly = (on: boolean): void => {
+  try {
+    localStorage.setItem(ARABIC_ONLY_KEY, on ? '1' : '0');
+  } catch {
+    /* storage unavailable: filter simply won't persist */
+  }
+};
+
+const withLang = (query: URLSearchParams): URLSearchParams => {
+  if (getArabicOnly()) query.set('lang', 'ar');
+  return query;
+};
 
 interface FetchOptions extends RequestInit {
   timeoutMs?: number;
@@ -119,7 +144,7 @@ export const apiService = {
    */
   async getStats(): Promise<StatsSummary> {
     try {
-      return await requestWithRetry<StatsSummary>('/stats');
+      return await requestWithRetry<StatsSummary>(`/stats${getArabicOnly() ? '?lang=ar' : ''}`);
     } catch (err) {
       console.warn('API /stats fallback:', err);
       // Fallback calculation via /articles if /stats is unavailable
@@ -152,6 +177,7 @@ export const apiService = {
     if (params.sort_by) query.append('sort_by', params.sort_by);
     if (params.sort_dir) query.append('sort_dir', params.sort_dir);
 
+    withLang(query);
     const qs = query.toString();
     const endpoint = `/articles${qs ? `?${qs}` : ''}`;
     return await requestWithRetry<SearchResponse>(endpoint);
@@ -173,6 +199,7 @@ export const apiService = {
     if (params.sort_by) query.append('sort_by', params.sort_by);
     if (params.sort_dir) query.append('sort_dir', params.sort_dir);
 
+    withLang(query);
     const qs = query.toString();
     const endpoint = `/search-text${qs ? `?${qs}` : ''}`;
     return await requestWithRetry<SearchResponse>(endpoint);
@@ -190,7 +217,7 @@ export const apiService = {
    */
   async getCountries(): Promise<CountryNewsCount[]> {
     try {
-      return await requestWithRetry<CountryNewsCount[]>('/countries');
+      return await requestWithRetry<CountryNewsCount[]>(`/countries${getArabicOnly() ? '?lang=ar' : ''}`);
     } catch {
       return [];
     }
@@ -274,6 +301,10 @@ export const apiService = {
 
   async getSaudiIncidentReport(): Promise<SaudiIncidentReport> {
     return await requestWithRetry<SaudiIncidentReport>('/saudi-fraud/incidents/report');
+  },
+
+  async getSaudiRuntime(): Promise<SaudiRuntime> {
+    return await requestWithRetry<SaudiRuntime>('/saudi-fraud/runtime');
   },
 
   /**

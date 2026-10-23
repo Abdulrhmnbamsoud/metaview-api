@@ -1,4 +1,5 @@
 # backend/app/db.py
+import re
 import sqlite3
 from typing import Dict, Any, List, Optional, Tuple
 from .config import DB_PATH
@@ -17,6 +18,19 @@ def _ensure_column(con: sqlite3.Connection, table: str, column: str, col_type: s
         cur.execute(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}")
 
 BACKUP_KEEP = 3
+
+_AR_LETTER = re.compile(r"[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]")
+_ANY_LETTER = re.compile(r"[^\W\d_]")
+
+
+def detect_language(*texts: Optional[str]) -> str:
+    """'ar' when Arabic letters dominate the given texts (> 40% of all letters), else 'en'.
+    Used only to tag articles; it never alters their text."""
+    joined = " ".join(t for t in texts if t)
+    letters = len(_ANY_LETTER.findall(joined))
+    if not letters:
+        return "en"
+    return "ar" if len(_AR_LETTER.findall(joined)) / letters > 0.4 else "en"
 
 
 def backup_database(tag: str = "manual") -> Optional[str]:
@@ -69,9 +83,30 @@ def _needs_incident_migration() -> bool:
     return bool(cols) and "content_type" not in cols
 
 
+def _needs_language_tag() -> bool:
+    """True when an existing DB has articles whose ``language`` is still untagged."""
+    import os
+    if not os.path.exists(DB_PATH) or os.path.getsize(DB_PATH) == 0:
+        return False
+    try:
+        con = sqlite3.connect(DB_PATH, timeout=30)
+        try:
+            cols = [r[1] for r in con.execute("PRAGMA table_info(articles)")]
+            if "language" not in cols:
+                return bool(con.execute("SELECT 1 FROM articles LIMIT 1").fetchone())
+            return bool(con.execute(
+                "SELECT 1 FROM articles WHERE language IS NULL OR language = '' LIMIT 1").fetchone())
+        finally:
+            con.close()
+    except sqlite3.Error:
+        return False
+
+
 def init_db() -> None:
     if _needs_incident_migration():
         backup_database("pre-incident-layer")
+    elif _needs_language_tag():
+        backup_database("pre-language-tag")
     con = get_db()
     cur = con.cursor()
     # Use executescript for multiple CREATE statements
@@ -295,6 +330,17 @@ def init_db() -> None:
     cur.execute("CREATE INDEX IF NOT EXISTS idx_articles_hash ON articles(content_hash)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_fetch_log_source ON fetch_log(source_code, started_at)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_threat_saudi ON threat_intel(is_saudi, fraud_category)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_articles_language ON articles(language)")
+
+    # Derived metadata only (never touches headline/content/url): tag rows that have no language yet.
+    untagged = cur.execute(
+        "SELECT id, headline, article_summary FROM articles WHERE language IS NULL OR language = ''"
+    ).fetchall()
+    if untagged:
+        cur.executemany(
+            "UPDATE articles SET language = ? WHERE id = ?",
+            [(detect_language(r["headline"], r["article_summary"]), r["id"]) for r in untagged],
+        )
 
     con.commit()
     con.close()
@@ -342,7 +388,7 @@ def upsert_article(item: Dict[str, Any]) -> Optional[int]:
                 item.get("content_hash"),
                 item.get("fetched_at"),
                 item.get("source_code"),
-                item.get("language"),
+                item.get("language") or detect_language(item.get("headline"), item.get("article_summary")),
             ),
         )
         article_id = cur.lastrowid
@@ -382,47 +428,49 @@ def insert_article_if_new(item: Dict[str, Any]) -> Tuple[Optional[int], bool]:
     return upsert_article(item), True
 
 
-def get_stats_summary() -> Dict[str, Any]:
+def get_stats_summary(lang: Optional[str] = None) -> Dict[str, Any]:
     con = get_db()
     cur = con.cursor()
-    
-    cur.execute("SELECT COUNT(*) AS total FROM articles")
+    # Optional language scope ('ar' / 'en'); None keeps every article.
+    lw, lp = (" AND language = ?", [lang]) if lang else ("", [])
+
+    cur.execute(f"SELECT COUNT(*) AS total FROM articles WHERE 1=1{lw}", lp)
     total = int(cur.fetchone()["total"])
-    
-    cur.execute("SELECT COUNT(DISTINCT source) AS total_sources FROM articles WHERE source != ''")
+
+    cur.execute(f"SELECT COUNT(DISTINCT source) AS total_sources FROM articles WHERE source != ''{lw}", lp)
     total_sources = int(cur.fetchone()["total_sources"])
-    
-    cur.execute("""
-        SELECT COUNT(*) AS last_24h 
-        FROM articles 
-        WHERE datetime(published_at) >= datetime('now', '-1 day')
-    """)
+
+    cur.execute(f"""
+        SELECT COUNT(*) AS last_24h
+        FROM articles
+        WHERE datetime(published_at) >= datetime('now', '-1 day'){lw}
+    """, lp)
     last_24h = int(cur.fetchone()["last_24h"])
 
-    cur.execute("SELECT MAX(created_at) AS last_sync FROM articles")
+    cur.execute(f"SELECT MAX(created_at) AS last_sync FROM articles WHERE 1=1{lw}", lp)
     last_sync_row = cur.fetchone()
     last_sync = last_sync_row["last_sync"] if last_sync_row and last_sync_row["last_sync"] else None
 
     # Sources distribution
-    cur.execute("""
-        SELECT source, COUNT(*) AS count 
-        FROM articles 
-        WHERE source != '' 
-        GROUP BY source 
-        ORDER BY count DESC 
+    cur.execute(f"""
+        SELECT source, COUNT(*) AS count
+        FROM articles
+        WHERE source != ''{lw}
+        GROUP BY source
+        ORDER BY count DESC
         LIMIT 10
-    """)
+    """, lp)
     source_dist = [{"source": r["source"], "count": r["count"]} for r in cur.fetchall()]
 
     # Countries distribution
-    cur.execute("""
-        SELECT country, COUNT(*) AS count 
-        FROM articles 
-        WHERE country != '' AND country IS NOT NULL 
-        GROUP BY country 
-        ORDER BY count DESC 
+    cur.execute(f"""
+        SELECT country, COUNT(*) AS count
+        FROM articles
+        WHERE country != '' AND country IS NOT NULL{lw}
+        GROUP BY country
+        ORDER BY count DESC
         LIMIT 10
-    """)
+    """, lp)
     country_dist = [{"country": r["country"], "count": r["count"]} for r in cur.fetchall()]
 
     con.close()

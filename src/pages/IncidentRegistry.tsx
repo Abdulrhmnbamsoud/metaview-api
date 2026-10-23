@@ -156,7 +156,7 @@ export const IncidentRegistry: React.FC = () => {
       {/* Title */}
       <div className="pb-4 border-b border-white/5">
         <h1 className="text-2xl font-black text-white royal-gradient-text flex items-center gap-3">
-          <FolderSearch className="w-7 h-7 text-[#c5a059]" />
+          <FolderSearch className="w-7 h-7 text-[#4cd7f6]" />
           سجل الحوادث (Incident Registry)
         </h1>
         <p className="text-xs text-gray-400 mt-1 leading-relaxed">
@@ -173,7 +173,7 @@ export const IncidentRegistry: React.FC = () => {
             <div key={s.label} className="sovereign-card rounded-2xl p-4 border border-white/10">
               <div className="flex items-center justify-between text-gray-400 text-[11px]">
                 <span>{s.label}</span>
-                <Icon className="w-4 h-4 text-[#c5a059]" />
+                <Icon className="w-4 h-4 text-[#4cd7f6]" />
               </div>
               <div className="text-2xl font-black text-white mt-2 font-mono">{s.value}</div>
             </div>
@@ -210,7 +210,7 @@ export const IncidentRegistry: React.FC = () => {
             id={`incident-tab-${k}`}
             onClick={() => setTab(k)}
             className={`px-4 py-2.5 text-xs font-semibold border-b-2 whitespace-nowrap transition-colors ${
-              tab === k ? 'border-[#c5a059] text-[#e0c58a]' : 'border-transparent text-gray-400 hover:text-white'
+              tab === k ? 'border-[#4cd7f6] text-[#acedff]' : 'border-transparent text-gray-400 hover:text-white'
             }`}
           >
             {label}
@@ -235,14 +235,14 @@ export const IncidentRegistry: React.FC = () => {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="بحث في عناوين الحوادث…"
-                className="w-full bg-[#0d0f18] border border-[#c5a059]/20 focus:border-[#c5a059]/60 py-2.5 pr-10 pl-3 rounded-xl text-xs text-white placeholder-gray-500 outline-none"
+                className="w-full bg-[#0F172A] border border-[#4cd7f6]/20 focus:border-[#4cd7f6]/60 py-2.5 pr-10 pl-3 rounded-xl text-xs text-white placeholder-gray-500 outline-none"
               />
               <Search className="w-4 h-4 text-gray-500 absolute right-3 top-1/2 -translate-y-1/2" />
             </form>
             <select
               value={recordType}
               onChange={(e) => { setRecordType(e.target.value); setPage(1); }}
-              className="bg-[#0d0f18] border border-white/10 rounded-xl text-xs text-gray-200 px-3 py-2.5"
+              className="bg-[#0F172A] border border-white/10 rounded-xl text-xs text-gray-200 px-3 py-2.5"
             >
               <option value="">كل أنواع السجل</option>
               <option value="confirmed_incident">واقعة مؤكدة</option>
@@ -251,7 +251,7 @@ export const IncidentRegistry: React.FC = () => {
             <select
               value={reviewStatus}
               onChange={(e) => { setReviewStatus(e.target.value); setPage(1); }}
-              className="bg-[#0d0f18] border border-white/10 rounded-xl text-xs text-gray-200 px-3 py-2.5"
+              className="bg-[#0F172A] border border-white/10 rounded-xl text-xs text-gray-200 px-3 py-2.5"
             >
               <option value="">كل حالات المراجعة</option>
               <option value="needs_review">تحتاج مراجعة</option>
@@ -274,7 +274,7 @@ export const IncidentRegistry: React.FC = () => {
                 return (
                   <article
                     key={it.id}
-                    className="sovereign-card rounded-2xl p-5 border border-white/10 hover:border-[#c5a059]/40 transition-colors"
+                    className="sovereign-card rounded-2xl p-5 border border-white/10 hover:border-[#4cd7f6]/40 transition-colors"
                   >
                     <div className="flex flex-wrap items-center gap-2 mb-3">
                       <span className="px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold bg-black/40 text-gray-300 border border-white/10">
@@ -283,7 +283,7 @@ export const IncidentRegistry: React.FC = () => {
                       <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border ${recordBadge[it.record_type] || ''}`}>
                         {it.record_type_ar}
                       </span>
-                      <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-[#c5a059]/15 text-[#e0c58a] border border-[#c5a059]/30">
+                      <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-[#4cd7f6]/15 text-[#acedff] border border-[#4cd7f6]/30">
                         {it.fraud_category_ar}
                       </span>
                       <span className={`px-2.5 py-1 rounded-lg text-[10px] border ${reviewBadge[it.review_status] || ''}`}>
@@ -292,7 +292,7 @@ export const IncidentRegistry: React.FC = () => {
                       {bb && <span className={`px-2.5 py-1 rounded-lg text-[10px] border ${bb.cls}`}>{bb.label}</span>}
                     </div>
                     <h3
-                      className="text-base font-bold text-white leading-snug cursor-pointer hover:text-[#e0c58a]"
+                      className="text-base font-bold text-white leading-snug cursor-pointer hover:text-[#acedff]"
                       onClick={() => openDetail(it)}
                     >
                       {it.title}
@@ -309,8 +309,8 @@ export const IncidentRegistry: React.FC = () => {
                       <ul className="text-[11px] text-gray-400 space-y-1 flex-1 min-w-[240px]">
                         {it.articles.slice(0, 3).map((a) => (
                           <li key={a.article_id} className="flex items-center gap-2">
-                            <ExternalLink className="w-3 h-3 text-[#c5a059] shrink-0" />
-                            <a href={a.url} target="_blank" rel="noopener noreferrer" className="hover:text-[#e0c58a] truncate">
+                            <ExternalLink className="w-3 h-3 text-[#4cd7f6] shrink-0" />
+                            <a href={a.url} target="_blank" rel="noopener noreferrer" className="hover:text-[#acedff] truncate">
                               {a.source || a.domain || 'مصدر'} — {a.title}
                             </a>
                           </li>
@@ -319,7 +319,7 @@ export const IncidentRegistry: React.FC = () => {
                       </ul>
                       <button
                         onClick={() => openDetail(it)}
-                        className="px-3 py-1.5 rounded-lg bg-[#c5a059]/15 border border-[#c5a059]/40 text-[#e0c58a] text-[11px]"
+                        className="px-3 py-1.5 rounded-lg bg-[#4cd7f6]/15 border border-[#4cd7f6]/40 text-[#acedff] text-[11px]"
                       >
                         تفاصيل الحادثة وسبب الدمج
                       </button>
@@ -343,8 +343,8 @@ export const IncidentRegistry: React.FC = () => {
       {/* REVIEW QUEUE */}
       {tab === 'review' && (
         <div className="space-y-4">
-          <div className="p-4 rounded-2xl bg-[#0d0f18] border border-[#c5a059]/20 flex gap-3 text-xs text-gray-300 leading-relaxed">
-            <ClipboardCheck className="w-5 h-5 text-[#c5a059] shrink-0" />
+          <div className="p-4 rounded-2xl bg-[#0F172A] border border-[#4cd7f6]/20 flex gap-3 text-xs text-gray-300 leading-relaxed">
+            <ClipboardCheck className="w-5 h-5 text-[#4cd7f6] shrink-0" />
             <div>
               {noteReview || 'اقتراحات دمج غير حاسمة تنتظر قراراً بشرياً. لا يُنفَّذ أي دمج غير مؤكد تلقائياً.'}
               <div className="text-[11px] text-gray-500 mt-1">
@@ -369,7 +369,7 @@ export const IncidentRegistry: React.FC = () => {
                       <div className="text-gray-200 font-semibold leading-snug">{a.headline || `مقال ${a.id}`}</div>
                       <div className="text-[11px] text-gray-500">{a.source} • {fmtDate(a.published_at)}</div>
                       {a.url && (
-                        <a href={a.url} target="_blank" rel="noopener noreferrer" dir="ltr" className="text-[11px] text-[#e0c58a] break-all hover:underline">
+                        <a href={a.url} target="_blank" rel="noopener noreferrer" dir="ltr" className="text-[11px] text-[#acedff] break-all hover:underline">
                           {a.url}
                         </a>
                       )}
@@ -388,7 +388,7 @@ export const IncidentRegistry: React.FC = () => {
       {/* WARNINGS / AWARENESS */}
       {(tab === 'warnings' || tab === 'awareness') && (
         <div className="space-y-4">
-          <div className="p-4 rounded-2xl bg-[#0d0f18] border border-[#c5a059]/20 text-xs text-gray-300 leading-relaxed">
+          <div className="p-4 rounded-2xl bg-[#0F172A] border border-[#4cd7f6]/20 text-xs text-gray-300 leading-relaxed">
             {tab === 'warnings'
               ? 'التحذيرات تنبّه من أسلوب أو تهديد ولا تصف واقعة بعينها، لذلك لا تُحتسب حوادث.'
               : 'حملات التوعية (مثل حملة «شيّك») تثقيفية ولا تصف واقعة احتيال، لذلك لا تُحتسب حوادث.'}
@@ -405,7 +405,7 @@ export const IncidentRegistry: React.FC = () => {
                   <div className="text-[11px] text-gray-500 mt-1">{it.source} • {fmtDate(it.published_at)}</div>
                 </div>
                 {it.original_url && (
-                  <a href={it.original_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#c5a059]/15 border border-[#c5a059]/40 text-[#e0c58a] text-[11px]">
+                  <a href={it.original_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#4cd7f6]/15 border border-[#4cd7f6]/40 text-[#acedff] text-[11px]">
                     المصدر الأصلي <ExternalLink className="w-3 h-3" />
                   </a>
                 )}
@@ -418,7 +418,7 @@ export const IncidentRegistry: React.FC = () => {
       {/* DETAIL MODAL */}
       {selected && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-start justify-center p-4 overflow-y-auto" onClick={() => setSelected(null)}>
-          <div className="w-full max-w-3xl bg-[#0a0b12] border border-[#c5a059]/30 rounded-2xl p-6 space-y-5 my-8" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-3xl bg-[#0a0b12] border border-[#4cd7f6]/30 rounded-2xl p-6 space-y-5 my-8" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-start justify-between gap-4">
               <div>
                 <div className="flex flex-wrap gap-2">
@@ -439,7 +439,7 @@ export const IncidentRegistry: React.FC = () => {
             {/* Coverage + merge reasons */}
             <section className="space-y-2">
               <h3 className="text-xs font-bold text-white flex items-center gap-2">
-                <Newspaper className="w-4 h-4 text-[#c5a059]" /> التغطيات المرتبطة وسبب ربط كل واحدة
+                <Newspaper className="w-4 h-4 text-[#4cd7f6]" /> التغطيات المرتبطة وسبب ربط كل واحدة
               </h3>
               <ul className="space-y-2">
                 {selected.articles.map((a) => (
@@ -450,7 +450,7 @@ export const IncidentRegistry: React.FC = () => {
                     </div>
                     <div className="text-gray-300 leading-snug">{a.title}</div>
                     <div className="text-amber-200/80">سبب الربط: {basisLabel(a.match_basis)}</div>
-                    <a href={a.url} target="_blank" rel="noopener noreferrer" dir="ltr" className="flex items-center gap-1 text-[#e0c58a] break-all hover:underline">
+                    <a href={a.url} target="_blank" rel="noopener noreferrer" dir="ltr" className="flex items-center gap-1 text-[#acedff] break-all hover:underline">
                       <ExternalLink className="w-3 h-3 shrink-0" /> {a.url}
                     </a>
                   </li>
@@ -482,7 +482,7 @@ export const IncidentRegistry: React.FC = () => {
                 </div>
                 {selected.facts.fact_sentences.slice(0, 4).map((s, i) => (
                   <p key={i} className="text-[11px] text-gray-300 leading-relaxed border-r-2 border-emerald-500/40 pr-2">
-                    {s.text} <a href={s.url} target="_blank" rel="noopener noreferrer" className="text-[#e0c58a] hover:underline">— {s.source}</a>
+                    {s.text} <a href={s.url} target="_blank" rel="noopener noreferrer" className="text-[#acedff] hover:underline">— {s.source}</a>
                   </p>
                 ))}
               </section>
@@ -492,13 +492,13 @@ export const IncidentRegistry: React.FC = () => {
             {selected.methods && selected.methods.length > 0 && (
               <section className="space-y-2">
                 <h3 className="text-xs font-bold text-white flex items-center gap-2">
-                  <FlaskConical className="w-4 h-4 text-[#c5a059]" /> أساليب ذُكرت صراحة (مع الاقتباس)
+                  <FlaskConical className="w-4 h-4 text-[#4cd7f6]" /> أساليب ذُكرت صراحة (مع الاقتباس)
                 </h3>
                 {selected.methods.map((m) => (
                   <div key={m.tag} className="p-3 rounded-lg bg-black/40 border border-white/5 text-[11px]">
-                    <b className="text-[#e0c58a]">{m.label}</b>
+                    <b className="text-[#acedff]">{m.label}</b>
                     {m.quotes.slice(0, 1).map((q, i) => (
-                      <p key={i} className="text-gray-400 mt-1 leading-relaxed">«{q.quote}» <a href={q.url} target="_blank" rel="noopener noreferrer" className="text-[#e0c58a] hover:underline">— {q.source}</a></p>
+                      <p key={i} className="text-gray-400 mt-1 leading-relaxed">«{q.quote}» <a href={q.url} target="_blank" rel="noopener noreferrer" className="text-[#acedff] hover:underline">— {q.source}</a></p>
                     ))}
                   </div>
                 ))}
@@ -509,7 +509,7 @@ export const IncidentRegistry: React.FC = () => {
             {selected.indicators && (
               <section className="space-y-2">
                 <h3 className="text-xs font-bold text-white flex items-center gap-2">
-                  <ListChecks className="w-4 h-4 text-[#c5a059]" /> مؤشرات المخاطر
+                  <ListChecks className="w-4 h-4 text-[#4cd7f6]" /> مؤشرات المخاطر
                 </h3>
                 <div className="grid md:grid-cols-2 gap-3 text-[11px]">
                   <div className="p-3 rounded-lg bg-black/40 border border-white/5">

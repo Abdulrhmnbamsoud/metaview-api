@@ -87,7 +87,7 @@ export const Operations: React.FC = () => {
           disabled={loading}
           className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 text-xs font-semibold border border-white/10 transition-colors"
         >
-          <RefreshCw className={`w-3.5 h-3.5 text-[#c5a059] ${loading ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`w-3.5 h-3.5 text-[#4cd7f6] ${loading ? 'animate-spin' : ''}`} />
           <span>تحديث المقاييس</span>
         </button>
       </div>
@@ -126,7 +126,7 @@ export const Operations: React.FC = () => {
           <span className="text-2xl font-black text-white font-mono">
             {sourcesData?.count || '—'}
           </span>
-          <span className="text-[10px] text-[#e0c58a] block mt-1 font-mono">
+          <span className="text-[10px] text-[#acedff] block mt-1 font-mono">
             TRUSTED RSS CHANNELS
           </span>
         </div>
@@ -143,10 +143,10 @@ export const Operations: React.FC = () => {
       </div>
 
       {/* Manual Execution Control Room */}
-      <div className="sovereign-card rounded-3xl p-6 md:p-8 border border-[#c5a059]/20 bg-gradient-to-r from-[#0c0e18] via-[#090b12] to-[#06070a]">
+      <div className="sovereign-card rounded-3xl p-6 md:p-8 border border-[#4cd7f6]/20 bg-gradient-to-r from-[#0c0e18] via-[#090b12] to-[#06070a]">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-6 border-b border-white/5">
           <div className="space-y-1">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-[#c5a059]/15 text-[#e0c58a] text-xs font-mono">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-[#4cd7f6]/15 text-[#acedff] text-xs font-mono">
               <Terminal className="w-3.5 h-3.5" />
               <span>POST /ingest/run CONTROL TRIGGER</span>
             </div>
@@ -165,7 +165,7 @@ export const Operations: React.FC = () => {
                 value={ingestLimit}
                 onChange={(e) => setIngestLimit(Number(e.target.value))}
                 disabled={isIngesting}
-                className="bg-transparent text-[#e0c58a] font-bold font-mono outline-none"
+                className="bg-transparent text-[#acedff] font-bold font-mono outline-none"
               >
                 <option value={15}>15 مقال</option>
                 <option value={30}>30 مقال</option>
@@ -178,8 +178,8 @@ export const Operations: React.FC = () => {
               disabled={isIngesting}
               className={`flex items-center gap-2 px-6 py-3 rounded-2xl text-xs font-bold shadow-xl transition-all ${
                 isIngesting
-                  ? 'bg-[#c5a059]/30 text-gray-400 border border-[#c5a059]/30 cursor-not-allowed'
-                  : 'bg-gradient-to-r from-[#c5a059] to-[#dfc377] hover:brightness-110 text-black'
+                  ? 'bg-[#4cd7f6]/30 text-gray-400 border border-[#4cd7f6]/30 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-[#4cd7f6] to-[#dfc377] hover:brightness-110 text-black'
               }`}
             >
               <Play className={`w-4 h-4 fill-current ${isIngesting ? 'animate-spin' : ''}`} />
@@ -200,7 +200,7 @@ export const Operations: React.FC = () => {
         {lastRunResult && (
           <div className="mt-6 space-y-4">
             <div className="flex items-center justify-between text-xs">
-              <span className="font-mono text-[#e0c58a] font-bold">
+              <span className="font-mono text-[#acedff] font-bold">
                 نتائج آخر دورة رصد مكتملة (Telemetry):
               </span>
               <span className="text-gray-400 font-mono text-[11px]">
@@ -217,7 +217,7 @@ export const Operations: React.FC = () => {
               </div>
               <div className="p-3 rounded-xl bg-[#121520] border border-white/5">
                 <span className="text-[10px] text-gray-500 block font-mono">استخراج صور ناجح</span>
-                <span className="text-lg font-black text-[#e0c58a] font-mono">
+                <span className="text-lg font-black text-[#acedff] font-mono">
                   {lastRunResult.with_images_total || 0}
                 </span>
               </div>
@@ -293,7 +293,7 @@ export const Operations: React.FC = () => {
                   الدولة: {src.country} • {src.articles_count} مقال مخزن
                 </span>
               </div>
-              <span className="px-2.5 py-1 rounded-lg text-[10px] font-mono bg-white/5 text-[#e0c58a] border border-white/10 uppercase">
+              <span className="px-2.5 py-1 rounded-lg text-[10px] font-mono bg-white/5 text-[#acedff] border border-white/10 uppercase">
                 {src.code}
               </span>
             </div>

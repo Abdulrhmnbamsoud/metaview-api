@@ -81,7 +81,7 @@ export const WorldMap: React.FC = () => {
         <div className="flex items-center gap-2">
           <button
             onClick={() => navigate(`/explorer?country=${selectedCountry}`)}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#c5a059] hover:bg-[#dfc377] text-black text-xs font-bold transition-all shadow-md"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#4cd7f6] hover:bg-[#dfc377] text-black text-xs font-bold transition-all shadow-md"
           >
             <span>استعراض أخبار {activeCountryMeta.nameAr} في المستكشف</span>
             <ChevronLeft className="w-4 h-4" />
@@ -90,10 +90,10 @@ export const WorldMap: React.FC = () => {
       </div>
 
       {/* Critical Methodology Notice (Rule #8) */}
-      <div className="p-4 rounded-2xl bg-[#0e111a] border border-[#c5a059]/20 flex items-start gap-3">
-        <Info className="w-5 h-5 text-[#c5a059] shrink-0 mt-0.5" />
+      <div className="p-4 rounded-2xl bg-[#0e111a] border border-[#4cd7f6]/20 flex items-start gap-3">
+        <Info className="w-5 h-5 text-[#4cd7f6] shrink-0 mt-0.5" />
         <div className="text-xs text-gray-300 leading-relaxed space-y-1">
-          <div className="font-bold text-[#e0c58a]">منهجية الفصل الجغرافي الصارمة (Intelligence Rule):</div>
+          <div className="font-bold text-[#acedff]">منهجية الفصل الجغرافي الصارمة (Intelligence Rule):</div>
           <div>
             الخريطة تعرض حالياً <span className="text-white font-semibold">بلد المصدر الناشر (Source Country)</span> مثل رويترز (بريطانيا) وسي إن إن (أمريكا). لا تفترض المنصة أن الدولة المرتبطة بالمصدر هي مكان وقوع الحدث، التزاماً بقواعد الدقة ومنع تضليل التحليلات الجيوسياسية.
           </div>
@@ -101,16 +101,16 @@ export const WorldMap: React.FC = () => {
       </div>
 
       {/* Interactive World Canvas / Radar Map */}
-      <div className="sovereign-card rounded-3xl p-6 md:p-8 border border-[#c5a059]/20 relative overflow-hidden bg-gradient-to-b from-[#090b12] to-[#040508]">
+      <div className="sovereign-card rounded-3xl p-6 md:p-8 border border-[#4cd7f6]/20 relative overflow-hidden bg-gradient-to-b from-[#090b12] to-[#040508]">
         {/* World Map SVG Canvas */}
         <div className="relative w-full h-[360px] md:h-[420px] rounded-2xl bg-[#06070c] border border-white/5 flex items-center justify-center overflow-hidden">
           {/* Subtle Radar Circles */}
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
-            <div className="w-[600px] h-[600px] rounded-full border border-[#c5a059]" />
-            <div className="w-[400px] h-[400px] rounded-full border border-[#c5a059]" />
-            <div className="w-[200px] h-[200px] rounded-full border border-[#c5a059]" />
-            <div className="absolute w-full h-[1px] bg-[#c5a059]/40" />
-            <div className="absolute h-full w-[1px] bg-[#c5a059]/40" />
+            <div className="w-[600px] h-[600px] rounded-full border border-[#4cd7f6]" />
+            <div className="w-[400px] h-[400px] rounded-full border border-[#4cd7f6]" />
+            <div className="w-[200px] h-[200px] rounded-full border border-[#4cd7f6]" />
+            <div className="absolute w-full h-[1px] bg-[#4cd7f6]/40" />
+            <div className="absolute h-full w-[1px] bg-[#4cd7f6]/40" />
           </div>
 
           {/* SVG Map Projection View */}
@@ -178,22 +178,22 @@ export const WorldMap: React.FC = () => {
                 <div className="relative flex items-center justify-center">
                   {/* Ping effect */}
                   {isSelected && (
-                    <span className="absolute w-8 h-8 rounded-full bg-[#c5a059]/40 animate-ping" />
+                    <span className="absolute w-8 h-8 rounded-full bg-[#4cd7f6]/40 animate-ping" />
                   )}
 
                   {/* Marker Node */}
                   <div
                     className={`w-7 h-7 rounded-xl flex items-center justify-center transition-all ${
                       isSelected
-                        ? 'bg-[#c5a059] text-black shadow-[0_0_20px_#c5a059] scale-125'
-                        : 'bg-[#0f121c] text-[#e0c58a] border border-[#c5a059]/40 hover:border-[#c5a059] hover:scale-110'
+                        ? 'bg-[#4cd7f6] text-black shadow-[0_0_20px_#4cd7f6] scale-125'
+                        : 'bg-[#0f121c] text-[#acedff] border border-[#4cd7f6]/40 hover:border-[#4cd7f6] hover:scale-110'
                     }`}
                   >
                     <span className="text-[10px] font-mono font-black">{c.country}</span>
                   </div>
 
                   {/* Label tooltip */}
-                  <div className="absolute top-8 whitespace-nowrap bg-black/90 backdrop-blur-md px-2.5 py-1 rounded-lg border border-[#c5a059]/30 text-[11px] font-mono text-white opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-xl">
+                  <div className="absolute top-8 whitespace-nowrap bg-black/90 backdrop-blur-md px-2.5 py-1 rounded-lg border border-[#4cd7f6]/30 text-[11px] font-mono text-white opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-xl">
                     {coord.nameAr} ({c.count} خبر){c.country === 'SA' ? ' - السعدية: مدينة صناعية هامة في السعودية' : ''}
                   </div>
                 </div>
@@ -215,14 +215,14 @@ export const WorldMap: React.FC = () => {
                 onClick={() => setSelectedCountry(c.country)}
                 className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
                   isSelected
-                    ? 'bg-[#c5a059] text-black shadow-lg font-bold'
+                    ? 'bg-[#4cd7f6] text-black shadow-lg font-bold'
                     : 'bg-[#121520] hover:bg-white/10 text-gray-300 border border-white/5'
                 }`}
               >
                 <span>{coord?.nameAr || c.country}</span>
                 <span
                   className={`text-[10px] font-mono px-1.5 py-0.5 rounded-md ${
-                    isSelected ? 'bg-black/20 text-black' : 'bg-white/5 text-[#c5a059]'
+                    isSelected ? 'bg-black/20 text-black' : 'bg-white/5 text-[#4cd7f6]'
                   }`}
                 >
                   {c.count}
@@ -237,7 +237,7 @@ export const WorldMap: React.FC = () => {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <MapPin className="w-4 h-4 text-[#c5a059]" />
+            <MapPin className="w-4 h-4 text-[#4cd7f6]" />
             <h2 className="text-lg font-bold text-white">
               أحدث الأخبار الصادرة عن مصادر {activeCountryMeta.nameAr}
             </h2>
@@ -248,7 +248,7 @@ export const WorldMap: React.FC = () => {
 
           <button
             onClick={() => navigate(`/explorer?country=${selectedCountry}`)}
-            className="text-xs font-semibold text-[#c5a059] hover:underline flex items-center gap-1"
+            className="text-xs font-semibold text-[#4cd7f6] hover:underline flex items-center gap-1"
           >
             <span>عرض كل أخبار {selectedCountry}</span>
             <ExternalLink className="w-3.5 h-3.5" />
@@ -258,7 +258,7 @@ export const WorldMap: React.FC = () => {
         {loadingArticles ? (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="h-48 bg-[#0c0e16] rounded-2xl animate-pulse" />
+              <div key={i} className="h-48 bg-[#0F172A] rounded-2xl animate-pulse" />
             ))}
           </div>
         ) : countryArticles.length > 0 ? (

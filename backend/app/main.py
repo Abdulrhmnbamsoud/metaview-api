@@ -68,9 +68,14 @@ def _build_where(
     entity: Optional[str],
     min_date: Optional[str],
     max_date: Optional[str],
+    lang: Optional[str] = None,
 ) -> Tuple[str, list]:
     where = []
     params = []
+
+    if lang in ("ar", "en"):
+        where.append("language = ?")
+        params.append(lang)
 
     q_clean = (q or "").strip()
     if q_clean:
@@ -165,8 +170,8 @@ def health():
 
 
 @app.get("/stats", response_model=StatsResponse)
-def get_stats():
-    return get_stats_summary()
+def get_stats(lang: Optional[str] = Query(None, pattern="^(ar|en)$")):
+    return get_stats_summary(lang)
 
 
 @app.get("/sources")
@@ -202,16 +207,17 @@ def list_sources():
 
 
 @app.get("/countries")
-def list_countries():
+def list_countries(lang: Optional[str] = Query(None, pattern="^(ar|en)$")):
     con = get_db()
     cur = con.cursor()
-    cur.execute("""
+    lw, lp = (" AND language = ?", [lang]) if lang else ("", [])
+    cur.execute(f"""
         SELECT country, COUNT(*) as count 
         FROM articles 
-        WHERE country IS NOT NULL AND country != '' 
+        WHERE country IS NOT NULL AND country != ''{lw}
         GROUP BY country 
         ORDER BY count DESC
-    """)
+    """, lp)
     rows = cur.fetchall()
     con.close()
     return [{"country": r["country"], "count": r["count"]} for r in rows]
@@ -239,6 +245,7 @@ def list_articles(
     entity: Optional[str] = None,
     min_date: Optional[str] = None,
     max_date: Optional[str] = None,
+    lang: Optional[str] = Query(None, pattern="^(ar|en)$"),
 
     sort_by: str = Query("published_at"),
     sort_dir: str = Query("desc"),
@@ -250,7 +257,7 @@ def list_articles(
         q=None,
         source=source, country=country, domain=domain,
         category=category, entity=entity,
-        min_date=min_date, max_date=max_date
+        min_date=min_date, max_date=max_date, lang=lang
     )
     total = _count_where(where_sql, params)
 
@@ -295,6 +302,7 @@ def search_text(
     entity: Optional[str] = None,
     min_date: Optional[str] = None,
     max_date: Optional[str] = None,
+    lang: Optional[str] = Query(None, pattern="^(ar|en)$"),
 
     sort_by: str = Query("published_at"),
     sort_dir: str = Query("desc"),
@@ -306,7 +314,7 @@ def search_text(
         q=q,
         source=source, country=country, domain=domain,
         category=category, entity=entity,
-        min_date=min_date, max_date=max_date
+        min_date=min_date, max_date=max_date, lang=lang
     )
     total = _count_where(where_sql, params)
 

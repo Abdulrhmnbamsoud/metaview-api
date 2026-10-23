@@ -86,15 +86,15 @@ export const AiLayer: React.FC = () => {
             البنية المعمارية المخططة لخدمات التحليل الذكي المستقلة
           </p>
         </div>
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#c5a059]/10 border border-[#c5a059]/30 text-[#e0c58a] text-xs font-mono">
-          <Cpu className="w-4 h-4 text-[#c5a059]" />
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#4cd7f6]/10 border border-[#4cd7f6]/30 text-[#acedff] text-xs font-mono">
+          <Cpu className="w-4 h-4 text-[#4cd7f6]" />
           <span>MICROSERVICES ARCHITECTURE</span>
         </div>
       </div>
 
       {/* Transparency & Integrity Box */}
-      <div className="p-5 rounded-2xl bg-[#0d0f18] border border-[#c5a059]/20 flex items-start gap-4">
-        <ShieldCheck className="w-6 h-6 text-[#c5a059] shrink-0 mt-0.5" />
+      <div className="p-5 rounded-2xl bg-[#0F172A] border border-[#4cd7f6]/20 flex items-start gap-4">
+        <ShieldCheck className="w-6 h-6 text-[#4cd7f6] shrink-0 mt-0.5" />
         <div className="text-xs text-gray-300 leading-relaxed space-y-1">
           <strong className="text-white text-sm block">
             معيار النزاهة والشفافية التقنية (Rule #12 & Rule #15):
@@ -116,7 +116,7 @@ export const AiLayer: React.FC = () => {
             >
               <div>
                 <div className="flex items-center justify-between mb-4">
-                  <div className="w-10 h-10 rounded-xl bg-[#c5a059]/10 border border-[#c5a059]/20 flex items-center justify-center text-[#c5a059]">
+                  <div className="w-10 h-10 rounded-xl bg-[#4cd7f6]/10 border border-[#4cd7f6]/20 flex items-center justify-center text-[#4cd7f6]">
                     <Icon className="w-5 h-5" />
                   </div>
                   <span
@@ -136,7 +136,7 @@ export const AiLayer: React.FC = () => {
 
               <div className="pt-4 border-t border-white/5 space-y-2">
                 <div className="flex items-center gap-1.5 text-[11px] font-mono text-gray-400">
-                  <Terminal className="w-3.5 h-3.5 text-[#c5a059]" />
+                  <Terminal className="w-3.5 h-3.5 text-[#4cd7f6]" />
                   <span>{cap.endpoint}</span>
                 </div>
                 <div className="p-2 rounded-lg bg-black/60 border border-white/5 text-[10px] font-mono text-gray-500 truncate">
