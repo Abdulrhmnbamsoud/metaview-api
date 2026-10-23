@@ -10,6 +10,7 @@ import { Repository } from './pages/Repository';
 import { Sources } from './pages/Sources';
 import { AiLayer } from './pages/AiLayer';
 import { SaudiFraud } from './pages/SaudiFraud';
+import { IncidentRegistry } from './pages/IncidentRegistry';
 
 export const App: React.FC = () => {
   return (
@@ -24,6 +25,7 @@ export const App: React.FC = () => {
           <Route path="/sources" element={<Sources />} />
           <Route path="/ai-layer" element={<AiLayer />} />
           <Route path="/saudi-fraud" element={<SaudiFraud />} />
+          <Route path="/incident-registry" element={<IncidentRegistry />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Layout>

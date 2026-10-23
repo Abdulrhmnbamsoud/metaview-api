@@ -14,6 +14,7 @@ import {
   CheckCircle2,
   AlertTriangle,
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { apiService } from '../services/api';
 import {
   SaudiOverview,
@@ -167,9 +168,9 @@ export const SaudiFraud: React.FC = () => {
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'أخبار احتيال سعودية', value: overview?.total_items ?? '…', icon: ShieldAlert },
-          { label: 'آخر 7 أيام', value: overview?.last_7_days ?? '…', icon: Clock },
-          { label: 'صلة بنكية عالية', value: overview?.high_bank_relevance ?? '…', icon: Landmark },
+          { label: 'حوادث مستقلة', value: overview?.incidents_total ?? '…', icon: ShieldAlert },
+          { label: 'مقالات (حوادث + تحذيرات + توعية)', value: overview?.total_items ?? '…', icon: Clock },
+          { label: 'حوادث بصلة بنكية عالية', value: overview?.high_bank_relevance ?? '…', icon: Landmark },
           {
             label: 'مصادر تعمل / الإجمالي',
             value: overview ? `${overview.sources_ok} / ${overview.sources_total}` : '…',
@@ -294,7 +295,17 @@ export const SaudiFraud: React.FC = () => {
                       <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-[#c5a059]/15 text-[#e0c58a] border border-[#c5a059]/30">
                         {it.fraud_category_ar}
                       </span>
-                      {it.event_type && (
+                      {it.content_type_ar && (
+                        <span className="px-2.5 py-1 rounded-lg text-[10px] bg-white/5 text-gray-300 border border-white/10">
+                          {it.content_type_ar}
+                        </span>
+                      )}
+                      {it.incident_id ? (
+                        <Link to="/incident-registry" className="px-2.5 py-1 rounded-lg text-[10px] bg-sky-500/10 text-sky-300 border border-sky-500/30 hover:bg-sky-500/20">
+                          ضمن حادثة #{it.incident_id}
+                        </Link>
+                      ) : null}
+                      {!it.content_type_ar && it.event_type && (
                         <span className="px-2.5 py-1 rounded-lg text-[10px] bg-white/5 text-gray-300 border border-white/10">
                           {eventLabel[it.event_type] || it.event_type}
                         </span>
@@ -351,27 +362,37 @@ export const SaudiFraud: React.FC = () => {
 
       {/* PATTERNS */}
       {tab === 'patterns' && (
-        <div className="grid md:grid-cols-2 gap-6">
-          <div className="sovereign-card rounded-2xl p-5 border border-white/10 space-y-3">
-            <h2 className="text-sm font-bold text-white">فئات الاحتيال المرصودة</h2>
-            {patterns?.patterns.length ? patterns.patterns.map((p) => (
-              <div key={p.key} className="p-3 rounded-xl bg-black/40 border border-white/5">
-                <div className="flex justify-between text-xs">
-                  <b className="text-[#e0c58a]">{p.label_ar}</b>
-                  <span className="font-mono text-gray-300">{p.count}</span>
-                </div>
-                {p.modus_operandi && <p className="text-[11px] text-gray-400 mt-1 leading-relaxed">{p.modus_operandi}</p>}
-              </div>
-            )) : <p className="text-xs text-gray-500">لا أنماط بعد.</p>}
+        <div className="space-y-4">
+          <div className="p-4 rounded-2xl bg-[#0d0f18] border border-[#c5a059]/20 text-xs text-gray-300 leading-relaxed">
+            {patterns?.note || 'الأنماط أساليب ذُكرت صراحة في المصادر؛ العدّ بالحوادث المستقلة وليس بالمقالات.'}
           </div>
-          <div className="sovereign-card rounded-2xl p-5 border border-white/10 space-y-3">
-            <h2 className="text-sm font-bold text-white">القنوات المذكورة في المصادر</h2>
-            {patterns?.channels.length ? patterns.channels.map((c) => (
-              <div key={c.channel} className="flex justify-between text-xs p-2 rounded-lg bg-black/40 border border-white/5">
-                <span className="text-gray-200">{c.channel}</span>
-                <span className="font-mono text-gray-300">{c.count}</span>
-              </div>
-            )) : <p className="text-xs text-gray-500">لا قنوات بعد.</p>}
+          <div className="grid md:grid-cols-2 gap-6">
+            <div className="sovereign-card rounded-2xl p-5 border border-white/10 space-y-3">
+              <h2 className="text-sm font-bold text-white">أساليب الاحتيال المذكورة في المصادر</h2>
+              {patterns?.patterns.length ? patterns.patterns.map((p) => (
+                <div key={p.key} className="p-3 rounded-xl bg-black/40 border border-white/5 space-y-1">
+                  <div className="flex justify-between text-xs">
+                    <b className="text-[#e0c58a]">{p.label_ar}</b>
+                    <span className="font-mono text-gray-300">{p.incident_count} حادثة • {p.warning_article_count} تحذير</span>
+                  </div>
+                  {p.evidence[0] && (
+                    <p className="text-[11px] text-gray-400 leading-relaxed">
+                      «{p.evidence[0].quote}»{' '}
+                      <a href={p.evidence[0].url} target="_blank" rel="noopener noreferrer" className="text-[#e0c58a] hover:underline">— {p.evidence[0].source}</a>
+                    </p>
+                  )}
+                </div>
+              )) : <p className="text-xs text-gray-500">لا أنماط بعد.</p>}
+            </div>
+            <div className="sovereign-card rounded-2xl p-5 border border-white/10 space-y-3">
+              <h2 className="text-sm font-bold text-white">القنوات المذكورة في المصادر</h2>
+              {patterns?.channels.length ? patterns.channels.map((c) => (
+                <div key={c.channel} className="flex justify-between text-xs p-2 rounded-lg bg-black/40 border border-white/5">
+                  <span className="text-gray-200">{c.channel}</span>
+                  <span className="font-mono text-gray-300">{c.count}</span>
+                </div>
+              )) : <p className="text-xs text-gray-500">لا قنوات بعد.</p>}
+            </div>
           </div>
         </div>
       )}
@@ -384,19 +405,29 @@ export const SaudiFraud: React.FC = () => {
             {rules?.note || 'قواعد مقترحة من النظام (فرضيات) وغير مُختبرة على بيانات فعلية.'}
           </div>
           {rules?.rules.length ? rules.rules.map((r) => (
-            <div key={r.category} className="sovereign-card rounded-2xl p-5 border border-white/10 space-y-3">
+            <div key={r.rule_id} className="sovereign-card rounded-2xl p-5 border border-white/10 space-y-3">
               <div className="flex flex-wrap justify-between gap-2">
-                <h3 className="font-bold text-white text-sm">{r.rule?.name || r.category_ar}</h3>
+                <h3 className="font-bold text-white text-sm">{r.name}</h3>
                 <span className="text-[10px] font-mono px-2 py-1 rounded-lg bg-amber-500/10 text-amber-300 border border-amber-500/30">
-                  {r.rule?.status} • {r.supporting_items} خبر داعم
+                  {r.rule_id} • {r.status} • {r.evidence.incident_count} حادثة داعمة
                 </span>
               </div>
-              <p className="text-xs text-gray-400">{r.rule?.hypothesis}</p>
-              <pre dir="ltr" className="text-[11px] font-mono bg-black/60 border border-white/5 rounded-lg p-3 whitespace-pre-wrap text-emerald-300">{r.rule?.logic}</pre>
+              <p className="text-xs text-gray-400">{r.hypothesis}</p>
+              <pre dir="ltr" className="text-[11px] font-mono bg-black/60 border border-white/5 rounded-lg p-3 whitespace-pre-wrap text-emerald-300">{r.logic}</pre>
               <div className="text-[11px] text-gray-400">
                 <b className="text-gray-200">البيانات المطلوبة للاختبار:</b>
                 <ul className="list-disc pr-5 mt-1 space-y-0.5">{(r.required_data || []).map((d, i) => <li key={i}>{d}</li>)}</ul>
               </div>
+              <div className="text-[11px] text-gray-400">
+                <b className="text-gray-200">الحوادث الداعمة:</b>
+                <ul className="list-disc pr-5 mt-1 space-y-0.5">
+                  {r.evidence.incidents.map((i) => (
+                    <li key={i.id}>{i.title} <span className="text-gray-500">({i.article_count} تغطية)</span></li>
+                  ))}
+                  {r.evidence.incidents.length === 0 && <li>لا حوادث؛ مبنية على {r.evidence.warning_article_count} تحذير فقط</li>}
+                </ul>
+              </div>
+              <p className="text-[10px] text-gray-500">{r.evidence.note}</p>
             </div>
           )) : <p className="text-xs text-gray-500">لا قواعد بعد.</p>}
         </div>

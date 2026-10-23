@@ -23,6 +23,10 @@ import {
   SaudiSourceInfo,
   SaudiPatternsResponse,
   SaudiRulesResponse,
+  SaudiIncident,
+  SaudiIncidentsResponse,
+  SaudiIncidentReport,
+  MergeSuggestion,
 } from '../types/saudi';
 
 // Base URL resolution: Environment variable -> Vite Proxy (/api) -> direct localhost
@@ -219,6 +223,7 @@ export const apiService = {
     if (params.source) query.append('source', params.source);
     if (params.q) query.append('q', params.q);
     if (params.bank_relevance) query.append('bank_relevance', params.bank_relevance);
+    if (params.content_type) query.append('content_type', params.content_type);
     query.append('page', String(params.page || 1));
     query.append('page_size', String(params.page_size || 20));
     return await requestWithRetry<SaudiNewsResponse>(`/saudi-fraud/news?${query.toString()}`);
@@ -238,6 +243,37 @@ export const apiService = {
 
   async getSaudiRules(): Promise<SaudiRulesResponse> {
     return await requestWithRetry<SaudiRulesResponse>('/saudi-fraud/rules');
+  },
+
+  // ---- Incident Registry (read-only; reviewer decisions are admin-API only) ----
+  async getSaudiIncidents(params: {
+    category?: string;
+    q?: string;
+    bank_relevance?: string;
+    record_type?: string;
+    review_status?: string;
+    page?: number;
+    page_size?: number;
+  } = {}): Promise<SaudiIncidentsResponse> {
+    const query = new URLSearchParams();
+    (['category', 'q', 'bank_relevance', 'record_type', 'review_status'] as const).forEach((k) => {
+      if (params[k]) query.append(k, String(params[k]));
+    });
+    query.append('page', String(params.page || 1));
+    query.append('page_size', String(params.page_size || 20));
+    return await requestWithRetry<SaudiIncidentsResponse>(`/saudi-fraud/incidents?${query.toString()}`);
+  },
+
+  async getSaudiIncident(id: number): Promise<SaudiIncident> {
+    return await requestWithRetry<SaudiIncident>(`/saudi-fraud/incidents/${id}`);
+  },
+
+  async getSaudiMergeSuggestions(status: string = 'pending'): Promise<{ status: string; total: number; items: MergeSuggestion[]; note: string }> {
+    return await requestWithRetry(`/saudi-fraud/incidents/merge-suggestions?status=${encodeURIComponent(status)}`);
+  },
+
+  async getSaudiIncidentReport(): Promise<SaudiIncidentReport> {
+    return await requestWithRetry<SaudiIncidentReport>('/saudi-fraud/incidents/report');
   },
 
   /**

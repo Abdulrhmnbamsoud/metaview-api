@@ -16,7 +16,62 @@ def _ensure_column(con: sqlite3.Connection, table: str, column: str, col_type: s
     if column not in cols:
         cur.execute(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}")
 
+BACKUP_KEEP = 3
+
+
+def backup_database(tag: str = "manual") -> Optional[str]:
+    """Consistent copy of the live database (sqlite online-backup API) into <db dir>/backups/."""
+    import logging
+    import os
+    from datetime import datetime, timezone
+    try:
+        if not os.path.exists(DB_PATH) or os.path.getsize(DB_PATH) == 0:
+            return None
+        bdir = os.path.join(os.path.dirname(os.path.abspath(DB_PATH)), "backups")
+        os.makedirs(bdir, exist_ok=True)
+        dest = os.path.join(bdir, f"metaview-{tag}-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.db")
+        src = sqlite3.connect(DB_PATH, timeout=30)
+        dst = sqlite3.connect(dest)
+        try:
+            src.backup(dst)
+        finally:
+            dst.close()
+            src.close()
+        old = sorted(f for f in os.listdir(bdir) if f.startswith(f"metaview-{tag}-") and f.endswith(".db"))
+        for f in old[:-BACKUP_KEEP]:
+            os.remove(os.path.join(bdir, f))
+        logging.getLogger("metaview.db").info("database backup written: %s", dest)
+        return dest
+    except Exception:  # pragma: no cover - backup must never block startup
+        logging.getLogger("metaview.db").exception("database backup failed")
+        return None
+
+
+def _needs_incident_migration() -> bool:
+    """True when an existing, non-empty DB predates the incident layer (no ``incidents`` table, or a
+    threat_intel table without ``content_type``). A brand-new/empty DB needs no backup."""
+    import os
+    if not os.path.exists(DB_PATH) or os.path.getsize(DB_PATH) == 0:
+        return False
+    try:
+        con = sqlite3.connect(DB_PATH, timeout=30)
+        try:
+            tables = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            if not tables & {"articles", "threat_intel"}:
+                return False
+            if "incidents" not in tables:
+                return True
+            cols = [r[1] for r in con.execute("PRAGMA table_info(threat_intel)")]
+        finally:
+            con.close()
+    except sqlite3.Error:
+        return False
+    return bool(cols) and "content_type" not in cols
+
+
 def init_db() -> None:
+    if _needs_incident_migration():
+        backup_database("pre-incident-layer")
     con = get_db()
     cur = con.cursor()
     # Use executescript for multiple CREATE statements
@@ -169,6 +224,67 @@ def init_db() -> None:
     _ensure_column(con, "threat_intel", "detection_rule", "TEXT")
     _ensure_column(con, "threat_intel", "required_data", "TEXT")
     _ensure_column(con, "threat_intel", "matched_terms", "TEXT")
+    # Incident layer: content type per article + link to the (derived) incident it belongs to
+    _ensure_column(con, "threat_intel", "content_type", "TEXT")
+    _ensure_column(con, "threat_intel", "incident_id", "INTEGER")
+
+    # Incidents are DERIVED from articles (rebuildable); they never replace or delete articles.
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS incidents (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT, summary TEXT, fraud_category TEXT, fraud_category_ar TEXT,
+            first_reported_at TEXT, last_reported_at TEXT,
+            article_count INTEGER, source_count INTEGER,
+            bank_relevance TEXT, confidence REAL, evidence_confidence REAL,
+            locations TEXT, agencies TEXT, signature TEXT, facts TEXT, methods TEXT,
+            channels TEXT, indicators TEXT, articles TEXT, match_basis TEXT,
+            record_type TEXT, review_status TEXT, pending_review INTEGER DEFAULT 0,
+            created_at TEXT, updated_at TEXT
+        )
+        """
+    )
+    _ensure_column(con, "incidents", "record_type", "TEXT")
+    _ensure_column(con, "incidents", "review_status", "TEXT")
+    _ensure_column(con, "incidents", "pending_review", "INTEGER DEFAULT 0")
+    # Coverage link: which articles back which incident, and WHY they were linked (articles are never merged).
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS incident_articles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            incident_id INTEGER NOT NULL, article_id INTEGER NOT NULL UNIQUE, threat_id INTEGER,
+            role TEXT, content_type TEXT, match_basis TEXT, published_at TEXT, linked_at TEXT
+        )
+        """
+    )
+    # Uncertain merges are NOT applied: they wait here for a human decision, which is then kept forever.
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS merge_suggestions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            article_a INTEGER NOT NULL, article_b INTEGER NOT NULL,
+            score REAL, shared TEXT, conflicts TEXT,
+            status TEXT NOT NULL DEFAULT 'pending',
+            reviewer TEXT, reason TEXT, created_at TEXT, decided_at TEXT,
+            UNIQUE(article_a, article_b)
+        )
+        """
+    )
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_incident_articles_inc ON incident_articles(incident_id)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_merge_suggestions_status ON merge_suggestions(status)")
+    # Results of REAL rule backtests / shadow runs. A rule is 'tested' only if it has rows here.
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS rule_tests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            rule_id TEXT NOT NULL, tested_at TEXT, dataset TEXT,
+            precision_ REAL, recall REAL, alerts INTEGER, notes TEXT, tester TEXT
+        )
+        """
+    )
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_threat_incident ON threat_intel(incident_id)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_threat_content_type ON threat_intel(content_type)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_rule_tests_rule ON rule_tests(rule_id)")
 
     cur.execute("CREATE INDEX IF NOT EXISTS idx_articles_published ON articles(published_at)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_articles_source ON articles(source)")

@@ -61,7 +61,7 @@ def _store_threat_intel(record: Dict[str, Any]) -> Optional[int]:
         "confidence", "original_url", "related_links", "is_saudi", "is_financial",
         "created_at", "updated_at",
         "fraud_category", "fraud_category_ar", "modus_operandi", "channels", "target_group",
-        "bank_relevance", "detection_rule", "required_data", "matched_terms",
+        "bank_relevance", "detection_rule", "required_data", "matched_terms", "content_type",
     ]
     values = [record.get(c) for c in cols]
     placeholders = ", ".join("?" for _ in cols)
@@ -162,6 +162,7 @@ def analyze_and_store(
         "detection_rule": _j(analysis["detection_rule"]),
         "required_data": _j(analysis["required_data"]),
         "matched_terms": _j(analysis["matched_terms"]),
+        "content_type": analysis["content_type"],
     }
     threat_id = _store_threat_intel(record)
     if threat_id is None:

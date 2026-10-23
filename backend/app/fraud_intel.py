@@ -621,6 +621,161 @@ def _bank_relevance(text_norm: str, category: str, is_saudi: bool) -> Dict[str, 
 
 
 # --------------------------------------------------------------------------- #
+# Content type: WHAT KIND of publication is this?
+#   confirmed_incident  - the source reports a concrete fraud event with enforcement / judicial action
+#                         (arrest, seizure, charge, court)
+#   reported_incident   - a concrete event is described (victim, attempt, occurrence) but there is no
+#                         enforcement wording: details or confirmation are incomplete
+#   fraud_warning       - a warning or trend piece about fraud, without a concrete incident
+#   awareness_campaign  - a campaign / initiative / training whose subject is fraud
+#   general_cybersecurity - cyber awareness/training content where fraud is incidental
+#   unrelated           - no fraud signal at all (kept stored, never counted)
+# --------------------------------------------------------------------------- #
+CT_CONFIRMED = "confirmed_incident"
+CT_REPORTED = "reported_incident"
+CT_WARNING = "fraud_warning"
+CT_AWARENESS = "awareness_campaign"
+CT_GENERAL = "general_cybersecurity"
+CT_UNRELATED = "unrelated"
+CONTENT_TYPES = (CT_CONFIRMED, CT_REPORTED, CT_WARNING, CT_AWARENESS, CT_GENERAL, CT_UNRELATED)
+CONTENT_TYPE_AR = {
+    CT_CONFIRMED: "حادثة احتيال مؤكدة",
+    CT_REPORTED: "حادثة احتيال مبلَّغ عنها",
+    CT_WARNING: "تحذير احتيالي",
+    CT_AWARENESS: "حملة توعية",
+    CT_GENERAL: "أمن سيبراني عام",
+    CT_UNRELATED: "غير ذي صلة",
+}
+# Types that describe a concrete event: only these can form an incident record.
+INCIDENT_CONTENT_TYPES = (CT_CONFIRMED, CT_REPORTED)
+# Content types shown to users as fraud material.
+VISIBLE_CONTENT_TYPES = (CT_CONFIRMED, CT_REPORTED, CT_WARNING, CT_AWARENESS)
+
+ENFORCEMENT_STEMS = _prep([
+    "قبض", "اطاح", "ضبط", "توقيف", "احال", "محكمة", "ادان", "بالسجن", "حكم عليه",
+    "اوقفت", "اوقفوا", "اوقفته", "اوقفتهم",
+    # "توقف" alone means "stopped"; it only signals an arrest when a person is its object
+    r"re:(?:توقف|يوقف|توقفت|توقفان) (?:\d+|\w*(?:مقيم|متهم|شخص|اشخاص|مواطن|وافد|محتال|نصاب|عصابه|مشتبه))",
+    "arrest*", "busted", "detain*", "apprehend*", "sentenc*", "convict*", "charged",
+])
+# a concrete occurrence described by the source (headline/summary only)
+INCIDENT_CUES = _prep([
+    "واقعة", "الوقائع", "وقع ضحية", "وقعوا ضحية", "وقعت ضحية", "حاول شخص", "حاول مجهول", "استولى", "استولوا",
+    "سرقوا", "تعرض لعملية", "تعرضت لعملية", "تعرضوا لعملية",
+])
+WARNING_CUES = _prep([
+    "تحذر", "حذر", "تحذير", "تنبيه", "تنبه", "احذر", "مخاطر", "تتزايد", "يتزايد", "تزايد", "تزداد", "ارتفاع",
+    "تنشط", "تستهدف", "يستهدف", "تنامي", "تفشي", "تصاعد", "warn*", "advisory", "alert*",
+])
+# NOTE: "re:" patterns run on normalised text, so they are written in normalised form.
+CAMPAIGN_CUES = _prep([
+    "مبادرة", "مبادرات", "توعي", "توعو", "=وعي", "تثقيف", "محاضرة", "ورشة", "ورش عمل", "دورة تدريبية",
+    "برنامج تدريبي", "مؤتمر", "ملتقى", "ندوة", "نصائح", "ارشادات",
+    r"re:(?:تطلق|اطلاق|اطلقت|تدشن|تدشين|يطلق|تطلقان)\w* (?:ال)?حمله",
+    r"re:حمله (?:توع|تثقيف|وطني|اعلامي)",
+    "campaign*", "awareness", "initiative*", "workshop*", "webinar*",
+])
+CYBER_CUES = _prep(["سيبراني", "سيبرانية", "معلوماتي", "cyber*"])
+
+
+def relevant_text(title: str, summary: str, body: str) -> str:
+    """Headline + summary + the body sentences that are themselves about the fraud.
+
+    Page boilerplate (menus, related links, sidebars of unrelated news) never qualifies, so numbers
+    and places mentioned there cannot leak into an article's facts.
+    """
+    head = f"{(title or '').strip()}. {(summary or '').strip()}".strip()
+    head_norm = norm(head)
+    allow_enf = bool(_hits(ENFORCEMENT_STEMS, head_norm))
+    keep = [head]
+    for s in _split_sentences(body or ""):
+        sn = norm(s)
+        if _hits(STRONG_FRAUD, sn) or (allow_enf and _hits(ENFORCEMENT_STEMS, sn)):
+            keep.append(s)
+    return "\n".join(_uniq(keep))
+
+
+def classify_content_type(title: str, summary: str, rel_raw: str = "") -> Tuple[str, List[str]]:
+    """Decide the content type of an article that passed the fraud-signal gate.
+
+    Decision order (first match wins), evaluated on the headline/summary so that body boilerplate
+    cannot change the result:
+      1. enforcement or a described occurrence                         -> confirmed_incident
+      2. campaign/training wording in the headline                     -> awareness_campaign if the headline
+                                                                          itself names fraud, else general_cybersecurity
+      3. warning/trend wording                                         -> fraud_warning
+      4. campaign/training wording in the summary                      -> awareness_campaign / general_cybersecurity
+      5. cyber wording without fraud in the headline                   -> general_cybersecurity
+      6. otherwise (no concrete event reported)                        -> fraud_warning
+    """
+    title_norm = norm(title)
+    head_norm = norm(f"{title} {summary}")
+    title_strong = [s for s in _uniq(_hits(STRONG_FRAUD, title_norm)) if s not in WEAK_FRAUD_LABELS]
+    enforcement = _uniq(_hits(ENFORCEMENT_STEMS, head_norm))
+    incident_cues = _uniq(_hits(INCIDENT_CUES, head_norm))
+    title_campaign = _uniq(_hits(CAMPAIGN_CUES, title_norm))
+    head_campaign = _uniq(_hits(CAMPAIGN_CUES, head_norm))
+    head_warning = _uniq(_hits(WARNING_CUES, head_norm))
+    cyber_title = _uniq(_hits(CYBER_CUES, title_norm))
+
+    if enforcement:
+        return CT_CONFIRMED, ["enforcement:" + "|".join(enforcement[:3])]
+    if incident_cues:
+        return CT_REPORTED, ["described_occurrence_without_enforcement:" + "|".join(incident_cues[:3])]
+    if title_campaign:
+        if title_strong:
+            return CT_AWARENESS, ["campaign_in_title:" + "|".join(title_campaign[:3]), "fraud_in_title"]
+        return CT_GENERAL, ["campaign_in_title:" + "|".join(title_campaign[:3]), "no_fraud_term_in_title"]
+    if head_warning:
+        return CT_WARNING, ["warning_wording:" + "|".join(head_warning[:3])]
+    if head_campaign:
+        if title_strong:
+            return CT_AWARENESS, ["campaign_in_summary:" + "|".join(head_campaign[:3]), "fraud_in_title"]
+        return CT_GENERAL, ["campaign_in_summary:" + "|".join(head_campaign[:3]), "no_fraud_term_in_title"]
+    if cyber_title and not title_strong:
+        return CT_GENERAL, ["cyber_wording_without_fraud_in_title"]
+    return CT_WARNING, ["no_concrete_event_reported"]
+
+
+# --------------------------------------------------------------------------- #
+# Stated fraud methods. A tag is produced ONLY when the source text itself contains the wording;
+# the quote is the supporting sentence. Patterns are written in normalised form.
+# --------------------------------------------------------------------------- #
+METHOD_LEXICON: List[Tuple[str, str, str]] = [
+    ("victim_data_misuse", "استخدام بيانات الضحايا", r"بيانات (?:ال)?(?:ضحاياهم|ضحاياه|ضحايا|ضحيتهم)"),
+    ("online_purchase", "شراء سلع عبر المتاجر الإلكترونية",
+     r"شراء[^.،\n]{0,70}(?:عبر|من خلال) (?:ال)?متاجر (?:ال)?الكترونيه"),
+    ("resale_or_shipping", "بيع السلع أو شحنها", r"بيعها او شحنها|بيعها وشحنها|اعاده بيع"),
+    ("illicit_transfer", "تحويل أموال بطرق غير مشروعة أو إلى الخارج",
+     r"تحويل\w* [^.،\n]{0,50}(?:الي الخارج|غير (?:ال)?مشروع)"),
+    ("impersonation", "انتحال صفة أو هوية", r"انتحال|ينتحل|انتحل|منتحل"),
+    ("suspicious_link", "رابط أو موقع مشبوه",
+     r"رابط\w* (?:الكتروني\w* )?مشبوه|روابط تصيد|رابط تصيد|رابط احتيالي|مواقع وهميه|موقع وهمي|موقع مزيف"),
+    ("phone_call", "اتصال أو مكالمة احتيالية", r"(?:اتصال|اتصالات|مكالمه|مكالمات) (?:هاتفي\w*|احتيالي\w*|مشبوه\w*)"),
+    ("otp_or_credentials", "طلب رمز التحقق أو بيانات الدخول", r"رمز التحقق|\botp\b|الرقم السري|كلمه المرور|كلمه السر"),
+    ("fraudulent_ads", "إعلانات احتيالية أو وهمية", r"اعلان\w* (?:احتيالي\w*|وهمي\w*)|اعلانات احتياليه"),
+    ("fake_store", "متجر إلكتروني وهمي", r"متاجر? (?:الكترونيه )?وهميه?"),
+    ("fake_investment", "استثمار أو منصة تداول وهمية", r"استثمار\w* وهمي\w*|منصات? (?:تداول )?وهميه?|توظيف (?:ال)?اموال"),
+    ("pyramid_scheme", "مخطط هرمي / بونزي", r"مخطط\w* هرمي\w*|بونزي|\bponzi\b"),
+    ("social_engineering", "الهندسة الاجتماعية", r"الهندسه الاجتماعيه"),
+    ("ai_assisted", "استخدام تقنيات الذكاء الاصطناعي", r"الذكاء الاصطناعي"),
+]
+_METHOD_RES = [(tag, label, re.compile(rx)) for tag, label, rx in METHOD_LEXICON]
+
+
+def extract_method_tags(rel_raw: str) -> List[Dict[str, str]]:
+    """Methods the source itself states, each with the sentence that states it (no inference)."""
+    sentences = _split_sentences(rel_raw or "")
+    out: List[Dict[str, str]] = []
+    for tag, label, rx in _METHOD_RES:
+        for s in sentences:
+            if rx.search(norm(s)):
+                out.append({"tag": tag, "label": label, "quote": s[:320]})
+                break
+    return out
+
+
+# --------------------------------------------------------------------------- #
 # Main entry point
 # --------------------------------------------------------------------------- #
 def analyze(
@@ -696,10 +851,17 @@ def analyze(
     event_type = _event_type(full_norm)
 
     # 5) extraction (facts = what the source says) ----------------------------
-    channels = _group_hits(CHANNELS, full_norm)
-    targets = _group_hits(TARGETS, full_norm)
-    agencies = _group_hits(AGENCIES, full_norm)
-    numbers = _extract_numbers(full_raw)
+    # Scraped pages often carry menus / related-link sidebars. Facts (numbers, channels, agencies,
+    # methods) are therefore taken ONLY from the headline, the summary and body sentences that
+    # themselves carry a fraud signal - never from the whole page.
+    rel_raw = relevant_text(title, summary, body)
+    rel_norm = norm(rel_raw)
+    content_type, content_reasons = classify_content_type(title, summary, rel_raw)
+    method_tags = extract_method_tags(rel_raw)
+    channels = _group_hits(CHANNELS, rel_norm)
+    targets = _group_hits(TARGETS, rel_norm)
+    agencies = _group_hits(AGENCIES, rel_norm)
+    numbers = _extract_numbers(rel_raw)
 
     fact_sentences: List[str] = []
     method_sentences: List[str] = []
@@ -764,6 +926,9 @@ def analyze(
         "agencies_mentioned": agencies,
         "numbers": numbers,
         "fraud_terms_found": signals[:8],
+        "method_tags": method_tags,
+        "content_type": content_type,
+        "content_type_reasons": content_reasons,
         "banks_mentioned": bank["named_entities"],
         "text_basis": "title+summary+article_body" if body else "title+summary_only",
     }
@@ -818,9 +983,15 @@ def analyze(
         "analysis_confidence": analysis_conf,
         "confidence": confidence,
         "is_financial": is_financial,
+        "content_type": content_type,
+        "content_type_ar": CONTENT_TYPE_AR[content_type],
+        "content_type_reasons": content_reasons,
+        "method_tags": method_tags,
         "used_body": bool(body),
         "language": "ar" if arabic_ratio(full_raw) > 0.4 else "en",
     }, None
 
 
-__all__ = ["analyze", "has_fraud_signal", "norm", "CATEGORY_AR", "CATEGORY_ORDER", "arabic_ratio"]
+__all__ = ["analyze", "has_fraud_signal", "norm", "CATEGORY_AR", "CATEGORY_ORDER", "arabic_ratio",
+           "CONTENT_TYPES", "CONTENT_TYPE_AR", "VISIBLE_CONTENT_TYPES", "classify_content_type", "relevant_text",
+           "extract_method_tags", "METHOD_LEXICON"]

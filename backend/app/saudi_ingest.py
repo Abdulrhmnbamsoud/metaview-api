@@ -40,7 +40,7 @@ import feedparser
 import httpx
 from bs4 import BeautifulSoup
 
-from . import fraud_intel
+from . import fraud_intel, incidents
 from .config import (
     REQUEST_TIMEOUT, SAUDI_AUTO_INGEST, SAUDI_INGEST_EVERY_HOURS, SAUDI_MAX_BODY_FETCH,
     SAUDI_MAX_DECODE_PER_RUN, USER_AGENT,
@@ -666,7 +666,9 @@ def _process_entry(ctx: RunContext, src: SaudiSource, entry: Entry, resolved_url
         ctx.recent.append((article_id, toks))
         ctx.examples.append({"threat_id": threat_id, "article_id": article_id, "title": title, "url": cleaned,
                              "source": item["source"], "published_at": item["published_at"],
-                             "category": analysis["fraud_category_ar"], "saudi_basis": analysis["saudi_basis"]})
+                             "category": analysis["fraud_category_ar"], "saudi_basis": analysis["saudi_basis"],
+                             "content_type": analysis.get("content_type"),
+                             "content_type_ar": analysis.get("content_type_ar")})
     _mark_seen(raw, cleaned, src.code, "stored", None, article_id)
 
 
@@ -838,9 +840,19 @@ def run_saudi_ingest(trigger: str = "manual", only: Optional[List[str]] = None) 
                 log.info("source %-26s %-12s entries=%-3d new=%-3d dup=%-3d excl=%-3d err=%s", src.code, res["state"],
                          len(res.get("entries", [])), c["new_articles"], c["duplicates"], c["excluded"], res.get("error"))
 
+        # derive independent incidents from the confirmed articles (never touches articles)
+        incident_report: Dict[str, Any] = {}
+        try:
+            incident_report = incidents.rebuild()
+        except Exception as exc:
+            log.exception("incident rebuild failed")
+            incident_report = {"error": f"{type(exc).__name__}: {exc}"}
         con = get_db()
-        saudi_total = con.execute("SELECT COUNT(*) AS n FROM threat_intel WHERE is_saudi = 1").fetchone()["n"]
-        con.close()
+        try:
+            inc_counts = incidents.counts(con)
+            saudi_total = con.execute("SELECT COUNT(*) AS n FROM threat_intel WHERE is_saudi = 1").fetchone()["n"]
+        finally:
+            con.close()
         states = [p["state"] for p in per_source]
         report = {
             "status": "completed", "run_id": run_id, "trigger": trigger, "started_at": started,
@@ -860,6 +872,7 @@ def run_saudi_ingest(trigger: str = "manual", only: Optional[List[str]] = None) 
             "decode_rate_limited": ctx.decode_blocked,
             "rate_limit_events": list(_NET.events),
             "saudi_fraud_total_in_db": saudi_total,
+            "incidents": incident_report, "incident_counts": inc_counts,
             "new_examples": ctx.examples[:25],
             "sources": per_source,
         }
@@ -944,15 +957,22 @@ def start_scheduler() -> bool:
     return True
 
 
-def reclassify_stored() -> Dict[str, Any]:
-    """Re-evaluate every article stored by this pipeline with the current engine.
+def reclassify_stored(only_missing_content_type: bool = False) -> Dict[str, Any]:
+    """Re-evaluate articles stored by this pipeline with the current engine.
 
-    Articles are never deleted. If an article no longer qualifies, only its derived
-    ``threat_intel`` row and fraud ``category`` are removed and the reason is logged.
+    Articles are never deleted. If an article no longer qualifies, its ``threat_intel`` row is kept
+    but marked ``content_type='unrelated'`` (excluded from indicators) and the fraud ``category`` of
+    the article is cleared. With ``only_missing_content_type`` only rows that predate the
+    content-type column are processed (used for the in-place upgrade of an existing database).
     """
     by_code = {s.code: s for s in SAUDI_SOURCES}
     con = get_db()
-    rows = con.execute("SELECT * FROM articles WHERE source_code IS NOT NULL AND source_code != ''").fetchall()
+    if only_missing_content_type:
+        rows = con.execute(
+            "SELECT a.*, t.is_saudi AS prev_saudi FROM articles a JOIN threat_intel t ON t.article_id = a.id "
+            "WHERE a.source_code IS NOT NULL AND a.source_code != '' AND t.content_type IS NULL").fetchall()
+    else:
+        rows = con.execute("SELECT * FROM articles WHERE source_code IS NOT NULL AND source_code != ''").fetchall()
     con.close()
     kept: List[int] = []
     demoted: List[Dict[str, Any]] = []
@@ -965,12 +985,17 @@ def reclassify_stored() -> Dict[str, Any]:
             "saudi_scope": bool(src and src.saudi_scope and src.kind != "gnews"),
             "official": bool(src and src.official) or domain.endswith(".gov.sa"),
         }
+        # Upgrade mode: Saudi attribution was already decided when the row was first stored; do not
+        # re-litigate it here (only the content type + facts are being added).
         analysis, reason = fraud_intel.analyze(r["headline"] or "", r["article_summary"] or "", r["content"] or "",
-                                               source=meta, require_saudi=True)
+                                               source=meta, require_saudi=not only_missing_content_type)
         con = get_db()
         try:
             if analysis is None:
-                con.execute("DELETE FROM threat_intel WHERE article_id = ?", (r["id"],))
+                # Never delete: keep the article AND its analysis row, but mark it out of scope so it
+                # is excluded from every fraud indicator.
+                con.execute("UPDATE threat_intel SET content_type = ?, incident_id = NULL WHERE article_id = ?",
+                            (fraud_intel.CT_UNRELATED, r["id"]))
                 con.execute("UPDATE articles SET category = NULL WHERE id = ?", (r["id"],))
                 con.execute("UPDATE ingest_seen SET decision='excluded', reason=? WHERE article_id = ?",
                             (f"reclassified:{reason}", r["id"]))
@@ -985,10 +1010,42 @@ def reclassify_stored() -> Dict[str, Any]:
                "source": r["source"], "domain": domain, "country": "", "published_at": r["published_at"],
                "saudi_scope": meta["saudi_scope"], "saudi_publisher": meta["saudi_publisher"],
                "official": meta["official"]}
-        tid, _why = analyze_and_store(art, require_saudi=True)
+        tid, _why = analyze_and_store(art, require_saudi=not only_missing_content_type)
         if tid:
             kept.append(tid)
+            if only_missing_content_type and r["prev_saudi"] is not None:
+                con = get_db()
+                try:
+                    con.execute("UPDATE threat_intel SET is_saudi = ? WHERE id = ?", (r["prev_saudi"], tid))
+                    con.commit()
+                finally:
+                    con.close()
     return {"checked": len(rows), "kept": len(kept), "demoted": len(demoted), "demoted_items": demoted}
+
+
+def backfill_incidents() -> Dict[str, Any]:
+    """Upgrade an existing DB in place: classify stored rows that have no ``content_type`` yet, then
+    rebuild the derived incidents. Idempotent, never deletes articles, never resets data."""
+    res = reclassify_stored(only_missing_content_type=True)
+    res["incidents"] = incidents.rebuild()
+    con = get_db()
+    try:
+        res["counts"] = incidents.counts(con)
+    finally:
+        con.close()
+    return res
+
+
+def run_startup_backfill() -> Optional[Dict[str, Any]]:
+    """Startup hook: never raises (a backfill problem must not stop the API from booting)."""
+    try:
+        res = backfill_incidents()
+        log.info("incident backfill: classified=%s demoted=%s incidents=%s", res.get("kept"), res.get("demoted"),
+                 (res.get("incidents") or {}).get("incidents"))
+        return res
+    except Exception:
+        log.exception("incident backfill failed (continuing without it)")
+        return None
 
 
 def main() -> None:
@@ -996,8 +1053,13 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="Run the Saudi Fraud Intelligence ingestion")
     ap.add_argument("--run", action="store_true")
     ap.add_argument("--reclassify", action="store_true", help="re-evaluate stored articles with the current engine")
+    ap.add_argument("--rebuild-incidents", action="store_true",
+                    help="classify rows lacking content_type, then rebuild incidents (never deletes articles)")
     ap.add_argument("--only", default="", help="comma separated source codes")
     args = ap.parse_args()
+    if args.rebuild_incidents:
+        print(json.dumps(backfill_incidents(), ensure_ascii=False, indent=2))
+        return
     if args.reclassify:
         print(json.dumps(reclassify_stored(), ensure_ascii=False, indent=2))
         return

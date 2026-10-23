@@ -10,16 +10,22 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Header, HTTPException, Query
+from fastapi.responses import PlainTextResponse
+from pydantic import BaseModel, Field
 
 from .config import ADMIN_TOKEN, DATA_DIR, DB_PATH, SAUDI_AUTO_INGEST, SAUDI_INGEST_EVERY_HOURS
 from .db import get_db
-from . import saudi_ingest
-from .fraud_intel import CATEGORY_AR, CATEGORY_ORDER
+from . import incidents, saudi_ingest
+from .fraud_intel import CATEGORY_AR, CATEGORY_ORDER, CONTENT_TYPE_AR, VISIBLE_CONTENT_TYPES
 
 router = APIRouter(prefix="/saudi-fraud", tags=["saudi-fraud-intelligence"])
 
-# Saudi fraud item = Saudi-attributed threat that went through the fraud engine
-_BASE_WHERE = "t.is_saudi = 1 AND t.fraud_category IS NOT NULL"
+# Saudi item = Saudi-attributed threat that went through the fraud engine (any content type)
+_ANY_SAUDI_WHERE = "t.is_saudi = 1 AND t.fraud_category IS NOT NULL"
+# Default visibility: only fraud-relevant content. general_cybersecurity / unrelated / unclassified
+# articles stay in the DB but never appear in lists or indicators unless explicitly requested.
+_VISIBLE_TYPES = "', '".join(VISIBLE_CONTENT_TYPES)
+_BASE_WHERE = f"{_ANY_SAUDI_WHERE} AND t.content_type IN ('{_VISIBLE_TYPES}')"
 
 _JSON_FIELDS = (
     "verified_facts", "analytical_assessment", "detection_indicators",
@@ -62,6 +68,9 @@ def _item(r, detail: bool = False) -> Dict[str, Any]:
         "channels": _loads(r["channels"]) or [],
         "target_group": _loads(r["target_group"]) or [],
         "detection_rule": _loads(r["detection_rule"]),
+        "content_type": r["content_type"] or "unclassified",
+        "content_type_ar": CONTENT_TYPE_AR.get(r["content_type"], "غير مصنّف"),
+        "incident_id": r["incident_id"],
     }
     if detail:
         for f in ("verified_facts", "analytical_assessment", "detection_indicators",
@@ -80,9 +89,15 @@ _SELECT = """
 
 
 def _where(category: Optional[str], source: Optional[str], q: Optional[str],
-           date_from: Optional[str], date_to: Optional[str], bank: Optional[str]):
-    clauses = [_BASE_WHERE]
-    params: List[Any] = []
+           date_from: Optional[str], date_to: Optional[str], bank: Optional[str],
+           content_type: Optional[str] = None):
+    if content_type:
+        # explicit request (may be an excluded type, e.g. to audit what was left out of the indicators)
+        clauses = [_ANY_SAUDI_WHERE, "t.content_type = ?"]
+        params: List[Any] = [content_type]
+    else:
+        clauses = [_BASE_WHERE]
+        params = []
     if category:
         clauses.append("t.fraud_category = ?")
         params.append(category)
@@ -106,19 +121,14 @@ def _where(category: Optional[str], source: Optional[str], q: Optional[str],
 
 @router.get("/overview")
 def overview() -> Dict[str, Any]:
+    """Headline indicators. The success metric is INDEPENDENT INCIDENTS, not articles: warnings and
+    awareness campaigns are counted separately and general-cybersecurity/unrelated articles are
+    excluded from every indicator (they remain stored)."""
     con = get_db()
     try:
+        inc = incidents.counts(con)
         total = con.execute(
             f"SELECT COUNT(*) n FROM threat_intel t WHERE {_BASE_WHERE}").fetchone()["n"]
-        cats = {r["fraud_category"]: r["n"] for r in con.execute(
-            f"SELECT t.fraud_category, COUNT(*) n FROM threat_intel t WHERE {_BASE_WHERE} "
-            "GROUP BY t.fraud_category")}
-        last7 = con.execute(
-            f"SELECT COUNT(*) n FROM threat_intel t JOIN articles a ON a.id=t.article_id "
-            f"WHERE {_BASE_WHERE} AND a.published_at >= datetime('now','-7 days')").fetchone()["n"]
-        high_bank = con.execute(
-            f"SELECT COUNT(*) n FROM threat_intel t WHERE {_BASE_WHERE} AND t.bank_relevance='high'"
-        ).fetchone()["n"]
         srcs = con.execute(
             f"SELECT COUNT(DISTINCT a.source) n FROM threat_intel t JOIN articles a ON a.id=t.article_id "
             f"WHERE {_BASE_WHERE}").fetchone()["n"]
@@ -129,10 +139,29 @@ def overview() -> Dict[str, Any]:
         all_sources = con.execute("SELECT COUNT(*) n FROM source_registry").fetchone()["n"]
     finally:
         con.close()
+    cats = inc["incident_categories"]
     return {
-        "total_items": total,
-        "last_7_days": last7,
-        "high_bank_relevance": high_bank,
+        # --- success metric -------------------------------------------------
+        "incidents_total": inc["incidents_total"],
+        "incident_articles_total": inc["incident_articles_total"],
+        "incidents_last_7_days": inc["incidents_last_7_days"],
+        "incidents_high_bank_relevance": inc["incidents_high_bank_relevance"],
+        "incidents_confirmed": inc["incidents_confirmed"],
+        "incidents_reported": inc["incidents_reported"],
+        "incidents_needs_review": inc["incidents_needs_review"],
+        "merge_suggestions_pending": inc["merge_suggestions_pending"],
+        # --- separate, NOT counted as incidents -----------------------------
+        "warnings_total": inc["warnings_total"],
+        "awareness_total": inc["awareness_total"],
+        # --- stored but excluded from every fraud indicator ------------------
+        "excluded_general_cybersecurity": inc["excluded_general_cybersecurity"],
+        "excluded_unrelated": inc["excluded_unrelated"],
+        "unclassified": inc["unclassified"],
+        "by_content_type": inc["by_content_type"],
+        # --- legacy field names (same values, now incident-based) ------------
+        "total_items": total,  # visible articles only: confirmed + warning + awareness (NOT incidents)
+        "last_7_days": inc["incidents_last_7_days"],
+        "high_bank_relevance": inc["incidents_high_bank_relevance"],
         "distinct_sources": srcs,
         "categories": [
             {"key": k, "label_ar": CATEGORY_AR.get(k, k), "count": cats.get(k, 0)}
@@ -155,10 +184,14 @@ def news(
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
     bank_relevance: Optional[str] = Query(None, pattern="^(high|medium|low)$"),
+    content_type: Optional[str] = Query(
+        None, pattern="^(confirmed_incident|reported_incident|fraud_warning|awareness_campaign|general_cybersecurity|unrelated)$"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ) -> Dict[str, Any]:
-    where, params = _where(category, source, q, date_from, date_to, bank_relevance)
+    """Articles. By default only fraud-relevant content types; general_cybersecurity / unrelated
+    are stored but only returned when requested explicitly via ``content_type``."""
+    where, params = _where(category, source, q, date_from, date_to, bank_relevance, content_type)
     con = get_db()
     try:
         total = con.execute(
@@ -177,7 +210,7 @@ def news(
 def news_detail(threat_id: int) -> Dict[str, Any]:
     con = get_db()
     try:
-        r = con.execute(f"{_SELECT} WHERE t.id = ? AND {_BASE_WHERE}", (threat_id,)).fetchone()
+        r = con.execute(f"{_SELECT} WHERE t.id = ? AND {_ANY_SAUDI_WHERE}", (threat_id,)).fetchone()
     finally:
         con.close()
     if not r:
@@ -197,57 +230,146 @@ def sources() -> Dict[str, Any]:
     return {"sources": [dict(r) for r in rows]}
 
 
-@router.get("/patterns")
-def patterns() -> Dict[str, Any]:
-    """Aggregated fraud patterns (category / modus operandi / channels) across stored items."""
+@router.get("/incidents")
+def incidents_list(
+    category: Optional[str] = None,
+    q: Optional[str] = None,
+    bank_relevance: Optional[str] = Query(None, pattern="^(high|medium|low)$"),
+    record_type: Optional[str] = Query(None, pattern="^(confirmed_incident|reported_incident)$"),
+    review_status: Optional[str] = Query(None, pattern="^(auto_merged|single_source|needs_review|human_confirmed)$"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+) -> Dict[str, Any]:
+    """Independent fraud incidents (one row per real event), each with ALL the articles covering it."""
+    clauses, params = ["1=1"], []
+    if category:
+        clauses.append("fraud_category = ?")
+        params.append(category)
+    if bank_relevance:
+        clauses.append("bank_relevance = ?")
+        params.append(bank_relevance)
+    if record_type:
+        clauses.append("record_type = ?")
+        params.append(record_type)
+    if review_status:
+        clauses.append("review_status = ?")
+        params.append(review_status)
+    if q:
+        clauses.append("(title LIKE ? OR summary LIKE ? OR locations LIKE ? OR agencies LIKE ?)")
+        params += [f"%{q}%"] * 4
+    where = " AND ".join(clauses)
     con = get_db()
     try:
+        total = con.execute(f"SELECT COUNT(*) n FROM incidents WHERE {where}", params).fetchone()["n"]
         rows = con.execute(
-            f"SELECT t.fraud_category, t.modus_operandi, t.channels FROM threat_intel t WHERE {_BASE_WHERE}"
-        ).fetchall()
+            f"SELECT * FROM incidents WHERE {where} ORDER BY COALESCE(last_reported_at, created_at) DESC, id DESC "
+            "LIMIT ? OFFSET ?", params + [page_size, (page - 1) * page_size]).fetchall()
     finally:
         con.close()
-    by_cat: Dict[str, Dict[str, Any]] = {}
-    channels: Dict[str, int] = {}
-    for r in rows:
-        cat = r["fraud_category"]
-        e = by_cat.setdefault(cat, {"key": cat, "label_ar": CATEGORY_AR.get(cat, cat),
-                                    "count": 0, "modus_operandi": r["modus_operandi"]})
-        e["count"] += 1
-        for ch in _loads(r["channels"]) or []:
-            channels[ch] = channels.get(ch, 0) + 1
+    return {"page": page, "page_size": page_size, "total": total,
+            "items": [incidents.incident_to_dict(r) for r in rows]}
+
+
+def _check_admin(x_admin_token: Optional[str]) -> None:
+    """Fail-closed admin gate shared by every state-changing endpoint."""
+    if not ADMIN_TOKEN:
+        raise HTTPException(status_code=503, detail="Disabled: ADMIN_TOKEN is not configured")
+    if not x_admin_token or not hmac.compare_digest(x_admin_token.encode(), ADMIN_TOKEN.encode()):
+        raise HTTPException(status_code=401, detail="Invalid admin token")
+
+
+@router.get("/incidents/merge-suggestions")
+def merge_suggestions(status: Optional[str] = Query("pending", pattern="^(pending|approved|rejected|all)$")) -> Dict[str, Any]:
+    """Uncertain merges that were NOT applied automatically and wait for a human decision."""
+    con = get_db()
+    try:
+        items = incidents.list_suggestions(con, None if status == "all" else status)
+    finally:
+        con.close()
+    return {"status": status, "total": len(items), "items": items,
+            "note": "Pairs share some facts but not enough (or only weakly) to merge safely. "
+                    "Approving forces the merge; rejecting forbids it permanently."}
+
+
+class MergeDecision(BaseModel):
+    decision: str = Field(pattern="^(approved|rejected)$")
+    reviewer: str = Field(default="", max_length=80)
+    reason: str = Field(default="", max_length=500)
+
+
+@router.post("/incidents/merge-suggestions/{suggestion_id}/decision")
+def merge_decision(suggestion_id: int, body: MergeDecision, x_admin_token: Optional[str] = Header(None)) -> Dict[str, Any]:
+    """Record a reviewer decision (admin only). The incident set is rebuilt; no article is ever deleted."""
+    _check_admin(x_admin_token)
+    try:
+        return incidents.decide_suggestion(suggestion_id, body.decision, body.reviewer, body.reason)
+    except LookupError:
+        raise HTTPException(status_code=404, detail="Merge suggestion not found")
+
+
+@router.get("/incidents/report")
+def incidents_report(format: str = Query("json", pattern="^(json|markdown)$")):
+    """Articles vs independent incidents, warnings, awareness, review queue - with real links."""
+    con = get_db()
+    try:
+        rep = incidents.build_report(con)
+    finally:
+        con.close()
+    if format == "markdown":
+        return PlainTextResponse(incidents.report_markdown(rep), media_type="text/markdown; charset=utf-8")
+    return rep
+
+
+@router.get("/incidents/{incident_id}")
+def incident_detail(incident_id: int) -> Dict[str, Any]:
+    con = get_db()
+    try:
+        r = con.execute("SELECT * FROM incidents WHERE id = ?", (incident_id,)).fetchone()
+        if not r:
+            raise HTTPException(status_code=404, detail="Incident not found")
+        d = incidents.incident_to_dict(r, detail=True)
+        ids = {a["article_id"] for a in d["articles"]}
+        d["pending_merge_suggestions"] = [
+            s for s in incidents.list_suggestions(con, "pending")
+            if s["article_a"]["id"] in ids or s["article_b"]["id"] in ids]
+    finally:
+        con.close()
+    return d
+
+
+@router.get("/patterns")
+def patterns() -> Dict[str, Any]:
+    """Fraud patterns = methods stated in the sources, aggregated over incidents (warnings = weaker support)."""
+    con = get_db()
+    try:
+        pats = incidents.build_patterns(con)
+        chan: Dict[str, int] = {}
+        for r in con.execute("SELECT channels FROM incidents"):
+            for ch in _loads(r["channels"]) or []:
+                chan[ch] = chan.get(ch, 0) + 1
+    finally:
+        con.close()
     return {
-        "patterns": sorted(by_cat.values(), key=lambda x: -x["count"]),
-        "channels": [{"channel": k, "count": v} for k, v in sorted(channels.items(), key=lambda kv: -kv[1])],
+        "patterns": pats,
+        "channels": [{"channel": k, "count": v} for k, v in sorted(chan.items(), key=lambda kv: -kv[1])],
+        "note": "Patterns list only methods whose wording appears in a source article; counts are INCIDENTS, not articles.",
     }
 
 
 @router.get("/rules")
 def rules() -> Dict[str, Any]:
-    """Proposed (untested) detection rules, one per fraud category, with supporting evidence count."""
+    """Detection rules linked to the incidents/patterns behind them. ``tested`` requires a recorded backtest."""
     con = get_db()
     try:
-        rows = con.execute(
-            f"SELECT t.id, t.fraud_category, t.detection_rule, t.required_data, t.title "
-            f"FROM threat_intel t WHERE {_BASE_WHERE} ORDER BY t.id DESC"
-        ).fetchall()
+        items = incidents.build_rules(con)
     finally:
         con.close()
-    out: Dict[str, Dict[str, Any]] = {}
-    for r in rows:
-        cat = r["fraud_category"]
-        e = out.get(cat)
-        if e is None:
-            e = out[cat] = {
-                "category": cat, "category_ar": CATEGORY_AR.get(cat, cat),
-                "rule": _loads(r["detection_rule"]), "required_data": _loads(r["required_data"]),
-                "supporting_items": 0, "example_threat_ids": [],
-            }
-        e["supporting_items"] += 1
-        if len(e["example_threat_ids"]) < 5:
-            e["example_threat_ids"].append(r["id"])
-    return {"rules": list(out.values()),
-            "note": "Rules are system-proposed hypotheses (status: proposed_untested), not validated detections."}
+    return {"rules": items,
+            "summary": {"total": len(items),
+                        "tested": sum(1 for x in items if x["status"] == "tested"),
+                        "proposed_untested": sum(1 for x in items if x["status"] == "proposed_untested")},
+            "note": "Rules are system-proposed hypotheses (proposed_untested) unless a real test result is recorded; "
+                    "the evidence shows the threat exists, not that the rule works."}
 
 
 @router.get("/ingest/runs")

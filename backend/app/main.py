@@ -17,7 +17,7 @@ from .db import init_db, get_db, row_count, get_stats_summary
 from .schemas import IngestRequest, SearchResponse, HealthResponse, StatsResponse, ThreatIntel
 from .ingest import ingest_once
 from .saudi_api import router as saudi_router
-from .saudi_ingest import start_scheduler as start_saudi_scheduler
+from .saudi_ingest import start_scheduler as start_saudi_scheduler, run_startup_backfill
 
 app = FastAPI(title=APP_NAME, version=APP_VERSION, description="Global News Intelligence API")
 
@@ -39,6 +39,9 @@ app.add_middleware(
 
 init_db()
 app.include_router(saudi_router)
+# Upgrade an existing DB in place: classify rows lacking content_type and derive incidents.
+# Additive + idempotent (never deletes articles); independent of SAUDI_AUTO_INGEST.
+run_startup_backfill()
 # Saudi Fraud Intelligence: periodic ingestion (enabled with SAUDI_AUTO_INGEST=true)
 start_saudi_scheduler()
 
@@ -352,10 +355,11 @@ def list_threats(page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le
     offset = (page - 1) * page_size
     con = get_db()
     cur = con.cursor()
-    total_count = cur.execute("SELECT COUNT(*) FROM threat_intel").fetchone()[0]
+    excl = "COALESCE(content_type, '') NOT IN ('general_cybersecurity', 'unrelated')"
+    total_count = cur.execute(f"SELECT COUNT(*) FROM threat_intel WHERE {excl}").fetchone()[0]
     cur.execute(
-        """
-        SELECT * FROM threat_intel ORDER BY id DESC LIMIT ? OFFSET ?
+        f"""
+        SELECT * FROM threat_intel WHERE {excl} ORDER BY id DESC LIMIT ? OFFSET ?
         """,
         (page_size, offset),
     )

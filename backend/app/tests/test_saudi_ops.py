@@ -134,6 +134,11 @@ class ManualIngestProtection(unittest.TestCase):
         from backend.app import saudi_api
 
         self.api = saudi_api
+        self.tmp = tempfile.mkdtemp()
+        p = mock.patch.object(db_mod, "DB_PATH", os.path.join(self.tmp, "t.db"))
+        p.start()
+        self.addCleanup(p.stop)
+        db_mod.init_db()
         app = FastAPI()
         app.include_router(saudi_api.router)
         self.client = TestClient(app)
