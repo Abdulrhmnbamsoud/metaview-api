@@ -21,3 +21,5 @@ Thumbs.db
 # Database files
 backend/data/*.db
 *.db
+-MetaView-3/
+

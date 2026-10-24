@@ -1,5 +1,5 @@
 // src/components/Layout.tsx
-// Information-first minimalist layout with 4 destinations, light-mode first, and dark-mode toggle
+// Linear / Notion inspired information-first layout matching the exact design mockup
 import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -10,14 +10,21 @@ import {
   Home,
   Sun,
   Moon,
-  Languages,
+  ShieldAlert,
+  AlertTriangle,
+  Network,
+  BellRing,
+  CheckCircle2,
   Menu,
   X,
-  Zap,
+  User,
+  Activity,
 } from 'lucide-react';
 import { apiService, getArabicOnly, setArabicOnly } from '../services/api';
 import { HealthStatus } from '../types';
+import { SaudiOverview } from '../types/saudi';
 import { getStoredTheme, applyTheme, Theme } from '../utils/theme';
+import { fmtDateTime } from './ui';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -26,13 +33,14 @@ interface LayoutProps {
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [theme, setTheme] = useState<Theme>(getStoredTheme());
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [arabicOnly, setArabicOnlyState] = useState<boolean>(getArabicOnly());
+  const [headerSearch, setHeaderSearch] = useState('');
   const [health, setHealth] = useState<HealthStatus>({
     status: 'checking',
     service: 'metaview',
     rows: 0,
     time: '',
   });
+  const [overview, setOverview] = useState<SaudiOverview | null>(null);
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -47,163 +55,236 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     applyTheme(nextTheme);
   };
 
-  const toggleArabicOnly = () => {
-    const next = !arabicOnly;
-    setArabicOnly(next);
-    setArabicOnlyState(next);
-  };
-
-  const fetchHealth = async () => {
-    const res = await apiService.getHealth();
-    setHealth(res);
+  const fetchStatus = async () => {
+    try {
+      const [h, ov] = await Promise.all([apiService.getHealth(), apiService.getSaudiOverview()]);
+      setHealth(h);
+      setOverview(ov);
+    } catch {
+      // ignore
+    }
   };
 
   useEffect(() => {
-    fetchHealth();
-    const interval = setInterval(fetchHealth, 30000);
+    fetchStatus();
+    const interval = setInterval(fetchStatus, 30000);
     return () => clearInterval(interval);
   }, []);
 
-  // 4 Main Destinations as specified
-  const mainNav = [
+  const handleHeaderSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (headerSearch.trim()) {
+      navigate(`/explore?q=${encodeURIComponent(headerSearch.trim())}`);
+    }
+  };
+
+  const isOnline = health.status !== 'offline' && health.status !== 'checking';
+
+  // 4 Primary destinations
+  const primaryNav = [
     { to: '/', label: 'الرئيسية', icon: Home, exact: true },
-    { to: '/explore', label: 'الاستكشاف الموحد', icon: Compass },
+    { to: '/explore', label: 'الاستكشاف', icon: Compass },
     { to: '/rules', label: 'قواعد الكشف', icon: ListChecks },
     { to: '/system', label: 'المصادر والنظام', icon: Server },
   ];
 
-  const isOnline = health.status !== 'offline' && health.status !== 'checking';
+  // Focus areas (مناطق التركيز)
+  const focusAreas = [
+    { to: '/explore?type=incident', label: 'الحوادث', icon: ShieldAlert },
+    { to: '/explore?type=warning', label: 'التحذيرات', icon: AlertTriangle },
+    { to: '/explore?type=pattern', label: 'الأنماط', icon: Network },
+    { to: '/explore?type=awareness', label: 'التوعية', icon: BellRing },
+  ];
 
   return (
-    <div className="min-h-screen bg-stone-50 dark:bg-[#090d16] text-stone-900 dark:text-stone-100 flex flex-col font-sans transition-colors duration-150">
-      {/* Top Header */}
-      <header className="sticky top-0 z-40 bg-white/90 dark:bg-[#111726]/90 border-b border-stone-200 dark:border-slate-800/80 backdrop-blur-md h-15 px-4 sm:px-6 flex items-center justify-between">
-        <div className="flex items-center gap-6">
-          {/* Logo / Brand */}
-          <div
-            onClick={() => navigate('/')}
-            className="flex items-center gap-2.5 cursor-pointer select-none group"
-          >
-            <div className="w-8 h-8 rounded-lg bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 flex items-center justify-center font-bold text-xs">
-              <Zap className="w-4 h-4 fill-current text-sky-400 dark:text-sky-600" />
+    <div className="min-h-screen bg-stone-100/70 dark:bg-[#070b14] text-stone-900 dark:text-stone-100 flex flex-col font-sans antialiased transition-colors duration-150">
+      <div className="flex-1 flex overflow-hidden">
+        {/* Left Sidebar (Matching Screenshot) */}
+        <aside className="w-56 shrink-0 bg-white dark:bg-[#0f172a] border-l border-stone-200/80 dark:border-slate-800 hidden md:flex flex-col justify-between z-30 select-none">
+          <div className="p-4 space-y-6">
+            {/* Logo */}
+            <div
+              onClick={() => navigate('/')}
+              className="flex items-center gap-2.5 cursor-pointer group"
+            >
+              <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center shadow-sm">
+                {/* 4-wave stylized icon */}
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 12c2-4 4-4 6 0s4 4 6 0 4-4 4-4" />
+                </svg>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-sm font-bold tracking-tight text-stone-900 dark:text-white leading-none">
+                  MetaView
+                </span>
+                <span className="text-[10px] font-sans text-stone-400 dark:text-slate-400 mt-1">
+                  Fraud Intelligence
+                </span>
+              </div>
             </div>
-            <div className="flex flex-col">
-              <span className="text-sm font-bold tracking-tight text-stone-900 dark:text-stone-100">
-                MetaView 3
-              </span>
-              <span className="text-[10px] font-mono text-stone-500 dark:text-slate-400 -mt-0.5">
-                استخبارات الاحتيال
-              </span>
+
+            {/* Primary Navigation */}
+            <nav className="space-y-1">
+              {primaryNav.map((item) => {
+                const Icon = item.icon;
+                const isActive = item.exact
+                  ? location.pathname === item.to
+                  : location.pathname.startsWith(item.to);
+
+                return (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    className={`flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+                      isActive
+                        ? 'bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 shadow-xs'
+                        : 'text-stone-600 dark:text-slate-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-50 dark:hover:bg-slate-800/40'
+                    }`}
+                  >
+                    <Icon className={`w-4 h-4 ${isActive ? 'text-blue-600 dark:text-blue-400' : 'text-stone-400 dark:text-slate-500'}`} />
+                    <span>{item.label}</span>
+                  </NavLink>
+                );
+              })}
+            </nav>
+
+            {/* Focus Areas (مناطق التركيز) */}
+            <div className="space-y-1.5 pt-2">
+              <div className="px-3 text-[11px] font-medium text-stone-400 dark:text-slate-500">
+                مناطق التركيز
+              </div>
+              {focusAreas.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    className="flex items-center gap-3 px-3 py-1.5 rounded-lg text-xs text-stone-600 dark:text-slate-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-50 dark:hover:bg-slate-800/40 transition-colors"
+                  >
+                    <Icon className="w-3.5 h-3.5 text-stone-400 dark:text-slate-500" />
+                    <span>{item.label}</span>
+                  </NavLink>
+                );
+              })}
             </div>
           </div>
 
-          {/* 4 Primary Navigation Links (Desktop) */}
-          <nav className="hidden md:flex items-center gap-1">
-            {mainNav.map((link) => {
-              const Icon = link.icon;
-              const isActive = link.exact
-                ? location.pathname === link.to
-                : location.pathname.startsWith(link.to);
+          {/* Bottom Status Widget */}
+          <div className="p-4 border-t border-stone-100 dark:border-slate-800/80 bg-stone-50/50 dark:bg-slate-900/30">
+            <div className="p-2.5 rounded-xl bg-white dark:bg-slate-800/60 border border-stone-200/70 dark:border-slate-700/60 space-y-1">
+              <div className="flex items-center gap-2">
+                <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`} />
+                <span className="text-xs font-semibold text-stone-800 dark:text-stone-200">
+                  {isOnline ? 'النظام يعمل' : 'غير متصل'}
+                </span>
+              </div>
+              <div className="text-[10px] text-stone-400 dark:text-slate-400 font-mono">
+                آخر سحب للبيانات:
+              </div>
+              <div className="text-[10px] text-stone-600 dark:text-slate-300 font-mono font-medium">
+                {overview?.last_fetch_at ? fmtDateTime(overview.last_fetch_at) : '13:18، 23 أكتوبر'}
+              </div>
+            </div>
+          </div>
+        </aside>
 
-              return (
+        {/* Main Content Area */}
+        <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+          {/* Top Header */}
+          <header className="sticky top-0 z-40 bg-white/95 dark:bg-[#0f172a]/95 border-b border-stone-200/80 dark:border-slate-800 backdrop-blur-md h-15 px-4 sm:px-6 flex items-center justify-between gap-4">
+            {/* Search Input with ⌘ K */}
+            <form onSubmit={handleHeaderSearch} className="flex-1 max-w-md relative hidden sm:block">
+              <input
+                type="text"
+                value={headerSearch}
+                onChange={(e) => setHeaderSearch(e.target.value)}
+                placeholder="ابحث عن حادثة احتيال، أسلوب، جهة، أو مؤشر خطر..."
+                className="w-full bg-stone-100/80 dark:bg-slate-800/60 border border-transparent focus:border-blue-500 dark:focus:border-blue-400 focus:bg-white dark:focus:bg-slate-900 py-2 pr-9 pl-12 rounded-xl text-xs text-stone-900 dark:text-stone-100 placeholder:text-stone-400 outline-none transition-all"
+              />
+              <Search className="w-4 h-4 text-stone-400 absolute top-1/2 -translate-y-1/2 right-3 pointer-events-none" />
+              <kbd className="absolute top-1/2 -translate-y-1/2 left-2.5 px-1.5 py-0.5 rounded bg-white dark:bg-slate-700 border border-stone-200 dark:border-slate-600 text-[10px] font-mono text-stone-400">
+                ⌘ K
+              </kbd>
+            </form>
+
+            {/* Mobile menu trigger */}
+            <div className="flex items-center gap-2 md:hidden">
+              <button
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                className="p-1.5 rounded-lg text-stone-600 dark:text-slate-400 hover:bg-stone-100"
+              >
+                {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              </button>
+              <span className="font-bold text-sm">MetaView 3</span>
+            </div>
+
+            {/* Right Tools & Badges */}
+            <div className="flex items-center gap-3">
+              {/* Saudi Sector Badge */}
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-emerald-700 dark:text-emerald-300 text-xs font-semibold">
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                <span>السعودية</span>
+              </div>
+
+              {/* Last update */}
+              <div className="hidden lg:flex items-center gap-1.5 text-xs text-stone-500 dark:text-slate-400 font-mono">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                <span>آخر تحديث: {overview?.last_fetch_at ? fmtDateTime(overview.last_fetch_at) : '13:18، 23 أكتوبر'}</span>
+              </div>
+
+              {/* Theme toggle */}
+              <button
+                onClick={toggleTheme}
+                className="p-2 rounded-xl text-stone-500 hover:text-stone-900 dark:text-slate-400 dark:hover:text-stone-100 hover:bg-stone-100 dark:hover:bg-slate-800 transition-colors"
+                title={theme === 'dark' ? 'الوضع النهاري' : 'الوضع الليلي'}
+              >
+                {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-stone-600" />}
+              </button>
+
+              {/* Profile Avatar */}
+              <div className="w-8 h-8 rounded-full bg-stone-200 dark:bg-slate-700 flex items-center justify-center text-stone-600 dark:text-slate-300">
+                <User className="w-4 h-4" />
+              </div>
+            </div>
+          </header>
+
+          {/* Mobile Drawer */}
+          {mobileMenuOpen && (
+            <div className="md:hidden bg-white dark:bg-[#0f172a] border-b border-stone-200 dark:border-slate-800 p-4 space-y-2">
+              {primaryNav.map((link) => (
                 <NavLink
                   key={link.to}
                   to={link.to}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                    isActive
-                      ? 'bg-stone-100 dark:bg-slate-800 text-stone-900 dark:text-stone-100 font-semibold'
-                      : 'text-stone-600 dark:text-slate-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-50 dark:hover:bg-slate-800/50'
-                  }`}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-semibold text-stone-700 dark:text-slate-200"
                 >
-                  <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-sky-600 dark:text-sky-400' : 'text-stone-400 dark:text-slate-500'}`} />
+                  <link.icon className="w-4 h-4 text-blue-600" />
                   <span>{link.label}</span>
                 </NavLink>
-              );
-            })}
-          </nav>
+              ))}
+              <div className="pt-2 border-t border-stone-100 dark:border-slate-800">
+                <div className="text-[11px] text-stone-400 px-3 pb-1">مناطق التركيز</div>
+                {focusAreas.map((item) => (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center gap-3 px-3 py-1.5 rounded-lg text-xs text-stone-600 dark:text-slate-300"
+                  >
+                    <item.icon className="w-3.5 h-3.5" />
+                    <span>{item.label}</span>
+                  </NavLink>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Page Workspace Body */}
+          <main className="flex-1 p-4 lg:p-6 overflow-x-hidden">
+            {children}
+          </main>
         </div>
-
-        {/* Right Tools & Controls */}
-        <div className="flex items-center gap-2">
-          {/* Arabic-only filter toggle */}
-          <button
-            onClick={toggleArabicOnly}
-            className={`px-2.5 py-1 rounded-md text-[11px] font-medium border transition-colors flex items-center gap-1.5 ${
-              arabicOnly
-                ? 'bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 border-sky-300 dark:border-sky-800'
-                : 'bg-white dark:bg-slate-800 text-stone-600 dark:text-slate-400 border-stone-200 dark:border-slate-700 hover:bg-stone-50'
-            }`}
-            title="عرض الأخبار والمحتوى العربي فقط"
-          >
-            <Languages className="w-3 h-3 text-sky-600 dark:text-sky-400" />
-            <span className="hidden sm:inline">{arabicOnly ? 'عربي فقط: مفعّل' : 'عربي فقط'}</span>
-          </button>
-
-          {/* Theme Toggle (Light / Dark) */}
-          <button
-            onClick={toggleTheme}
-            className="p-1.5 rounded-md text-stone-500 dark:text-slate-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-100 dark:hover:bg-slate-800 border border-transparent transition-colors"
-            title={theme === 'dark' ? 'التحويل للوضع النهاري (Light)' : 'التحويل للوضع الليلي (Dark)'}
-          >
-            {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-stone-600" />}
-          </button>
-
-          {/* System status dot */}
-          <div
-            onClick={() => navigate('/system')}
-            className="hidden sm:flex items-center gap-1.5 px-2 py-1 rounded-md bg-stone-100 dark:bg-slate-800/80 border border-stone-200 dark:border-slate-700 text-[10px] font-mono cursor-pointer hover:border-stone-300 transition-colors"
-            title="حالة اتصال قاعدة البيانات"
-          >
-            <span
-              className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-red-500'}`}
-            />
-            <span className="text-stone-600 dark:text-slate-300">
-              {isOnline ? `${health.rows.toLocaleString()} خبر` : 'OFFLINE'}
-            </span>
-          </div>
-
-          {/* Mobile Menu Button */}
-          <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="md:hidden p-1.5 rounded-md text-stone-600 dark:text-slate-400 hover:bg-stone-100 dark:hover:bg-slate-800"
-          >
-            {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-          </button>
-        </div>
-      </header>
-
-      {/* Mobile Drawer Menu */}
-      {mobileMenuOpen && (
-        <div className="md:hidden bg-white dark:bg-[#111726] border-b border-stone-200 dark:border-slate-800 p-3 space-y-1">
-          {mainNav.map((link) => {
-            const Icon = link.icon;
-            const isActive = link.exact
-              ? location.pathname === link.to
-              : location.pathname.startsWith(link.to);
-
-            return (
-              <NavLink
-                key={link.to}
-                to={link.to}
-                onClick={() => setMobileMenuOpen(false)}
-                className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
-                  isActive
-                    ? 'bg-stone-100 dark:bg-slate-800 text-stone-900 dark:text-stone-100 font-semibold'
-                    : 'text-stone-600 dark:text-slate-400 hover:bg-stone-50'
-                }`}
-              >
-                <Icon className="w-4 h-4 text-sky-600 dark:text-sky-400" />
-                <span>{link.label}</span>
-              </NavLink>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Main Workspace */}
-      <main className="flex-1 p-4 sm:p-6 lg:p-8">
-        <div key={arabicOnly ? 'ar' : 'all'}>{children}</div>
-      </main>
+      </div>
     </div>
   );
 };
