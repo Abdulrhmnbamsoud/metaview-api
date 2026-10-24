@@ -2,74 +2,55 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --royal-black: #0A0E1A;
-  --royal-charcoal: #0F172A;
-  --royal-subcard: #131b2e;
-  --brand-gold: #4cd7f6;
-  --brand-gold-light: #acedff;
-  --brand-gold-dark: #06b6d4;
+@layer base {
+  body {
+    font-family: 'Cairo', 'Geist', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
 }
 
-body {
-  font-family: 'Geist', 'Cairo', 'Outfit', sans-serif;
-  background-color: var(--royal-black);
-  background-image: 
-    radial-gradient(circle at 50% 0%, rgba(76, 215, 246, 0.05) 0%, transparent 55%),
-    radial-gradient(circle at 100% 100%, rgba(6, 182, 212, 0.03) 0%, transparent 40%);
-  background-attachment: fixed;
-  color: #dae2fd;
-}
-
-/* Custom Scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: #08090d;
-}
-::-webkit-scrollbar-thumb {
-  background: rgba(76, 215, 246, 0.3);
-  border-radius: 9999px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(76, 215, 246, 0.6);
-}
-
-.royal-gradient-text {
-  background: linear-gradient(135deg, #dae2fd 20%, #acedff 65%, #4cd7f6 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-.sovereign-card {
-  background: #0F172A;
-  border: 1px solid #1E293B;
-  box-shadow: 0 4px 14px -6px rgba(0, 0, 0, 0.6);
-  transition: border-color 0.2s ease, background-color 0.2s ease;
-}
-
-.sovereign-card:hover {
-  border-color: rgba(76, 215, 246, 0.35);
-}
-
-.gold-glow {
-  box-shadow: 0 0 20px rgba(76, 215, 246, 0.2);
-}
-
-/* Command-center primitives */
+/* Linear/Notion-inspired minimal panel */
 .panel {
-  background: #0F172A;
-  border: 1px solid #1E293B;
+  background-color: #ffffff;
+  border: 1px solid #e7e5e4;
   border-radius: 0.75rem;
-  box-shadow: 0 4px 14px -6px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
 }
+
+.dark .panel {
+  background-color: #111726;
+  border-color: #1e293b;
+  box-shadow: none;
+}
+
+/* Minimalist label and mono numbers */
 .label-mono {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 10px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: #869397;
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  color: #78716c;
 }
-.num-mono { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; }
+
+.dark .label-mono {
+  color: #94a3b8;
+}
+
+.num-mono {
+  font-family: 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Subtle clean scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #d6d3d1;
+  border-radius: 9999px;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #334155;
+}

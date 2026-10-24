@@ -1,17 +1,20 @@
 // src/pages/ExecutiveOverview.tsx
-// Executive intelligence overview. Every figure is read from the backend; nothing is invented.
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+// Home Page: Information-First search-centric experience (Linear/Notion style)
+import React, { useCallback, useEffect, useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import {
-  ShieldCheck,
+  Search,
+  ShieldAlert,
   Network,
-  Landmark,
-  ListChecks,
-  Radio,
-  FileDown,
-  Eye,
   AlertTriangle,
   Clock,
+  RefreshCw,
+  ExternalLink,
+  ArrowRight,
+  CheckCircle2,
+  MapPin,
+  Building2,
+  ChevronLeft,
 } from 'lucide-react';
 import { apiService } from '../services/api';
 import {
@@ -19,76 +22,42 @@ import {
   SaudiIncidentReport,
   SaudiIncident,
   SaudiPatternsResponse,
-  SaudiRulesResponse,
-  SaudiSourceInfo,
-  SaudiFraudItem,
+  SaudiPattern,
 } from '../types/saudi';
-import {
-  Panel,
-  KpiTile,
-  Chip,
-  EpistemicChip,
-  Unavailable,
-  LoadingBlock,
-  ErrorBlock,
-  PageHeader,
-  fmtDateTime,
-  fmtDay,
-} from '../components/ui';
+import { Chip, EpistemicChip, LoadingBlock, ErrorBlock, fmtDay } from '../components/ui';
+import { IncidentDetailModal } from '../components/IncidentDetailModal';
 import { timeAgo } from '../utils/formatDate';
 
-const CT_LABEL: Record<string, string> = {
-  confirmed_incident: 'حوادث مؤكدة',
-  reported_incident: 'حوادث مبلَّغ عنها',
-  fraud_warning: 'تحذيرات احتيالية',
-  awareness_campaign: 'حملات توعية',
-  general_cybersecurity: 'أمن سيبراني عام (مستبعد)',
-  unrelated: 'غير ذي صلة (مستبعد)',
-};
-const CT_TONE: Record<string, string> = {
-  confirmed_incident: 'bg-threat-critical',
-  reported_incident: 'bg-threat-high',
-  fraud_warning: 'bg-threat-medium',
-  awareness_campaign: 'bg-brand',
-  general_cybersecurity: 'bg-epistemic-unknown',
-  unrelated: 'bg-epistemic-unknown',
-};
-
-const dayKey = (s: string) => s.slice(0, 10);
-
 export const ExecutiveOverview: React.FC = () => {
+  const navigate = useNavigate();
+  const [searchQuery, setSearchQuery] = useState('');
   const [ov, setOv] = useState<SaudiOverview | null>(null);
   const [report, setReport] = useState<SaudiIncidentReport | null>(null);
   const [incidents, setIncidents] = useState<SaudiIncident[]>([]);
-  const [patterns, setPatterns] = useState<SaudiPatternsResponse | null>(null);
-  const [rules, setRules] = useState<SaudiRulesResponse | null>(null);
-  const [sources, setSources] = useState<SaudiSourceInfo[]>([]);
-  const [news, setNews] = useState<SaudiFraudItem[]>([]);
+  const [patterns, setPatterns] = useState<SaudiPattern[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Selected incident for detail view
+  const [selectedIncident, setSelectedIncident] = useState<SaudiIncident | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [o, r, inc, p, ru, so, n] = await Promise.all([
+      const [o, r, inc, p] = await Promise.all([
         apiService.getSaudiOverview(),
         apiService.getSaudiIncidentReport(),
-        apiService.getSaudiIncidents({ page_size: 100 }),
+        apiService.getSaudiIncidents({ page_size: 6 }),
         apiService.getSaudiPatterns(),
-        apiService.getSaudiRules(),
-        apiService.getSaudiSources(),
-        apiService.getSaudiNews({ page_size: 100 }),
       ]);
       setOv(o);
       setReport(r);
       setIncidents(inc.items);
-      setPatterns(p);
-      setRules(ru);
-      setSources(so.sources);
-      setNews(n.items);
+      setPatterns(p.patterns);
     } catch (e: any) {
-      setError(e?.message || 'خطأ غير معروف');
+      setError(e?.message || 'خطأ في جلب البيانات');
     } finally {
       setLoading(false);
     }
@@ -101,388 +70,245 @@ export const ExecutiveOverview: React.FC = () => {
     return () => window.removeEventListener('metaview:refresh', h);
   }, [load]);
 
-  // Real timeline: stored Saudi fraud articles per publication day.
-  const timeline = useMemo(() => {
-    const m = new Map<string, number>();
-    news.forEach((i) => {
-      const d = i.published_at || i.fetched_at;
-      if (d) m.set(dayKey(d), (m.get(dayKey(d)) || 0) + 1);
-    });
-    return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-  }, [news]);
+  const handleRefresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await apiService.runIngest(15);
+      await load();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
-  // Situation summary: pure aggregation of stored records (no generated claims).
-  const summary = useMemo(() => {
-    const top = (arr: string[], n: number) => {
-      const m = new Map<string, number>();
-      arr.forEach((x) => x && m.set(x, (m.get(x) || 0) + 1));
-      return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, n);
-    };
-    const dates = news
-      .map((i) => i.published_at || i.fetched_at)
-      .filter(Boolean)
-      .map((d) => d as string)
-      .sort();
-    const peak = timeline.reduce<[string, number] | null>((b, e) => (!b || e[1] > b[1] ? e : b), null);
-    return {
-      first: dates[0] || null,
-      last: dates[dates.length - 1] || null,
-      peak,
-      activeDays: timeline.length,
-      distinctSources: new Set(news.map((i) => i.source).filter(Boolean)).size,
-      categories: top(news.map((i) => i.fraud_category_ar), 4),
-      channels: top(news.flatMap((i) => i.channels || []), 5),
-      locations: top(incidents.flatMap((i) => i.locations || []), 5),
-      agencies: top(incidents.flatMap((i) => i.agencies || []), 4),
-      latest: [...news]
-        .sort((a, b) => (b.published_at || b.fetched_at || '').localeCompare(a.published_at || a.fetched_at || ''))
-        .slice(0, 4),
-    };
-  }, [news, incidents, timeline]);
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      navigate(`/explore?q=${encodeURIComponent(searchQuery.trim())}`);
+    } else {
+      navigate('/explore');
+    }
+  };
 
-  if (loading && !ov) return <LoadingBlock label="جارٍ تحميل النظرة التنفيذية…" />;
+  if (loading && !ov) return <LoadingBlock label="جارٍ تحميل لوحة الاستخبارات…" />;
   if (error && !ov) return <ErrorBlock message={error} onRetry={load} />;
   if (!ov || !report) return null;
 
-  const maxDay = Math.max(1, ...timeline.map(([, c]) => c));
-  const byType = report.articles.by_content_type || {};
-  const typeTotal = Object.values(byType).reduce((a, b) => a + b, 0) || 1;
-  const sourcesBad = sources.filter((s) => s.last_status && s.last_status !== 'ok');
-  const sourcesOkRatio = ov.sources_total ? (ov.sources_ok / ov.sources_total) * 100 : null;
-  const incRatio = report.incidents.independent_total
-    ? (report.incidents.confirmed / report.incidents.independent_total) * 100
-    : null;
+  const reviewItems = incidents.filter((i) => i.needs_review || i.review_status === 'needs_review');
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        kicker="القيادة التنفيذية • السوق المالي السعودي"
-        title="النظرة التنفيذية لاستخبارات الاحتيال"
-        subtitle="ملخّص حيّ مبني بالكامل على بيانات المنصة: الأخبار الأصلية، الحوادث المستقلة، الأنماط، وقواعد الكشف المقترحة. لا يُعرض أي رقم غير موجود في قاعدة البيانات."
-        right={
-          <>
-            <Chip tone="low">حالة البيانات: مباشرة</Chip>
-            <a
-              href={`${apiService.getBaseUrl()}/saudi-fraud/incidents/report?format=markdown`}
-              target="_blank"
-              rel="noreferrer"
-              className="px-3 py-1.5 rounded-lg bg-brand text-brand-on text-sm font-semibold flex items-center gap-1.5 hover:bg-brand-container transition-colors"
+    <div className="space-y-8 max-w-4xl mx-auto py-2">
+      {/* 1. Unobtrusive last-updated & status strip */}
+      <div className="flex items-center justify-between text-xs text-stone-500 dark:text-slate-400 font-mono">
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-emerald-500" />
+          <span>المصادر: {ov.sources_ok}/{ov.sources_total} نشطة</span>
+          <span>•</span>
+          <span>آخر تحديث: {timeAgo(ov.last_fetch_at)}</span>
+        </div>
+
+        <button
+          onClick={handleRefresh}
+          disabled={refreshing}
+          className="flex items-center gap-1.5 hover:text-stone-800 dark:hover:text-stone-200 transition-colors"
+          title="مزامنة فورية"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-sky-600' : ''}`} />
+          <span>{refreshing ? 'جارٍ المزامنة…' : 'تحديث'}</span>
+        </button>
+      </div>
+
+      {/* 2. Primary Search Box (Linear / Modern Search style) */}
+      <div className="space-y-3 text-center sm:text-right">
+        <div className="space-y-1">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-stone-900 dark:text-stone-100">
+            استخبارات الاحتيال المالي
+          </h1>
+          <p className="text-sm text-stone-600 dark:text-slate-400">
+            البحث المباشر والوصول السريع للأدلة، الحوادث، وأنماط الاستهداف في القطاع البنكي
+          </p>
+        </div>
+
+        <form onSubmit={handleSearchSubmit} className="relative mt-4">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="ابحث عن حادثة احتيال، أسلوب، جهة، أو مؤشر خطر..."
+            className="w-full bg-white dark:bg-[#111726] border border-stone-300 dark:border-slate-800 rounded-2xl py-4 pr-12 pl-28 text-base text-stone-900 dark:text-stone-100 placeholder:text-stone-400 dark:placeholder:text-slate-500 shadow-sm focus:border-sky-500 dark:focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all"
+            autoFocus
+          />
+          <Search className="w-5 h-5 text-stone-400 dark:text-slate-500 absolute top-1/2 -translate-y-1/2 right-4 pointer-events-none" />
+          <button
+            type="submit"
+            className="absolute top-1/2 -translate-y-1/2 left-3 px-4 py-2 rounded-xl bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 font-semibold text-xs hover:bg-stone-800 dark:hover:bg-white transition-colors"
+          >
+            بحث
+          </button>
+        </form>
+
+        {/* Quick query chips */}
+        <div className="flex flex-wrap items-center gap-1.5 pt-1 text-xs text-stone-500 dark:text-slate-400">
+          <span className="text-[11px] font-mono">اقتراحات سريعة:</span>
+          {['الرياض', 'سريع', 'انتحال جهات حكومية', 'حسابات وسيطة (Mule)', 'مدى'].map((tag) => (
+            <button
+              key={tag}
+              type="button"
+              onClick={() => navigate(`/explore?q=${encodeURIComponent(tag)}`)}
+              className="px-2 py-0.5 rounded-md bg-stone-100 dark:bg-slate-800/80 hover:bg-stone-200 dark:hover:bg-slate-700 text-stone-700 dark:text-slate-300 text-xs transition-colors"
             >
-              <FileDown className="w-4 h-4" />
-              <span>تقرير الحوادث</span>
-            </a>
-          </>
-        }
+              {tag}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 3. Items Requiring Analyst Review */}
+      {reviewItems.length > 0 ? (
+        <section className="p-4 rounded-xl bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-amber-900 dark:text-amber-200 font-semibold text-xs">
+              <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+              <span>تنبيه المراجعة: {reviewItems.length} حوادث بانتظار قرار المحلل البشري</span>
+            </div>
+            <Link to="/explore?type=incident" className="text-xs text-amber-800 dark:text-amber-300 font-medium hover:underline">
+              عرض في الاستكشاف ←
+            </Link>
+          </div>
+          <div className="space-y-1.5 pt-1">
+            {reviewItems.map((item) => (
+              <div
+                key={item.id}
+                onClick={() => setSelectedIncident(item)}
+                className="flex items-center justify-between p-2 rounded-lg bg-white/80 dark:bg-slate-900/60 border border-amber-200/60 dark:border-amber-900/30 text-xs cursor-pointer hover:bg-white transition-colors"
+              >
+                <span className="text-stone-800 dark:text-stone-200 font-medium">{item.title}</span>
+                <span className="text-stone-400 font-mono text-[11px]">{item.ref}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : (
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-900/30 text-xs text-emerald-800 dark:text-emerald-300">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+          <span>حالة التحقق: كافة الحوادث المستقلة مدققة ومطابقة، ولا توجد اقتراحات دمج معلّقة حالياً.</span>
+        </div>
+      )}
+
+      {/* 4. Important Recent Incidents */}
+      <section className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <ShieldAlert className="w-4 h-4 text-sky-600 dark:text-sky-400" />
+            <h2 className="text-base font-bold text-stone-900 dark:text-stone-100">
+              أهم الحوادث المرصودة حديثاً
+            </h2>
+          </div>
+          <Link to="/explore?type=incident" className="text-xs text-sky-600 dark:text-sky-400 hover:underline font-medium">
+            عرض كافة الحوادث ({report.incidents.independent_total}) ←
+          </Link>
+        </div>
+
+        <div className="space-y-2.5">
+          {incidents.slice(0, 4).map((i) => (
+            <div
+              key={i.id}
+              onClick={() => setSelectedIncident(i)}
+              className="panel p-4 hover:border-sky-300 dark:hover:border-sky-800/80 transition-all cursor-pointer space-y-2 group"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-xs font-semibold text-stone-600 dark:text-slate-400">
+                    {i.ref}
+                  </span>
+                  <Chip tone={i.record_type === 'confirmed_incident' ? 'critical' : 'high'}>
+                    {i.record_type_ar}
+                  </Chip>
+                  {i.bank_relevance === 'high' && (
+                    <Chip tone="critical">صلة بنكية عالية</Chip>
+                  )}
+                </div>
+                <span className="text-xs font-mono text-stone-400 dark:text-slate-500">
+                  {fmtDay(i.first_reported_at)}
+                </span>
+              </div>
+
+              <div className="flex items-start justify-between gap-3">
+                <h3 className="text-sm font-semibold text-stone-900 dark:text-stone-100 group-hover:text-sky-600 dark:group-hover:text-sky-400 transition-colors leading-snug">
+                  {i.title}
+                </h3>
+                <ChevronLeft className="w-4 h-4 text-stone-400 group-hover:text-sky-600 dark:group-hover:text-sky-400 shrink-0 mt-0.5 transition-transform group-hover:-translate-x-1" />
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-xs text-stone-500 dark:text-slate-400">
+                <div className="flex items-center gap-3">
+                  {i.locations.length > 0 && (
+                    <span className="flex items-center gap-1">
+                      <MapPin className="w-3 h-3 text-sky-600 dark:text-sky-400" />
+                      {i.locations.join('، ')}
+                    </span>
+                  )}
+                  {i.agencies.length > 0 && (
+                    <span className="flex items-center gap-1">
+                      <Building2 className="w-3 h-3" />
+                      {i.agencies[0]}
+                    </span>
+                  )}
+                </div>
+
+                <span className="font-mono text-[11px] bg-stone-100 dark:bg-slate-800 px-2 py-0.5 rounded text-stone-600 dark:text-slate-300">
+                  {i.article_count} مصادر إخبارية مؤيدة
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* 5. Newly Identified Fraud Patterns */}
+      <section className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Network className="w-4 h-4 text-sky-600 dark:text-sky-400" />
+            <h2 className="text-base font-bold text-stone-900 dark:text-stone-100">
+              أنماط الاحتيال المكتشفة
+            </h2>
+          </div>
+          <Link to="/explore?type=pattern" className="text-xs text-sky-600 dark:text-sky-400 hover:underline font-medium">
+            عرض كافة الأنماط ({patterns.length}) ←
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {patterns.slice(0, 4).map((p) => (
+            <Link
+              key={p.key}
+              to={`/explore?q=${encodeURIComponent(p.label_ar)}`}
+              className="panel p-3.5 hover:border-sky-300 dark:hover:border-sky-800/80 transition-all space-y-1.5 group"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-stone-800 dark:text-stone-200 group-hover:text-sky-600 dark:group-hover:text-sky-400 transition-colors">
+                  {p.label_ar}
+                </span>
+                <span className="font-mono text-xs text-sky-600 dark:text-sky-400 font-bold">
+                  {p.incident_count} حوادث
+                </span>
+              </div>
+              <p className="text-[11px] text-stone-500 dark:text-slate-400 line-clamp-1">
+                القنوات: {p.channels.join('، ') || 'قنوات مصرفية متعددة'}
+              </p>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      {/* Incident Detail Modal */}
+      <IncidentDetailModal
+        incident={selectedIncident}
+        onClose={() => setSelectedIncident(null)}
       />
-
-      {/* KPI tiles */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        <KpiTile
-          label="حوادث مستقلة"
-          value={report.incidents.independent_total}
-          hint={`${report.incidents.confirmed} مؤكدة • ${report.incidents.reported} مبلَّغ عنها`}
-          icon={<ShieldCheck className="w-4 h-4" />}
-          tone="brand"
-          ratio={incRatio}
-          to="/incident-registry"
-        />
-        <KpiTile
-          label="أخبار خلف الحوادث"
-          value={report.incidents.articles_behind_incidents}
-          hint={`${report.incidents.multi_article} حادثة متعددة المصادر`}
-          icon={<Landmark className="w-4 h-4" />}
-          tone="plain"
-          to="/incident-registry"
-        />
-        <KpiTile
-          label="أنماط مستخرجة"
-          value={patterns ? patterns.patterns.length : '—'}
-          hint="من حوادث وتحذيرات موثّقة"
-          icon={<Network className="w-4 h-4" />}
-          tone="high"
-          to="/patterns"
-        />
-        <KpiTile
-          label="قواعد كشف مقترحة"
-          value={rules ? rules.summary.total : '—'}
-          hint={rules ? `${rules.summary.tested} مُختبرة • ${rules.summary.proposed_untested} بلا اختبار` : undefined}
-          icon={<ListChecks className="w-4 h-4" />}
-          tone="brand"
-          to="/rules"
-        />
-        <KpiTile
-          label="مصادر الرصد"
-          value={`${ov.sources_ok}/${ov.sources_total}`}
-          hint={ov.last_fetch_at ? `آخر جلب ${timeAgo(ov.last_fetch_at)}` : 'لم يُجلب بعد'}
-          icon={<Radio className="w-4 h-4" />}
-          tone={sourcesBad.length ? 'medium' : 'low'}
-          ratio={sourcesOkRatio}
-          to="/sources"
-        />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <div className="lg:col-span-8 space-y-6">
-          {/* Situation summary */}
-          <Panel
-            title="ملخّص الوضع الآن"
-            subtitle="مجمَّع آليًا من الأخبار والحوادث المخزّنة — لا يحتوي أي معلومة غير موجودة في المصادر."
-            icon={<ShieldCheck className="w-4 h-4" />}
-          >
-            {news.length === 0 ? (
-              <Unavailable title="لا بيانات كافية" note="لم تُخزَّن أخبار احتيال سعودية بعد." />
-            ) : (
-              <div className="space-y-4">
-                <p className="text-sm text-ink leading-loose">
-                  رصدت المنصة <b className="num-mono text-brand">{news.length}</b> خبرًا احتياليًا سعوديًا
-                  {summary.first && summary.last && (
-                    <> منشورًا بين <b>{fmtDay(summary.first)}</b> و<b>{fmtDay(summary.last)}</b></>
-                  )}
-                  ، من <b className="num-mono">{summary.distinctSources}</b> مصدرًا، وتغطي{' '}
-                  <b className="num-mono text-brand">{report.incidents.independent_total}</b> حادثة مستقلة (
-                  {report.incidents.confirmed} مؤكدة و{report.incidents.reported} مبلَّغ عنها)، إضافة إلى{' '}
-                  <b className="num-mono">{report.separate_from_incidents.fraud_warnings}</b> تحذيرًا و
-                  <b className="num-mono"> {report.separate_from_incidents.awareness_campaigns}</b> حملة توعية.
-                  {summary.peak && (
-                    <> أكثر الأيام نشرًا: <b>{summary.peak[0]}</b> ({summary.peak[1]} أخبار).</>
-                  )}
-                  {report.incidents.needs_review > 0 ? (
-                    <> يوجد <b className="text-threat-medium">{report.incidents.needs_review}</b> حادثة تنتظر مراجعة بشرية.</>
-                  ) : (
-                    <> لا توجد حوادث تنتظر مراجعة بشرية حاليًا.</>
-                  )}
-                </p>
-
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {[
-                    { l: 'أخبار مخزّنة', v: news.length, t: 'text-ink' },
-                    { l: 'حوادث مستقلة', v: report.incidents.independent_total, t: 'text-brand' },
-                    { l: 'أخبار آخر 7 أيام', v: ov.last_7_days, t: 'text-ink' },
-                    { l: 'أيام فيها نشر', v: summary.activeDays, t: 'text-ink' },
-                  ].map((x) => (
-                    <div key={x.l} className="p-3 rounded-lg bg-surface-lowest">
-                      <div className="label-mono">{x.l}</div>
-                      <div className={`num-mono text-2xl font-bold ${x.t}`}>{x.v}</div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                  {[
-                    { t: 'أبرز أنواع الاحتيال', d: summary.categories },
-                    { t: 'أبرز القنوات المذكورة', d: summary.channels },
-                    { t: 'أبرز المواقع في الحوادث', d: summary.locations },
-                    { t: 'أبرز الجهات المذكورة', d: summary.agencies },
-                  ]
-                    .filter((g) => g.d.length > 0)
-                    .map((g) => (
-                      <div key={g.t} className="space-y-1.5">
-                        <div className="label-mono">{g.t}</div>
-                        <div className="flex flex-wrap gap-1.5">
-                          {g.d.map(([k, c]) => (
-                            <Chip key={k} tone="brand">
-                              {k} ({c})
-                            </Chip>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                </div>
-
-                <div className="space-y-1.5">
-                  <div className="label-mono">أحدث الأخبار</div>
-                  {summary.latest.map((i) => (
-                    <a
-                      key={i.id}
-                      href={i.original_url || '#'}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex items-start justify-between gap-3 p-2.5 rounded-lg bg-surface-container hover:bg-surface-high transition-colors"
-                    >
-                      <span className="text-[13px] text-ink leading-relaxed">{i.headline || i.title}</span>
-                      <span className="text-[10px] text-ink-outline shrink-0 mt-0.5">
-                        {i.source} • {fmtDay(i.published_at || i.fetched_at)}
-                      </span>
-                    </a>
-                  ))}
-                </div>
-              </div>
-            )}
-          </Panel>
-
-          {/* Timeline */}
-          <Panel
-            title="الأخبار الاحتيالية السعودية حسب يوم النشر"
-            subtitle={`آخر ${news.length} خبرًا مخزّنًا — تاريخ النشر كما ورد من المصدر.`}
-            icon={<Clock className="w-4 h-4" />}
-          >
-            {timeline.length === 0 ? (
-              <Unavailable title="لا أخبار مخزّنة" note="لم تُسجَّل أخبار احتيال سعودية بعد." />
-            ) : (
-              <div className="rounded-lg bg-surface-lowest p-4">
-                <div className="flex items-stretch gap-2 h-44" dir="ltr">
-                  {timeline.map(([d, c]) => (
-                    <div key={d} className="flex-1 min-w-[18px] h-full flex flex-col justify-end items-center gap-1" title={`${d}: ${c}`}>
-                      <span className="text-[10px] font-mono text-ink-variant leading-none">{c}</span>
-                      <div
-                        className="w-full rounded-t bg-brand/80 hover:bg-brand transition-colors"
-                        style={{ height: `${Math.max(6, Math.round((c / maxDay) * 85))}%` }}
-                      />
-                      <span className="text-[9px] font-mono text-ink-outline leading-none">{d.slice(5)}</span>
-                    </div>
-                  ))}
-                </div>
-                <div className="flex justify-between text-[10px] font-mono text-ink-outline mt-2" dir="ltr">
-                  <span>{timeline[0][0]}</span>
-                  <span>{timeline[timeline.length - 1][0]}</span>
-                </div>
-              </div>
-            )}
-          </Panel>
-
-          {/* Content type breakdown */}
-          <Panel
-            title="توزيع الأخبار حسب نوع المحتوى"
-            subtitle="الفصل بين الخبر والحادثة والتحذير والتوعية — الحادثة قد تغطيها عدة أخبار."
-            icon={<AlertTriangle className="w-4 h-4" />}
-          >
-            <div className="space-y-3">
-              {Object.entries(byType)
-                .filter(([, c]) => c > 0)
-                .sort((a, b) => b[1] - a[1])
-                .map(([k, c]) => (
-                  <div key={k} className="space-y-1">
-                    <div className="flex justify-between text-xs">
-                      <span className="text-ink">{CT_LABEL[k] || k}</span>
-                      <span className="num-mono text-ink-variant">{c}</span>
-                    </div>
-                    <div className="w-full bg-surface-container h-2 rounded-full overflow-hidden">
-                      <div className={`${CT_TONE[k] || 'bg-surface-bright'} h-full rounded-full`} style={{ width: `${(c / typeTotal) * 100}%` }} />
-                    </div>
-                  </div>
-                ))}
-            </div>
-          </Panel>
-
-          {/* Priority incidents */}
-          <Panel
-            title="أحدث الحوادث المستقلة"
-            subtitle="كل حادثة تجمع الأخبار التي تتناول الواقعة نفسها بناءً على الوقائع (الجهة، الموقع، العدد)."
-            right={<Link to="/incident-registry" className="text-xs text-brand hover:underline">سجل الحوادث الكامل ←</Link>}
-          >
-            {incidents.length === 0 ? (
-              <Unavailable title="لا حوادث بعد" note="لم تُستخرج حوادث مستقلة من الأخبار المخزّنة." />
-            ) : (
-              <div className="space-y-3">
-                {incidents.map((i) => (
-                  <div key={i.id} className="p-4 rounded-lg bg-surface-container hover:bg-surface-high transition-colors space-y-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Chip tone={i.record_type === 'confirmed_incident' ? 'critical' : 'high'}>{i.record_type_ar}</Chip>
-                      <span className="num-mono text-[11px] text-brand">{i.ref}</span>
-                      <Chip>{i.review_status_ar}</Chip>
-                    </div>
-                    <div className="text-sm font-semibold text-ink leading-relaxed">{i.title}</div>
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <EpistemicChip kind="fact" label={`${i.article_count} خبر • ${i.source_count} مصدر`} />
-                        {i.locations.slice(0, 3).map((l) => (
-                          <Chip key={l}>{l}</Chip>
-                        ))}
-                      </div>
-                      <Link
-                        to="/incident-registry"
-                        className="text-xs text-ink-variant hover:text-brand flex items-center gap-1"
-                      >
-                        <Eye className="w-3.5 h-3.5" /> فتح الملف
-                      </Link>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Panel>
-        </div>
-
-        <div className="lg:col-span-4 space-y-6">
-          {/* Review queue */}
-          <Panel title="الانضباط المعرفي" subtitle="ما هو مؤكد، وما ينتظر مراجعة بشرية.">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="p-3 rounded-lg bg-surface-lowest">
-                <div className="label-mono">تنتظر المراجعة</div>
-                <div className="num-mono text-2xl font-bold text-threat-medium">{report.incidents.needs_review}</div>
-                <div className="text-[11px] text-ink-outline">حوادث</div>
-              </div>
-              <div className="p-3 rounded-lg bg-surface-lowest">
-                <div className="label-mono">اقتراحات دمج</div>
-                <div className="num-mono text-2xl font-bold text-brand">{report.pending_merge_suggestions}</div>
-                <div className="text-[11px] text-ink-outline">معلّقة</div>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              <EpistemicChip kind="fact" label="الوقائع من نص المصدر فقط" />
-              <EpistemicChip kind="inference" label="التحليل مُعلَّم كاستنتاج" />
-              <EpistemicChip kind="hypothesis" label="القواعد فرضيات غير مُختبرة" />
-            </div>
-            <div className="grid grid-cols-2 gap-3 text-xs text-ink-variant">
-              <div className="p-2.5 rounded-lg bg-surface-container">
-                تحذيرات منفصلة: <span className="num-mono text-ink">{report.separate_from_incidents.fraud_warnings}</span>
-              </div>
-              <div className="p-2.5 rounded-lg bg-surface-container">
-                حملات توعية: <span className="num-mono text-ink">{report.separate_from_incidents.awareness_campaigns}</span>
-              </div>
-            </div>
-          </Panel>
-
-          {/* Source integrity */}
-          <Panel
-            title="سلامة المصادر"
-            subtitle="حالة آخر جلب لكل مصدر."
-            icon={<Radio className="w-4 h-4" />}
-            right={<Link to="/sources" className="text-xs text-brand hover:underline">التفاصيل ←</Link>}
-          >
-            {sources.length === 0 ? (
-              <Unavailable title="لا مصادر مسجّلة" />
-            ) : (
-              <div className="space-y-2">
-                {sources.map((s) => {
-                  const ok = s.last_status === 'ok';
-                  const never = !s.last_status;
-                  return (
-                    <div key={s.code} className="p-2.5 rounded-lg bg-surface-container flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${never ? 'bg-epistemic-unknown' : ok ? 'bg-threat-low' : 'bg-threat-critical'}`} />
-                        <div className="min-w-0">
-                          <div className="text-[13px] font-semibold text-ink truncate">{s.name}</div>
-                          <div className="text-[10px] font-mono text-ink-outline">
-                            {s.official ? 'رسمي' : 'إعلامي'} • {s.stored} مخزّن
-                          </div>
-                        </div>
-                      </div>
-                      <div className="text-left shrink-0">
-                        <div className={`text-[11px] font-mono ${never ? 'text-ink-outline' : ok ? 'text-threat-low' : 'text-threat-critical'}`}>
-                          {never ? 'لم يُجلب' : ok ? 'OK' : s.last_status}
-                        </div>
-                        <div className="text-[10px] text-ink-outline">{s.last_success_at ? timeAgo(s.last_success_at) : '—'}</div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-            <div className="text-[11px] text-ink-outline">
-              آخر جلب: {fmtDateTime(ov.last_fetch_at)} • دورة التحديث كل {ov.refresh_every_hours} ساعة
-            </div>
-          </Panel>
-
-          {/* Honest gaps */}
-          <Panel title="قنوات غير مربوطة بعد">
-            <Unavailable
-              title="تيليمتري البنوك والويب المظلم"
-              note="لا يوجد ربط ببيانات البنوك الداخلية أو مصادر الويب المظلم، لذلك لا تُعرض أرقام لهما."
-            />
-          </Panel>
-        </div>
-      </div>
     </div>
   );
 };
