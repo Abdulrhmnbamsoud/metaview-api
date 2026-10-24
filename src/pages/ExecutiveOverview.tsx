@@ -33,6 +33,7 @@ import {
   ErrorBlock,
   PageHeader,
   fmtDateTime,
+  fmtDay,
 } from '../components/ui';
 import { timeAgo } from '../utils/formatDate';
 
@@ -73,7 +74,7 @@ export const ExecutiveOverview: React.FC = () => {
       const [o, r, inc, p, ru, so, n] = await Promise.all([
         apiService.getSaudiOverview(),
         apiService.getSaudiIncidentReport(),
-        apiService.getSaudiIncidents({ page_size: 5 }),
+        apiService.getSaudiIncidents({ page_size: 100 }),
         apiService.getSaudiPatterns(),
         apiService.getSaudiRules(),
         apiService.getSaudiSources(),
@@ -109,6 +110,35 @@ export const ExecutiveOverview: React.FC = () => {
     });
     return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   }, [news]);
+
+  // Situation summary: pure aggregation of stored records (no generated claims).
+  const summary = useMemo(() => {
+    const top = (arr: string[], n: number) => {
+      const m = new Map<string, number>();
+      arr.forEach((x) => x && m.set(x, (m.get(x) || 0) + 1));
+      return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, n);
+    };
+    const dates = news
+      .map((i) => i.published_at || i.fetched_at)
+      .filter(Boolean)
+      .map((d) => d as string)
+      .sort();
+    const peak = timeline.reduce<[string, number] | null>((b, e) => (!b || e[1] > b[1] ? e : b), null);
+    return {
+      first: dates[0] || null,
+      last: dates[dates.length - 1] || null,
+      peak,
+      activeDays: timeline.length,
+      distinctSources: new Set(news.map((i) => i.source).filter(Boolean)).size,
+      categories: top(news.map((i) => i.fraud_category_ar), 4),
+      channels: top(news.flatMap((i) => i.channels || []), 5),
+      locations: top(incidents.flatMap((i) => i.locations || []), 5),
+      agencies: top(incidents.flatMap((i) => i.agencies || []), 4),
+      latest: [...news]
+        .sort((a, b) => (b.published_at || b.fetched_at || '').localeCompare(a.published_at || a.fetched_at || ''))
+        .slice(0, 4),
+    };
+  }, [news, incidents, timeline]);
 
   if (loading && !ov) return <LoadingBlock label="جارٍ تحميل النظرة التنفيذية…" />;
   if (error && !ov) return <ErrorBlock message={error} onRetry={load} />;
@@ -193,6 +223,93 @@ export const ExecutiveOverview: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-8 space-y-6">
+          {/* Situation summary */}
+          <Panel
+            title="ملخّص الوضع الآن"
+            subtitle="مجمَّع آليًا من الأخبار والحوادث المخزّنة — لا يحتوي أي معلومة غير موجودة في المصادر."
+            icon={<ShieldCheck className="w-4 h-4" />}
+          >
+            {news.length === 0 ? (
+              <Unavailable title="لا بيانات كافية" note="لم تُخزَّن أخبار احتيال سعودية بعد." />
+            ) : (
+              <div className="space-y-4">
+                <p className="text-sm text-ink leading-loose">
+                  رصدت المنصة <b className="num-mono text-brand">{news.length}</b> خبرًا احتياليًا سعوديًا
+                  {summary.first && summary.last && (
+                    <> منشورًا بين <b>{fmtDay(summary.first)}</b> و<b>{fmtDay(summary.last)}</b></>
+                  )}
+                  ، من <b className="num-mono">{summary.distinctSources}</b> مصدرًا، وتغطي{' '}
+                  <b className="num-mono text-brand">{report.incidents.independent_total}</b> حادثة مستقلة (
+                  {report.incidents.confirmed} مؤكدة و{report.incidents.reported} مبلَّغ عنها)، إضافة إلى{' '}
+                  <b className="num-mono">{report.separate_from_incidents.fraud_warnings}</b> تحذيرًا و
+                  <b className="num-mono"> {report.separate_from_incidents.awareness_campaigns}</b> حملة توعية.
+                  {summary.peak && (
+                    <> أكثر الأيام نشرًا: <b>{summary.peak[0]}</b> ({summary.peak[1]} أخبار).</>
+                  )}
+                  {report.incidents.needs_review > 0 ? (
+                    <> يوجد <b className="text-threat-medium">{report.incidents.needs_review}</b> حادثة تنتظر مراجعة بشرية.</>
+                  ) : (
+                    <> لا توجد حوادث تنتظر مراجعة بشرية حاليًا.</>
+                  )}
+                </p>
+
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {[
+                    { l: 'أخبار مخزّنة', v: news.length, t: 'text-ink' },
+                    { l: 'حوادث مستقلة', v: report.incidents.independent_total, t: 'text-brand' },
+                    { l: 'أخبار آخر 7 أيام', v: ov.last_7_days, t: 'text-ink' },
+                    { l: 'أيام فيها نشر', v: summary.activeDays, t: 'text-ink' },
+                  ].map((x) => (
+                    <div key={x.l} className="p-3 rounded-lg bg-surface-lowest">
+                      <div className="label-mono">{x.l}</div>
+                      <div className={`num-mono text-2xl font-bold ${x.t}`}>{x.v}</div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                  {[
+                    { t: 'أبرز أنواع الاحتيال', d: summary.categories },
+                    { t: 'أبرز القنوات المذكورة', d: summary.channels },
+                    { t: 'أبرز المواقع في الحوادث', d: summary.locations },
+                    { t: 'أبرز الجهات المذكورة', d: summary.agencies },
+                  ]
+                    .filter((g) => g.d.length > 0)
+                    .map((g) => (
+                      <div key={g.t} className="space-y-1.5">
+                        <div className="label-mono">{g.t}</div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {g.d.map(([k, c]) => (
+                            <Chip key={k} tone="brand">
+                              {k} ({c})
+                            </Chip>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="label-mono">أحدث الأخبار</div>
+                  {summary.latest.map((i) => (
+                    <a
+                      key={i.id}
+                      href={i.original_url || '#'}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-start justify-between gap-3 p-2.5 rounded-lg bg-surface-container hover:bg-surface-high transition-colors"
+                    >
+                      <span className="text-[13px] text-ink leading-relaxed">{i.headline || i.title}</span>
+                      <span className="text-[10px] text-ink-outline shrink-0 mt-0.5">
+                        {i.source} • {fmtDay(i.published_at || i.fetched_at)}
+                      </span>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+          </Panel>
+
           {/* Timeline */}
           <Panel
             title="الأخبار الاحتيالية السعودية حسب يوم النشر"
