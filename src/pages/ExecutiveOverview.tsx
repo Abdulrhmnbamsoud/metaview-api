@@ -203,14 +203,15 @@ export const ExecutiveOverview: React.FC = () => {
               <Unavailable title="لا أخبار مخزّنة" note="لم تُسجَّل أخبار احتيال سعودية بعد." />
             ) : (
               <div className="rounded-lg bg-surface-lowest p-4">
-                <div className="flex items-end gap-1.5 h-40" dir="ltr">
+                <div className="flex items-stretch gap-2 h-44" dir="ltr">
                   {timeline.map(([d, c]) => (
-                    <div key={d} className="flex-1 min-w-[10px] flex flex-col items-center justify-end gap-1 group" title={`${d}: ${c}`}>
-                      <span className="text-[9px] font-mono text-ink-outline opacity-0 group-hover:opacity-100">{c}</span>
+                    <div key={d} className="flex-1 min-w-[18px] h-full flex flex-col justify-end items-center gap-1" title={`${d}: ${c}`}>
+                      <span className="text-[10px] font-mono text-ink-variant leading-none">{c}</span>
                       <div
-                        className="w-full rounded-t bg-brand/70 group-hover:bg-brand transition-colors"
-                        style={{ height: `${Math.max(4, (c / maxDay) * 100)}%` }}
+                        className="w-full rounded-t bg-brand/80 hover:bg-brand transition-colors"
+                        style={{ height: `${Math.max(6, Math.round((c / maxDay) * 85))}%` }}
                       />
+                      <span className="text-[9px] font-mono text-ink-outline leading-none">{d.slice(5)}</span>
                     </div>
                   ))}
                 </div>
