@@ -689,11 +689,13 @@ export const apiService = {
   async getFraudIntelligenceDashboardView(params: {
     windowDays?: number;
     geo?: string;
+    mapMode?: string;
     fraudType?: string;
   } = {}): Promise<DashboardViewResponse> {
     const sp = new URLSearchParams();
     if (params.windowDays) sp.append('window_days', String(params.windowDays));
     if (params.geo) sp.append('geo', params.geo);
+    if (params.mapMode) sp.append('map_mode', params.mapMode);
     if (params.fraudType) sp.append('fraud_type', params.fraudType);
     const qs = sp.toString();
     return await requestWithRetry<DashboardViewResponse>(`/fraud-intelligence/dashboard-view${qs ? `?${qs}` : ''}`);

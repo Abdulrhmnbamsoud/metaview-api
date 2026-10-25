@@ -606,11 +606,17 @@ def get_incidents_drilldown(
         clauses.append("fraud_type = ?")
         params.append(fraud_type)
     if country:
-        clauses.append("incident_country = ?")
-        params.append(country)
+        if country in ("SA", "السعودية"):
+            clauses.append("(incident_country = 'SA' OR locations LIKE '%السعودية%' OR title LIKE '%السعودية%' OR title LIKE '%الرياض%')")
+        else:
+            clauses.append("(incident_country = ? OR incident_country LIKE ?)")
+            params += [country, f"%{country}%"]
     if city:
-        clauses.append("incident_city = ?")
-        params.append(city)
+        if city in ("Unknown", "موقع غير محدد"):
+            clauses.append("(incident_city IS NULL OR incident_city = 'Unknown')")
+        else:
+            clauses.append("(incident_city = ? OR incident_city LIKE ? OR incident_region LIKE ? OR locations LIKE ? OR title LIKE ?)")
+            params += [city, f"%{city}%", f"%{city}%", f"%{city}%", f"%{city}%"]
     if sector:
         clauses.append("targeted_sector = ?")
         params.append(sector)
@@ -680,6 +686,179 @@ def get_single_incident(incident_id: int) -> Dict[str, Any]:
         con.close()
 
 
+def _build_dynamic_map_points(
+    incidents: List[Any], geo: str = "SA", map_mode: str = "cities"
+) -> Tuple[List[Dict[str, Any]], int, List[int]]:
+    """Builds verifiable, documented geographic points tied directly to real database incidents.
+    Adheres strictly to the rule: Zero fake data, zero invented coordinates, unlocated cases in Unknown.
+    """
+    points: List[Dict[str, Any]] = []
+    unknown_ids: List[int] = []
+
+    is_saudi = geo in ("SA", "السعودية")
+
+    if is_saudi:
+        if map_mode == "regions":
+            REGIONS_DEF = {
+                "منطقة الرياض": {"x": 60, "y": 48, "region": "منطقة الرياض"},
+                "منطقة مكة المكرمة": {"x": 34, "y": 62, "region": "منطقة مكة المكرمة"},
+                "المنطقة الشرقية": {"x": 74, "y": 40, "region": "المنطقة الشرقية"},
+                "منطقة المدينة المنورة": {"x": 38, "y": 42, "region": "منطقة المدينة المنورة"},
+                "منطقة تبوك": {"x": 26, "y": 24, "region": "منطقة تبوك"},
+                "منطقة عسير": {"x": 44, "y": 76, "region": "منطقة عسير"},
+                "منطقة القصيم": {"x": 52, "y": 40, "region": "منطقة القصيم"},
+            }
+            reg_map: Dict[str, List[Any]] = {k: [] for k in REGIONS_DEF}
+            for inc in incidents:
+                t = f"{inc['title'] or ''} {inc['locations'] or ''} {inc['incident_region'] or ''} {inc['incident_city'] or ''}"
+                matched = False
+                for rname in REGIONS_DEF:
+                    short = rname.replace("منطقة ", "")
+                    if short in t or rname in t or (inc["incident_city"] == "الرياض" and short == "الرياض"):
+                        reg_map[rname].append(inc)
+                        matched = True
+                        break
+                if not matched:
+                    if inc["incident_country"] in ("SA", "Unknown"):
+                        unknown_ids.append(inc["id"])
+
+            for rname, r_incs in reg_map.items():
+                if r_incs:
+                    cnt = len(r_incs)
+                    color = "#EF4444" if cnt >= 10 else ("#F97316" if cnt >= 6 else ("#FBBF24" if cnt >= 3 else "#3B82F6"))
+                    ft_counts = Counter([x["fraud_type_ar"] or "أخرى" for x in r_incs])
+                    ch_counts = Counter([x["channel_ar"] or "غير محدد" for x in r_incs if x["channel_ar"] != "Unknown"])
+                    points.append({
+                        "id": rname,
+                        "name": rname,
+                        "count": cnt,
+                        "color": color,
+                        "region": rname,
+                        "x": REGIONS_DEF[rname]["x"],
+                        "y": REGIONS_DEF[rname]["y"],
+                        "incident_ids": [x["id"] for x in r_incs],
+                        "top_fraud_types": [{"type_ar": k, "count": v} for k, v in ft_counts.most_common(3)],
+                        "top_channels": [{"channel_ar": k, "count": v} for k, v in ch_counts.most_common(3)],
+                        "incidents": [
+                            {
+                                "id": x["id"],
+                                "title": x["title"],
+                                "fraud_type_ar": x["fraud_type_ar"],
+                                "channel_ar": x["channel_ar"],
+                                "occurred_at": x["occurred_at"] or x["first_reported_at"],
+                                "evidence_text": x["evidence_text"],
+                            }
+                            for x in r_incs
+                        ],
+                    })
+        else:  # cities
+            CITIES_DEF = {
+                "الرياض": {"x": 60, "y": 48, "region": "منطقة الرياض"},
+                "جدة": {"x": 32, "y": 60, "region": "منطقة مكة المكرمة"},
+                "الدمام": {"x": 74, "y": 38, "region": "المنطقة الشرقية"},
+                "المدينة المنورة": {"x": 38, "y": 42, "region": "منطقة المدينة المنورة"},
+                "مكة المكرمة": {"x": 36, "y": 65, "region": "منطقة مكة المكرمة"},
+                "تبوك": {"x": 26, "y": 22, "region": "منطقة تبوك"},
+                "عسير": {"x": 44, "y": 78, "region": "منطقة عسير"},
+                "الخبر": {"x": 76, "y": 40, "region": "المنطقة الشرقية"},
+            }
+            city_map: Dict[str, List[Any]] = {k: [] for k in CITIES_DEF}
+            for inc in incidents:
+                city = inc["incident_city"]
+                t = f"{inc['title'] or ''} {inc['locations'] or ''} {inc['summary'] or ''}"
+                matched = False
+                for cname in CITIES_DEF:
+                    if city == cname or (city == "مكة" and cname == "مكة المكرمة") or (city == "أبها" and cname == "عسير") or cname in t:
+                        city_map[cname].append(inc)
+                        matched = True
+                        break
+                if not matched:
+                    if inc["incident_country"] in ("SA", "Unknown"):
+                        unknown_ids.append(inc["id"])
+
+            for cname, c_incs in city_map.items():
+                if c_incs:
+                    cnt = len(c_incs)
+                    color = "#EF4444" if cnt >= 10 else ("#F97316" if cnt >= 6 else ("#FBBF24" if cnt >= 3 else "#3B82F6"))
+                    ft_counts = Counter([x["fraud_type_ar"] or "أخرى" for x in c_incs])
+                    ch_counts = Counter([x["channel_ar"] or "غير محدد" for x in c_incs if x["channel_ar"] != "Unknown"])
+                    points.append({
+                        "id": cname,
+                        "name": cname,
+                        "count": cnt,
+                        "color": color,
+                        "region": CITIES_DEF[cname]["region"],
+                        "x": CITIES_DEF[cname]["x"],
+                        "y": CITIES_DEF[cname]["y"],
+                        "incident_ids": [x["id"] for x in c_incs],
+                        "top_fraud_types": [{"type_ar": k, "count": v} for k, v in ft_counts.most_common(3)],
+                        "top_channels": [{"channel_ar": k, "count": v} for k, v in ch_counts.most_common(3)],
+                        "incidents": [
+                            {
+                                "id": x["id"],
+                                "title": x["title"],
+                                "fraud_type_ar": x["fraud_type_ar"],
+                                "channel_ar": x["channel_ar"],
+                                "occurred_at": x["occurred_at"] or x["first_reported_at"],
+                                "evidence_text": x["evidence_text"],
+                            }
+                            for x in c_incs
+                        ],
+                    })
+    else:  # World / Global Countries
+        COUNTRIES_DEF = {
+            "SA": {"name": "السعودية", "x": 58, "y": 52},
+            "AE": {"name": "الإمارات", "x": 62, "y": 54},
+            "EG": {"name": "مصر", "x": 52, "y": 48},
+            "LB": {"name": "لبنان", "x": 53, "y": 44},
+            "US": {"name": "الولايات المتحدة", "x": 22, "y": 42},
+            "GB": {"name": "بريطانيا", "x": 44, "y": 32},
+            "IT": {"name": "إيطاليا", "x": 48, "y": 38},
+            "CA": {"name": "كندا", "x": 24, "y": 30},
+            "NO": {"name": "النرويج", "x": 46, "y": 24},
+            "HU": {"name": "المجر", "x": 50, "y": 35},
+        }
+        country_map: Dict[str, List[Any]] = {k: [] for k in COUNTRIES_DEF}
+        for inc in incidents:
+            c = inc["incident_country"]
+            if c in country_map:
+                country_map[c].append(inc)
+            else:
+                unknown_ids.append(inc["id"])
+
+        for ccode, c_incs in country_map.items():
+            if c_incs:
+                cnt = len(c_incs)
+                color = "#EF4444" if cnt >= 10 else ("#F97316" if cnt >= 6 else ("#FBBF24" if cnt >= 3 else "#3B82F6"))
+                ft_counts = Counter([x["fraud_type_ar"] or "أخرى" for x in c_incs])
+                ch_counts = Counter([x["channel_ar"] or "غير محدد" for x in c_incs if x["channel_ar"] != "Unknown"])
+                points.append({
+                    "id": ccode,
+                    "name": COUNTRIES_DEF[ccode]["name"],
+                    "count": cnt,
+                    "color": color,
+                    "region": COUNTRIES_DEF[ccode]["name"],
+                    "x": COUNTRIES_DEF[ccode]["x"],
+                    "y": COUNTRIES_DEF[ccode]["y"],
+                    "incident_ids": [x["id"] for x in c_incs],
+                    "top_fraud_types": [{"type_ar": k, "count": v} for k, v in ft_counts.most_common(3)],
+                    "top_channels": [{"channel_ar": k, "count": v} for k, v in ch_counts.most_common(3)],
+                    "incidents": [
+                        {
+                            "id": x["id"],
+                            "title": x["title"],
+                            "fraud_type_ar": x["fraud_type_ar"],
+                            "channel_ar": x["channel_ar"],
+                            "occurred_at": x["occurred_at"] or x["first_reported_at"],
+                            "evidence_text": x["evidence_text"],
+                        }
+                        for x in c_incs
+                    ],
+                })
+
+    return points, len(unknown_ids), unknown_ids
+
+
 # --------------------------------------------------------------------------- #
 # 11. Pixel-Accurate UI Dashboard View Model
 # --------------------------------------------------------------------------- #
@@ -687,6 +866,7 @@ def get_single_incident(incident_id: int) -> Dict[str, Any]:
 def get_dashboard_view(
     window_days: int = Query(30, ge=7, le=90),
     geo: str = Query("SA"),
+    map_mode: str = Query("cities"),
     fraud_type: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Provides high-density, structured view model matching the approved MetaView 3 design."""
@@ -708,15 +888,8 @@ def get_dashboard_view(
             "incident_ids": [i["id"] for i in incidents[:7]],
         }
 
-        # 2. Geographic Map Data (Saudi Arabia regions and documented incident coordinates)
-        map_points = [
-            {"id": "riyadh", "name": "الرياض", "count": 12, "color": "#EF4444", "region": "منطقة الرياض", "x": 62, "y": 48},
-            {"id": "jeddah", "name": "جدة", "count": 8, "color": "#F97316", "region": "منطقة مكة المكرمة", "x": 38, "y": 62},
-            {"id": "dammam", "name": "الدمام", "count": 6, "color": "#F97316", "region": "المنطقة الشرقية", "x": 75, "y": 38},
-            {"id": "madinah", "name": "المدينة المنورة", "count": 5, "color": "#FBBF24", "region": "منطقة المدينة المنورة", "x": 42, "y": 42},
-            {"id": "makkah", "name": "مكة", "count": 4, "color": "#FBBF24", "region": "منطقة مكة المكرمة", "x": 45, "y": 68},
-            {"id": "tabuk", "name": "تبوك", "count": 3, "color": "#3B82F6", "region": "منطقة تبوك", "x": 28, "y": 24},
-        ]
+        # 2. Dynamic Geographic Map Data (Saudi Arabia / World and documented incident coordinates)
+        map_points, unknown_geo_count, unknown_geo_ids = _build_dynamic_map_points(incidents, geo, map_mode)
 
         # 3. Top Observed Patterns (5 patterns with sparklines and percentages)
         top_patterns = [
@@ -992,6 +1165,8 @@ def get_dashboard_view(
         return {
             "hero_insight": hero_insight,
             "map_points": map_points,
+            "unknown_location_count": unknown_geo_count,
+            "unknown_location_incident_ids": unknown_geo_ids,
             "top_patterns": top_patterns,
             "relationship_flow": flow_data,
             "what_changed": what_changed,

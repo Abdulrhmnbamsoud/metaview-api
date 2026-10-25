@@ -35,6 +35,7 @@ import {
   DashboardViewResponse,
   EnrichedIncident,
   DrilldownResponse,
+  MapPoint,
 } from '../types/fraudIntelligence';
 
 export const FraudIntelligenceDashboard: React.FC = () => {
@@ -42,7 +43,9 @@ export const FraudIntelligenceDashboard: React.FC = () => {
   const [dateRange, setDateRange] = useState<number>(30);
   const [geoFilter, setGeoFilter] = useState<string>('السعودية');
   const [fraudTypeFilter, setFraudTypeFilter] = useState<string>('جميع الأنواع');
-  const [mapMode, setMapMode] = useState<'regions' | 'cities'>('regions');
+  const [mapMode, setMapMode] = useState<'regions' | 'cities'>('cities');
+  const [selectedCityPoint, setSelectedCityPoint] = useState<MapPoint | null>(null);
+  const [cityModalOpen, setCityModalOpen] = useState(false);
 
   // Active Flow Hover State (for Sankey highlighting)
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
@@ -68,7 +71,8 @@ export const FraudIntelligenceDashboard: React.FC = () => {
         setError(null);
         const res = await apiService.getFraudIntelligenceDashboardView({
           windowDays: dateRange,
-          geo: geoFilter === 'السعودية' ? 'SA' : 'all',
+          geo: geoFilter === 'السعودية' ? 'SA' : (geoFilter === 'العالم' ? 'ALL' : 'SA'),
+          mapMode: mapMode,
           fraudType: fraudTypeFilter !== 'جميع الأنواع' ? fraudTypeFilter : undefined,
         });
         if (isMounted) setData(res);
@@ -83,7 +87,7 @@ export const FraudIntelligenceDashboard: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, [dateRange, geoFilter, fraudTypeFilter]);
+  }, [dateRange, geoFilter, mapMode, fraudTypeFilter]);
 
   // Open Drilldown Modal
   const openDrilldown = async (title: string, params: Record<string, any> = {}) => {
@@ -351,13 +355,14 @@ export const FraudIntelligenceDashboard: React.FC = () => {
             {/* Controls on Left */}
             <div dir="rtl" className="flex items-center gap-2">
               <div className="relative">
-                <button
-                  onClick={() => setGeoFilter(geoFilter === 'السعودية' ? 'العالم' : 'السعودية')}
-                  className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 border border-[#E7ECF3] rounded-lg text-xs font-semibold text-[#10213D]"
+                <select
+                  value={geoFilter}
+                  onChange={(e) => setGeoFilter(e.target.value)}
+                  className="px-2.5 py-1 bg-slate-50 border border-[#E7ECF3] rounded-lg text-xs font-semibold text-[#10213D] cursor-pointer outline-none"
                 >
-                  <span>{geoFilter}</span>
-                  <ChevronDown className="w-3 h-3 text-[#64748B]" />
-                </button>
+                  <option value="السعودية">السعودية</option>
+                  <option value="العالم">العالم</option>
+                </select>
               </div>
 
               {/* Mode toggles */}
@@ -457,33 +462,23 @@ export const FraudIntelligenceDashboard: React.FC = () => {
               />
             </svg>
 
-            {/* Bubble Pins placed at exact Saudi cities */}
+            {/* Bubble Pins placed at exact coordinates */}
             {mapPoints.map((pt) => {
-              // Exact coordinate mapping matching image
-              const coords: Record<string, { top: string; left: string }> = {
-                'الرياض': { top: '48%', left: '60%' },
-                'جدة': { top: '60%', left: '32%' },
-                'الدمام': { top: '38%', left: '74%' },
-                'المدينة المنورة': { top: '42%', left: '38%' },
-                'مكة': { top: '65%', left: '36%' },
-                'تبوك': { top: '22%', left: '26%' },
-              };
-              const pos = coords[pt.name] || { top: '50%', left: '50%' };
+              const pos = { top: `${pt.y}%`, left: `${pt.x}%` };
 
               return (
                 <div
-                  key={pt.name}
+                  key={pt.id || pt.name}
                   style={{ top: pos.top, left: pos.left }}
-                  onClick={() =>
-                    openDrilldown(`الحوادث الموثقة في: ${pt.name}`, {
-                      city: pt.name,
-                    })
-                  }
+                  onClick={() => {
+                    setSelectedCityPoint(pt);
+                    setCityModalOpen(true);
+                  }}
                   className="absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer group z-20"
                 >
                   <div className="relative flex items-center justify-center">
-                    {/* Outer pulse glow for Riyadh */}
-                    {pt.count >= 10 && (
+                    {/* Outer pulse glow for prominent hotspots */}
+                    {pt.count >= 6 && (
                       <span className="animate-ping absolute inline-flex h-8 w-8 rounded-full bg-red-400 opacity-30"></span>
                     )}
 
@@ -491,18 +486,29 @@ export const FraudIntelligenceDashboard: React.FC = () => {
                     <div
                       style={{
                         backgroundColor: pt.color,
-                        width: `${Math.max(22, Math.min(36, 18 + pt.count * 1.3))}px`,
-                        height: `${Math.max(22, Math.min(36, 18 + pt.count * 1.3))}px`,
+                        width: `${Math.max(22, Math.min(36, 18 + pt.count * 1.5))}px`,
+                        height: `${Math.max(22, Math.min(36, 18 + pt.count * 1.5))}px`,
                       }}
                       className="rounded-full text-white font-extrabold text-xs flex items-center justify-center shadow-md border-2 border-white group-hover:scale-110 transition-transform"
                     >
                       {pt.count}
                     </div>
 
-                    {/* City Name Label */}
-                    <span className="absolute top-full mt-1 px-1.5 py-0.5 rounded bg-white/90 shadow-xs border border-slate-200 text-[10px] font-bold text-[#10213D] whitespace-nowrap opacity-90 group-hover:opacity-100">
+                    {/* Location Name Label */}
+                    <span className="absolute top-full mt-1 px-1.5 py-0.5 rounded bg-white/95 shadow-xs border border-slate-200 text-[10px] font-bold text-[#10213D] whitespace-nowrap opacity-90 group-hover:opacity-100 group-hover:scale-105 transition">
                       {pt.name}
                     </span>
+
+                    {/* Hover Tooltip */}
+                    <div className="hidden group-hover:block absolute bottom-full mb-2 right-1/2 translate-x-1/2 p-2 bg-slate-900/95 text-white rounded-lg shadow-lg text-[10px] whitespace-nowrap z-50 pointer-events-none">
+                      <div className="font-bold text-amber-300">{pt.name} ({pt.count} حوادث موثقة)</div>
+                      {pt.top_fraud_types && pt.top_fraud_types.length > 0 && (
+                        <div className="text-slate-300 mt-0.5">
+                          النمط: {pt.top_fraud_types[0].type_ar}
+                        </div>
+                      )}
+                      <div className="text-[9px] text-blue-300 mt-0.5">اضغط لعرض الأدلة والحوادث ←</div>
+                    </div>
                   </div>
                 </div>
               );
@@ -540,9 +546,19 @@ export const FraudIntelligenceDashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* Disclaimer at bottom */}
-          <div className="pt-2 text-[10.5px] text-[#64748B] text-center border-t border-[#F1F5F9]">
-            تعكس المواقع الحوادث المرصودة في مصادرنا، وليست إحصائية رسمية لمعدلات الاحتيال.
+          {/* Section for Unknown Locations & Disclaimers */}
+          <div className="pt-2 text-[11px] flex flex-wrap items-center justify-between gap-2 border-t border-[#F1F5F9]">
+            <button
+              onClick={() => openDrilldown('الحوادث ذات الموقع غير المحدد (موقع غير محدد)', { city: 'Unknown' })}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 transition text-xs font-semibold"
+            >
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+              <span>موقع غير محدد ({data?.unknown_location_count ?? 0} حوادث)</span>
+              <ChevronLeft className="w-3 h-3 text-amber-600" />
+            </button>
+            <div className="text-[10.5px] text-[#64748B]">
+              تعكس المواقع الحوادث المرصودة في مصادرنا، وليست إحصائية رسمية لمعدلات الاحتيال.
+            </div>
           </div>
         </div>
       </div>
@@ -1276,6 +1292,140 @@ export const FraudIntelligenceDashboard: React.FC = () => {
                 className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-[#10213D] rounded-xl text-xs font-semibold transition"
               >
                 {selectedIncident && drilldownData?.items?.length ? 'العودة للقائمة' : 'إغلاق'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------------- */}
+      {/* 11. City / Region Intelligence Inspector Modal (Section 5 Spec)      */}
+      {/* ------------------------------------------------------------------- */}
+      {cityModalOpen && selectedCityPoint && (
+        <div
+          dir="rtl"
+          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4"
+        >
+          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[85vh] shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="p-5 border-b border-[#E7ECF3] flex items-center justify-between bg-slate-50/70">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600">
+                  <MapPin className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-extrabold text-base text-[#10213D]">
+                      استخبارات الموقع: {selectedCityPoint.name}
+                    </h3>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#ECFDF5] text-[#10B981]">
+                      موثقة بالأدلة
+                    </span>
+                  </div>
+                  <p className="text-xs text-[#64748B] mt-0.5">
+                    {selectedCityPoint.region} • {geoFilter === 'العالم' ? 'رصد دولي' : 'المملكة العربية السعودية'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setCityModalOpen(false)}
+                className="p-2 hover:bg-slate-200/60 rounded-xl text-slate-400 hover:text-slate-600 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 overflow-y-auto space-y-4">
+              {/* 3 Metric Badges */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="p-3 rounded-xl bg-[#F8FAFC] border border-[#E7ECF3] text-right space-y-1">
+                  <span className="text-[11px] text-[#64748B]">عدد الحوادث الموثقة</span>
+                  <div className="text-xl font-black text-[#10213D]">{selectedCityPoint.count}</div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-[#F8FAFC] border border-[#E7ECF3] text-right space-y-1">
+                  <span className="text-[11px] text-[#64748B]">أكثر أنواع الاحتيال</span>
+                  <div className="text-xs font-bold text-[#10213D] truncate">
+                    {selectedCityPoint.top_fraud_types && selectedCityPoint.top_fraud_types.length > 0
+                      ? selectedCityPoint.top_fraud_types[0].type_ar
+                      : 'غير محدد'}
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-[#F8FAFC] border border-[#E7ECF3] text-right space-y-1">
+                  <span className="text-[11px] text-[#64748B]">القنوات المرتبطة</span>
+                  <div className="text-xs font-bold text-[#10213D] truncate">
+                    {selectedCityPoint.top_channels && selectedCityPoint.top_channels.length > 0
+                      ? selectedCityPoint.top_channels[0].channel_ar
+                      : 'قنوات متعددة'}
+                  </div>
+                </div>
+              </div>
+
+              {/* Documented Incidents List */}
+              <div className="space-y-2 pt-2">
+                <div className="font-bold text-xs text-[#10213D]">قائمة الحوادث الموثقة في هذا الموقع:</div>
+                {selectedCityPoint.incidents && selectedCityPoint.incidents.length > 0 ? (
+                  selectedCityPoint.incidents.map((inc: any) => (
+                    <div
+                      key={inc.id}
+                      className="p-3.5 rounded-xl border border-[#E7ECF3] bg-white hover:border-blue-400 hover:bg-slate-50/50 transition space-y-2"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="space-y-1">
+                          <h4 className="font-bold text-xs text-[#10213D] leading-snug">
+                            {inc.title}
+                          </h4>
+                          <div className="flex flex-wrap items-center gap-2 text-[10.5px] text-[#64748B]">
+                            <span>{inc.occurred_at ? inc.occurred_at.slice(0, 10) : 'تاريخ موثق'}</span>
+                            <span>•</span>
+                            <span className="text-blue-600 font-medium">{inc.fraud_type_ar || 'احتيال مالي'}</span>
+                            <span>•</span>
+                            <span>{inc.channel_ar || 'قناة الرصد'}</span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setCityModalOpen(false);
+                            viewSingleIncident(inc.id);
+                          }}
+                          className="shrink-0 px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-semibold transition"
+                        >
+                          عرض الأدلة والمصدر ←
+                        </button>
+                      </div>
+                      {inc.evidence_text && (
+                        <div className="text-[11px] text-slate-600 bg-slate-50 p-2 rounded-lg border-r-2 border-blue-400 italic">
+                          "{inc.evidence_text}"
+                        </div>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <div className="p-4 text-center text-xs text-[#64748B] bg-slate-50 rounded-xl">
+                    الحوادث المرتبطة مسجلة وموثقة في سجل المنصة. اضغط أدناه لعرض الحوادث في محرك الاستكشاف.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-[#E7ECF3] bg-slate-50/50 flex justify-between items-center">
+              <button
+                onClick={() => {
+                  setCityModalOpen(false);
+                  openDrilldown(`الحوادث الموثقة في: ${selectedCityPoint.name}`, { city: selectedCityPoint.name });
+                }}
+                className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold transition"
+              >
+                فتح السجل الكامل للحوادث ←
+              </button>
+              <button
+                onClick={() => setCityModalOpen(false)}
+                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-[#10213D] rounded-xl text-xs font-semibold transition"
+              >
+                إغلاق
               </button>
             </div>
           </div>

@@ -214,6 +214,17 @@ export interface MapPoint {
   region: string;
   x: number;
   y: number;
+  top_fraud_types?: Array<{ type_ar: string; count: number }>;
+  top_channels?: Array<{ channel_ar: string; count: number }>;
+  incident_ids?: number[];
+  incidents?: Array<{
+    id: number;
+    title: string;
+    fraud_type_ar?: string;
+    channel_ar?: string;
+    occurred_at?: string;
+    evidence_text?: string;
+  }>;
 }
 
 export interface TopPatternItem {
@@ -291,6 +302,8 @@ export interface DataQualityStats {
 export interface DashboardViewResponse {
   hero_insight: HeroInsight;
   map_points: MapPoint[];
+  unknown_location_count?: number;
+  unknown_location_incident_ids?: number[];
   top_patterns: TopPatternItem[];
   relationship_flow: RelationshipFlowData;
   what_changed: WhatChangedItem[];
