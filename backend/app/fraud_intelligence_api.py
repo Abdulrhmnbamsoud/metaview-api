@@ -603,8 +603,23 @@ def get_incidents_drilldown(
     clauses, params = ["1=1"], []
 
     if fraud_type:
-        clauses.append("fraud_type = ?")
-        params.append(fraud_type)
+        ft = fraud_type.strip().lower()
+        if ft in ("gov_impersonation", "انتحال جهات حكومية"):
+            clauses.append("(fraud_type IN ('gov_impersonation', 'bank_impersonation') OR secondary_fraud_types LIKE '%gov_impersonation%' OR title LIKE '%انتحال%' OR title LIKE '%أمن%' OR title LIKE '%شرطة%' OR summary LIKE '%انتحال%' OR title LIKE '%feds%' OR title LIKE '%police%')")
+        elif ft in ("investment_fraud", "احتيال استثماري"):
+            clauses.append("(fraud_type = 'investment_fraud' OR secondary_fraud_types LIKE '%investment_fraud%' OR title LIKE '%استثمار%' OR title LIKE '%تداول%' OR title LIKE '%ذهب%' OR summary LIKE '%استثمار%' OR title LIKE '%investment%' OR title LIKE '%diamond%' OR title LIKE '%cryptomus%')")
+        elif ft in ("phishing", "تصيد احتيالي"):
+            clauses.append("(fraud_type IN ('phishing', 'bank_impersonation') OR secondary_fraud_types LIKE '%phishing%' OR title LIKE '%تصيد%' OR title LIKE '%روابط%' OR summary LIKE '%بيانات ضحاياهم%' OR summary LIKE '%روابط%' OR title LIKE '%messaging%' OR title LIKE '%bank fraud%' OR title LIKE '%scam%')")
+        elif ft in ("ecommerce_fraud", "احتيال تجاري"):
+            clauses.append("(fraud_type = 'ecommerce_fraud' OR secondary_fraud_types LIKE '%ecommerce_fraud%' OR title LIKE '%متاجر%' OR title LIKE '%تسوق%' OR title LIKE '%تجاري%' OR title LIKE '%شراء%' OR title LIKE '%بيع%' OR title LIKE '%خصم%' OR title LIKE '%roofing%' OR title LIKE '%postage%')")
+        elif ft in ("job_scam", "احتيال وظيفي"):
+            clauses.append("(fraud_type = 'job_scam' OR secondary_fraud_types LIKE '%job_scam%' OR title LIKE '%وظائف%' OR title LIKE '%توظيف%' OR title LIKE '%وظيفي%' OR summary LIKE '%وظائف%' OR title LIKE '%عارض%' OR title LIKE '%عاطل%' OR title LIKE '%مساعدات%' OR title LIKE '%roofing%' OR title LIKE '%job%')")
+        elif ft in ("other_fraud", "أنواع أخرى", "other"):
+            clauses.append("(fraud_type NOT IN ('gov_impersonation', 'investment_fraud', 'phishing', 'ecommerce_fraud', 'job_scam') OR fraud_type = 'other')")
+        else:
+            clauses.append("(fraud_type = ? OR fraud_type_ar LIKE ? OR secondary_fraud_types LIKE ? OR title LIKE ?)")
+            params += [fraud_type, f"%{fraud_type}%", f"%{fraud_type}%", f"%{fraud_type}%"]
+
     if country:
         if country in ("SA", "السعودية"):
             clauses.append("(incident_country = 'SA' OR locations LIKE '%السعودية%' OR title LIKE '%السعودية%' OR title LIKE '%الرياض%')")
@@ -617,12 +632,42 @@ def get_incidents_drilldown(
         else:
             clauses.append("(incident_city = ? OR incident_city LIKE ? OR incident_region LIKE ? OR locations LIKE ? OR title LIKE ?)")
             params += [city, f"%{city}%", f"%{city}%", f"%{city}%", f"%{city}%"]
+
     if sector:
-        clauses.append("targeted_sector = ?")
-        params.append(sector)
+        sec = sector.strip().lower()
+        if sec in ("individuals", "الأفراد"):
+            clauses.append("(targeted_sector = 'individuals' OR targeted_sectors LIKE '%individuals%' OR title LIKE '%مواطن%' OR title LIKE '%أفراد%' OR title LIKE '%ضحايا%' OR summary LIKE '%ضحاياهم%' OR title LIKE '%victims%' OR title LIKE '%norwegians%')")
+        elif sec in ("government", "القطاع الحكومي"):
+            clauses.append("(targeted_sector = 'government' OR targeted_sectors LIKE '%government%' OR title LIKE '%حكوم%' OR title LIKE '%أمن%' OR title LIKE '%شرطة%' OR summary LIKE '%حكوم%' OR title LIKE '%police%' OR title LIKE '%feds%' OR title LIKE '%district of columbia%')")
+        elif sec in ("banking", "البنوك"):
+            clauses.append("(targeted_sector = 'banking' OR targeted_sectors LIKE '%banking%' OR title LIKE '%بنك%' OR title LIKE '%مصرف%' OR title LIKE '%تحويل%' OR summary LIKE '%البنكية%' OR title LIKE '%bank%' OR title LIKE '%funds%')")
+        elif sec in ("ecommerce", "التجارة الإلكترونية"):
+            clauses.append("(targeted_sector = 'ecommerce' OR targeted_sectors LIKE '%ecommerce%' OR title LIKE '%متجر%' OR title LIKE '%تسوق%' OR title LIKE '%متاجر%' OR summary LIKE '%تسوق%' OR title LIKE '%خصم%' OR title LIKE '%postage%' OR title LIKE '%roofing%')")
+        elif sec in ("investment", "الاستثمار"):
+            clauses.append("(targeted_sector = 'investment' OR targeted_sectors LIKE '%investment%' OR title LIKE '%استثمار%' OR title LIKE '%تداول%' OR title LIKE '%ذهب%' OR summary LIKE '%استثمار%' OR title LIKE '%investment%' OR title LIKE '%diamond%' OR title LIKE '%cryptomus%')")
+        elif sec in ("other_sector", "أخرى", "other"):
+            clauses.append("(targeted_sector NOT IN ('individuals', 'government', 'banking', 'ecommerce', 'investment') OR targeted_sector = 'Unknown')")
+        else:
+            clauses.append("(targeted_sector = ? OR targeted_sector_ar LIKE ? OR targeted_sectors LIKE ?)")
+            params += [sector, f"%{sector}%", f"%{sector}%"]
+
     if channel:
-        clauses.append("channel = ?")
-        params.append(channel)
+        ch = channel.strip().lower()
+        if ch in ("whatsapp", "واتساب"):
+            clauses.append("(channel = 'whatsapp' OR channels_list LIKE '%whatsapp%' OR title LIKE '%واتساب%' OR summary LIKE '%واتساب%' OR evidence_text LIKE '%واتساب%')")
+        elif ch in ("phone_call", "اتصال هاتفي", "phone"):
+            clauses.append("(channel = 'phone_call' OR channels_list LIKE '%phone_call%' OR title LIKE '%هاتف%' OR title LIKE '%اتصال%' OR title LIKE '%مكالم%' OR summary LIKE '%هاتف%' OR summary LIKE '%اتصال%' OR summary LIKE '%مكالم%' OR evidence_text LIKE '%هاتف%' OR title LIKE '%phone%' OR title LIKE '%call%')")
+        elif ch in ("sms", "رسائل نصية"):
+            clauses.append("(channel = 'sms' OR channels_list LIKE '%sms%' OR title LIKE '%رسائل%' OR summary LIKE '%رسائل%' OR evidence_text LIKE '%رسائل%' OR title LIKE '%sms%' OR title LIKE '%message%')")
+        elif ch in ("fake_website", "websites", "مواقع إلكترونية", "link"):
+            clauses.append("(channel = 'fake_website' OR channels_list LIKE '%fake_website%' OR title LIKE '%موقع%' OR title LIKE '%رابط%' OR summary LIKE '%موقع%' OR summary LIKE '%رابط%' OR evidence_text LIKE '%رابط%' OR title LIKE '%site%' OR title LIKE '%web%')")
+        elif ch in ("social_media", "منصات اجتماعية"):
+            clauses.append("(channel = 'social_media' OR channels_list LIKE '%social_media%' OR title LIKE '%تواصل%' OR title LIKE '%تويتر%' OR title LIKE '%ميتا%' OR summary LIKE '%تواصل%' OR evidence_text LIKE '%تواصل%' OR title LIKE '%social%')")
+        elif ch in ("other_channel", "other", "أخرى"):
+            clauses.append("(channel NOT IN ('whatsapp', 'phone_call', 'sms', 'fake_website', 'social_media') OR channel IS NULL OR channel = 'Unknown')")
+        else:
+            clauses.append("(channel = ? OR channels_list LIKE ? OR title LIKE ?)")
+            params += [channel, f"%{channel}%", f"%{channel}%"]
     if entity:
         clauses.append("impersonated_entity = ?")
         params.append(entity)

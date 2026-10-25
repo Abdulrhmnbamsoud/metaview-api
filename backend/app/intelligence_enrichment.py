@@ -272,15 +272,15 @@ COUNTRY_NAMES_EN_AR: Dict[str, Tuple[str, str]] = {
 CHANNELS_DEF = {
     "sms": {
         "name_ar": "رسائل نصية (SMS)",
-        "terms": ["رسائل نصية", "رسالة نصية", "رسائل sms", "sms", "text message", "smishing"],
+        "terms": ["رسائل نصية", "رسالة نصية", "رسائل sms", "sms", "text message", "smishing", "رسائل مشبوهة", "رسائل قصيرة", "رمز التحقق", "رسائل", "رسالة"],
     },
     "phone_call": {
         "name_ar": "مكالمات هاتفية",
-        "terms": ["اتصال هاتفي", "مكالمة هاتفية", "مكالمات هاتفية", "اتصال من مجهول", "phone call", "phone scam", "calling victims", "voice call", "vishing", "spoofed phone"],
+        "terms": ["اتصال هاتفي", "مكالمة هاتفية", "مكالمات هاتفية", "اتصال من مجهول", "phone call", "phone scam", "calling victims", "voice call", "vishing", "spoofed phone", "هواتف", "هاتف متنقل", "رقم هاتف", "اتصالات مشبوهة", "مكالمات", "اتصال", "scam calls"],
     },
     "whatsapp": {
         "name_ar": "تطبيق واتساب (WhatsApp)",
-        "terms": ["واتساب", "واتس اب", "whatsapp", "رسائل واتساب"],
+        "terms": ["واتساب", "واتس اب", "whatsapp", "رسائل واتساب", "تطبيقات المراسلة", "مراسلة فورية", "تطبيق مراسلة", "تطبيق واتس"],
     },
     "email": {
         "name_ar": "بريد إلكتروني (Email)",
@@ -288,11 +288,11 @@ CHANNELS_DEF = {
     },
     "social_media": {
         "name_ar": "منصات التواصل الاجتماعي",
-        "terms": ["مواقع التواصل", "شبكات التواصل", "تويتر", "منصة إكس", "تلغرام", "انستغرام", "فيسبوك", "social media", "telegram", "twitter", "facebook", "instagram", "tiktok", "finfluencer"],
+        "terms": ["مواقع التواصل", "شبكات التواصل", "تويتر", "منصة إكس", "تلغرام", "انستغرام", "فيسبوك", "social media", "telegram", "twitter", "facebook", "instagram", "tiktok", "finfluencer", "ميتا", "منصات اجتماعية", "منصات التواصل", "حسابات موثقة"],
     },
     "fake_website": {
         "name_ar": "مواقع وروابط وهمية",
-        "terms": ["موقع وهمي", "مواقع وهمية", "رابط مشبوه", "صفحة مزيفة", "fake website", "phishing site", "spoofed domain", "fake portal", "cloned website"],
+        "terms": ["موقع وهمي", "مواقع وهمية", "رابط مشبوه", "صفحة مزيفة", "fake website", "phishing site", "spoofed domain", "fake portal", "cloned website", "متاجر إلكترونية", "متجر إلكتروني", "روابط إلكترونية", "رابط إلكتروني", "مواقع إلكترونية", "موقع إلكتروني", "روابط", "رابط"],
     },
     "mobile_app": {
         "name_ar": "تطبيقات جوال خبيثة",
@@ -303,19 +303,19 @@ CHANNELS_DEF = {
 SECTORS_DEF = {
     "banking": {
         "name_ar": "القطاع المصرفي والمالي",
-        "terms": ["بنك", "بنوك", "مصرف", "مصارف", "حساب بنكي", "بطاقة ائتمانية", "bank", "banking", "financial institution", "credit union", "atm"],
+        "terms": ["بنك", "بنوك", "مصرف", "مصارف", "حساب بنكي", "بطاقة ائتمانية", "بطاقات", "تحويلات", "bank", "banking", "financial institution", "credit union", "atm", "بيانات بنكية", "سداد"],
     },
     "government": {
         "name_ar": "القطاع الحكومي والخدمي",
-        "terms": ["حكومي", "وزارة", "شرطة", "الأمن العام", "النيابة", "أبشر", "نفاذ", "الزكاة والضريبة", "government", "police", "tax authority", "postal service", "municipality", "city of mobile"],
+        "terms": ["حكومي", "وزارة", "شرطة", "الأمن العام", "النيابة", "أبشر", "نفاذ", "الزكاة والضريبة", "government", "police", "tax authority", "postal service", "municipality", "city of mobile", "جهات رسمية"],
     },
     "ecommerce": {
         "name_ar": "التجارة والتجزئة الإلكترونية",
-        "terms": ["متجر", "تسوق", "مشتريات", "شحن", "بضائع", "ecommerce", "e-commerce", "retail", "marketplace", "online shopping", "roofing"],
+        "terms": ["متجر", "تسوق", "مشتريات", "شحن", "بضائع", "ecommerce", "e-commerce", "retail", "marketplace", "online shopping", "roofing", "متاجر إلكترونية"],
     },
     "investment": {
         "name_ar": "الاستثمار وأسواق المال",
-        "terms": ["استثمار", "أسهم", "تداول", "عملات مشفرة", "محفظة استثمارية", "investment", "trading", "stock market", "crypto", "forex", "diamond"],
+        "terms": ["استثمار", "أسهم", "تداول", "عملات مشفرة", "محفظة استثمارية", "ذهب", "سبائك", "سبائك ذهبية", "سبائك ذهب", "investment", "trading", "stock market", "crypto", "forex", "diamond"],
     },
     "telecom": {
         "name_ar": "الاتصالات والتقنية",
@@ -323,7 +323,7 @@ SECTORS_DEF = {
     },
     "individuals": {
         "name_ar": "الأفراد والمستهلكين",
-        "terms": ["مواطن", "مقيم", "أفراد", "ضحايا", "مستهلكين", "كبار السن", "individuals", "consumers", "homeowners", "elderly", "citizens"],
+        "terms": ["مواطن", "مواطنين", "مقيم", "مقيمين", "أفراد", "ضحايا", "مستهلكين", "كبار السن", "individuals", "consumers", "homeowners", "elderly", "citizens", "بيانات ضحاياهم", "بيانات الضحايا"],
     },
 }
 
@@ -485,25 +485,25 @@ def enrich_intelligence(
         ))
         # 3. Confirmed enforcement / arrest / court / judicial sanction
         is_confirmed = bool(re.search(
-            rf"{_AR_PREFIX}(?:ال|[يوت]|وال)?(قبض|اطاح|ضبط|توقيف|محكمه|سجن|ادان|موقوف|مشتبه|سقوط عصابه|في قبضه|تفكيك|مواجهه الشبح){_AR_SUFFIX}|"
+            rf"{_AR_PREFIX}(?:ال|[يوت]|وال)?(قبض|اطاح|ضبط|توقيف|محكمه|سجن|ادان|موقوف|مشتبه|سقوط عصابه|في قبضه|تفكيك|مواجهه الشبح|في الفخ){_AR_SUFFIX}|"
             r"\b(arrest|arrested|arrests|charged|charges|sentenc|indicted|busted|detained|strike force|convicted|sanctions|feds suspect|judge releases suspect|operation confrontation ghost)\b",
             full_norm
         ))
         # 4. Specific reported incident with victims, losses, or police investigation
         is_reported = bool(re.search(
-            rf"{_AR_PREFIX}(وقع ضحيه|تعرض لعمليه|استولي علي|سرقوا|ضحايا|خسائر|تفاصيل جريمه|احتيال وابتزاز|فخ احتيال){_AR_SUFFIX}|"
+            rf"{_AR_PREFIX}(وقع ضحيه|تعرض لعمليه|استولي علي|سرقوا|ضحايا|خسائر|تفاصيل جريمه|احتيال وابتزاز|فخ احتيال|محتالون في الفخ|محاولات احتياليه|انتحال هويه|حاول شخص|رسائل مشبوهه){_AR_SUFFIX}|"
             r"\b(defrauded|victim of|victims|lost|losses|stolen|drains|drained|hit by|hit millions|cost victims|scam costs|investigate.*fraud complaints|scam in anne arundel|scam has victims|roofing scam|leave gold in forest|diamond scam|feds charge)\b",
             full_norm
         ))
 
-        if is_awareness:
-            content_type = "awareness_campaign"
-        elif is_warning:
-            content_type = "fraud_warning"
-        elif is_confirmed:
+        if is_confirmed:
             content_type = "confirmed_incident"
         elif is_reported:
             content_type = "reported_incident"
+        elif is_warning:
+            content_type = "fraud_warning"
+        elif is_awareness:
+            content_type = "awareness_campaign"
         else:
             # Fallback: if it has fraud terminology but no specific incident proof, classify as awareness
             content_type = "awareness_campaign"

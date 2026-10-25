@@ -652,196 +652,253 @@ export const FraudIntelligenceDashboard: React.FC = () => {
         </div>
 
         {/* Column 2 (Middle): كيف تحدث عمليات الاحتيال؟ (Sankey Flow Diagram in RTL Order) (~42%) */}
-        {flow && (
-          <div
-            dir="rtl"
-            className="lg:col-span-5 bg-white border border-[#E7ECF3] rounded-2xl p-5 md:p-6 shadow-xs space-y-3 flex flex-col justify-between"
-          >
-            <h3 className="text-sm font-bold text-[#10213D] text-center">
-              كيف تحدث عمليات الاحتيال؟
-            </h3>
+        {/* Column 2 (Middle): كيف تحدث عمليات الاحتيال؟ (Sankey Flow Diagram in RTL Order) (~42%) */}
+        {flow && (() => {
+          const isNodeConnected = (nodeId: string) => {
+            if (!hoveredNode) return false;
+            if (hoveredNode === nodeId) return true;
+            const isDirect = flow.flows.some(
+              (f) =>
+                (f.from === hoveredNode && f.to === nodeId) ||
+                (f.to === hoveredNode && f.from === nodeId)
+            );
+            if (isDirect) return true;
+            // 2-hop check: channel -> typology -> sector
+            const intermediateTypes = flow.flows
+              .filter((f) => f.from === hoveredNode)
+              .map((f) => f.to);
+            if (intermediateTypes.includes(nodeId)) return true;
+            const is2Hop = flow.flows.some(
+              (f) => intermediateTypes.includes(f.from) && f.to === nodeId
+            );
+            if (is2Hop) return true;
+            const incomingTypes = flow.flows
+              .filter((f) => f.to === hoveredNode)
+              .map((f) => f.from);
+            if (incomingTypes.includes(nodeId)) return true;
+            const is2HopReverse = flow.flows.some(
+              (f) => incomingTypes.includes(f.to) && f.from === nodeId
+            );
+            return is2HopReverse;
+          };
 
-            {/* 3 Columns Layout: Right = Channels, Center = Typologies, Left = Sectors (RTL Flow) */}
-            <div dir="rtl" className="relative pt-1 min-h-[270px]">
-              {/* SVG Alluvial Ribbon Overlay connecting Col 1 (Right) -> Col 2 (Mid) -> Col 3 (Left) */}
-              <svg
-                className="absolute inset-0 w-full h-full pointer-events-none z-0"
-                preserveAspectRatio="none"
-                viewBox="0 0 300 240"
-              >
-                <defs>
-                  <linearGradient id="flowGradRed" x1="1" y1="0" x2="0" y2="0">
-                    <stop offset="0%" stopColor="#EF4444" stopOpacity="0.35" />
-                    <stop offset="100%" stopColor="#DC2626" stopOpacity="0.25" />
-                  </linearGradient>
-                  <linearGradient id="flowGradBlue" x1="1" y1="0" x2="0" y2="0">
-                    <stop offset="0%" stopColor="#3B82F6" stopOpacity="0.35" />
-                    <stop offset="100%" stopColor="#2563EB" stopOpacity="0.25" />
-                  </linearGradient>
-                  <linearGradient id="flowGradAmber" x1="1" y1="0" x2="0" y2="0">
-                    <stop offset="0%" stopColor="#F59E0B" stopOpacity="0.35" />
-                    <stop offset="100%" stopColor="#D97706" stopOpacity="0.25" />
-                  </linearGradient>
-                  <linearGradient id="flowGradEmerald" x1="1" y1="0" x2="0" y2="0">
-                    <stop offset="0%" stopColor="#10B981" stopOpacity="0.35" />
-                    <stop offset="100%" stopColor="#059669" stopOpacity="0.25" />
-                  </linearGradient>
-                  <linearGradient id="flowGradPurple" x1="1" y1="0" x2="0" y2="0">
-                    <stop offset="0%" stopColor="#8B5CF6" stopOpacity="0.35" />
-                    <stop offset="100%" stopColor="#7C3AED" stopOpacity="0.25" />
-                  </linearGradient>
-                </defs>
+          const isFlowHighlighted = (from: string, to: string) => {
+            if (!hoveredNode) return false;
+            if (hoveredNode === from || hoveredNode === to) return true;
+            const fromChannel = flow.channels.some((c) => c.id === hoveredNode);
+            if (fromChannel) {
+              const intermediateTypes = flow.flows
+                .filter((f) => f.from === hoveredNode)
+                .map((f) => f.to);
+              if (intermediateTypes.includes(from)) return true;
+            }
+            const toSector = flow.sectors.some((s) => s.id === hoveredNode);
+            if (toSector) {
+              const intermediateTypes = flow.flows
+                .filter((f) => f.to === hoveredNode)
+                .map((f) => f.from);
+              if (intermediateTypes.includes(to)) return true;
+            }
+            return false;
+          };
 
-                {/* Flow paths: Channels (Right: x ~ 215) to Types (Mid: x ~ 185) */}
-                <path
-                  d="M 215 24 C 200 24, 200 24, 185 24 L 185 42 C 200 42, 200 42, 215 42 Z"
-                  fill="url(#flowGradRed)"
-                />
-                <path
-                  d="M 215 30 C 200 30, 200 62, 185 62 L 185 76 C 200 76, 200 42, 215 42 Z"
-                  fill="url(#flowGradAmber)"
-                />
-                <path
-                  d="M 215 62 C 200 62, 200 28, 185 28 L 185 36 C 200 36, 200 72, 215 72 Z"
-                  fill="url(#flowGradRed)"
-                />
-                <path
-                  d="M 215 100 C 200 100, 200 100, 185 100 L 185 116 C 200 116, 200 116, 215 116 Z"
-                  fill="url(#flowGradBlue)"
-                />
-                <path
-                  d="M 215 138 C 200 138, 200 138, 185 138 L 185 154 C 200 154, 200 154, 215 154 Z"
-                  fill="url(#flowGradEmerald)"
-                />
-                <path
-                  d="M 215 176 C 200 176, 200 68, 185 68 L 185 80 C 200 80, 200 190, 215 190 Z"
-                  fill="url(#flowGradAmber)"
-                />
-                <path
-                  d="M 215 184 C 200 184, 200 176, 185 176 L 185 190 C 200 190, 200 196, 215 196 Z"
-                  fill="url(#flowGradPurple)"
-                />
+          return (
+            <div
+              dir="rtl"
+              className="lg:col-span-5 bg-white border border-[#E7ECF3] rounded-2xl p-5 md:p-6 shadow-xs space-y-3 flex flex-col justify-between"
+            >
+              <div className="space-y-1 text-center">
+                <h3 className="text-sm font-bold text-[#10213D]">
+                  كيف تحدث عمليات الاحتيال؟
+                </h3>
+                <p className="text-[11px] text-[#64748B]">
+                  مرر مؤشر الفأرة لاستعراض مسار التدفق، أو انقر على أي عنصر لاستعراض الحوادث الموثقة
+                </p>
+              </div>
 
-                {/* Flow paths: Types (Mid: x ~ 115) to Sectors (Left: x ~ 85) */}
-                <path
-                  d="M 115 24 C 100 24, 100 24, 85 24 L 85 42 C 100 42, 100 42, 115 42 Z"
-                  fill="url(#flowGradRed)"
-                />
-                <path
-                  d="M 115 30 C 100 30, 100 62, 85 62 L 85 76 C 100 76, 100 42, 115 42 Z"
-                  fill="url(#flowGradRed)"
-                />
-                <path
-                  d="M 115 62 C 100 62, 100 28, 85 28 L 85 38 C 100 38, 100 74, 115 74 Z"
-                  fill="url(#flowGradAmber)"
-                />
-                <path
-                  d="M 115 70 C 100 70, 100 176, 85 176 L 85 190 C 100 190, 100 80, 115 80 Z"
-                  fill="url(#flowGradAmber)"
-                />
-                <path
-                  d="M 115 100 C 100 100, 100 100, 85 100 L 85 116 C 100 116, 100 116, 115 116 Z"
-                  fill="url(#flowGradBlue)"
-                />
-                <path
-                  d="M 115 138 C 100 138, 100 138, 85 138 L 85 154 C 100 154, 100 154, 115 154 Z"
-                  fill="url(#flowGradEmerald)"
-                />
-                <path
-                  d="M 115 176 C 100 176, 100 36, 85 36 L 85 44 C 100 44, 100 186, 115 186 Z"
-                  fill="url(#flowGradPurple)"
-                />
-              </svg>
+              {/* 3 Columns Layout: Right = Channels, Center = Typologies, Left = Sectors (RTL Flow) */}
+              <div dir="rtl" className="relative pt-1 min-h-[270px]">
+                {/* Dynamic SVG Alluvial Ribbon Overlay connecting Col 1 (Right) -> Col 2 (Mid) -> Col 3 (Left) */}
+                <svg
+                  className="absolute inset-0 w-full h-full pointer-events-none z-0"
+                  preserveAspectRatio="none"
+                  viewBox="0 0 300 240"
+                >
+                  {flow.flows.map((f, idx) => {
+                    const cIdx = flow.channels.findIndex((c) => c.id === f.from);
+                    const tIdx = flow.typologies.findIndex((t) => t.id === f.to);
+                    const tIdx2 = flow.typologies.findIndex((t) => t.id === f.from);
+                    const sIdx = flow.sectors.findIndex((s) => s.id === f.to);
 
-              {/* 3 Interactive Node Columns in Arabic Flow: Channels -> Types -> Sectors */}
-              <div className="relative z-10 grid grid-cols-3 gap-3 text-xs">
-                {/* Column 1 (RIGHT): القنوات المستخدمة */}
-                <div className="space-y-2">
-                  <div className="font-bold text-[11px] text-[#64748B] pb-1 text-center">
-                    القنوات المستخدمة
+                    let x1 = 0, y1 = 0, x2 = 0, y2 = 0;
+                    let strokeColor = '#3B82F6';
+
+                    if (cIdx >= 0 && tIdx >= 0) {
+                      x1 = 205;
+                      y1 = 26 + cIdx * 34.5;
+                      x2 = 185;
+                      y2 = 26 + tIdx * 34.5;
+                      strokeColor = flow.channels[cIdx]?.color || '#3B82F6';
+                    } else if (tIdx2 >= 0 && sIdx >= 0) {
+                      x1 = 115;
+                      y1 = 26 + tIdx2 * 34.5;
+                      x2 = 95;
+                      y2 = 26 + sIdx * 34.5;
+                      strokeColor = flow.typologies[tIdx2]?.color || '#EF4444';
+                    } else {
+                      return null;
+                    }
+
+                    const highlighted = isFlowHighlighted(f.from, f.to);
+                    const dimmed = hoveredNode !== null && !highlighted;
+
+                    return (
+                      <path
+                        key={`flow-${f.from}-${f.to}-${idx}`}
+                        d={`M ${x1} ${y1} C ${(x1 + x2) / 2} ${y1}, ${(x1 + x2) / 2} ${y2}, ${x2} ${y2}`}
+                        fill="none"
+                        stroke={strokeColor}
+                        strokeWidth={highlighted ? Math.max(3, f.pct / 3) : Math.max(1.2, f.pct / 6)}
+                        strokeOpacity={highlighted ? 0.95 : dimmed ? 0.05 : 0.35}
+                        strokeLinecap="round"
+                        className="transition-all duration-300"
+                      />
+                    );
+                  })}
+                </svg>
+
+                {/* 3 Interactive Node Columns in Arabic Flow: Channels -> Types -> Sectors */}
+                <div className="relative z-10 grid grid-cols-3 gap-3 text-xs">
+                  {/* Column 1 (RIGHT): القنوات المستخدمة */}
+                  <div className="space-y-2">
+                    <div className="font-bold text-[11px] text-[#64748B] pb-1 text-center">
+                      القنوات المستخدمة
+                    </div>
+                    <div className="space-y-1.5">
+                      {flow.channels.map((c) => {
+                        const isHovered = hoveredNode === c.id;
+                        const isConnected = isNodeConnected(c.id);
+                        const isDimmed = hoveredNode !== null && !isHovered && !isConnected;
+
+                        return (
+                          <div
+                            key={c.id}
+                            onMouseEnter={() => setHoveredNode(c.id)}
+                            onMouseLeave={() => setHoveredNode(null)}
+                            onClick={() =>
+                              openDrilldown(`الحوادث المنفذة عبر: ${c.name_ar}`, {
+                                channel: c.id,
+                              })
+                            }
+                            className={`p-1.5 rounded-lg border transition-all duration-200 flex items-center justify-between cursor-pointer text-[11px] ${
+                              isHovered
+                                ? 'ring-2 ring-blue-500 bg-blue-50/90 border-blue-400 font-bold scale-[1.02] shadow-sm z-20'
+                                : isConnected
+                                ? 'ring-1 ring-blue-300 bg-slate-50 border-blue-300 font-semibold z-10'
+                                : isDimmed
+                                ? 'opacity-40 bg-white/70 border-slate-200'
+                                : 'bg-white hover:bg-slate-50 border-slate-200/80 shadow-xs'
+                            }`}
+                          >
+                            <div className="flex items-center gap-1.5 truncate">
+                              <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: c.color }} />
+                              <span className="font-medium text-[#10213D] truncate">{c.name_ar}</span>
+                            </div>
+                            <span className="font-bold text-[#64748B] text-[10px]">{c.percentage}%</span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                  <div className="space-y-1.5">
-                    {flow.channels.map((c) => (
-                      <div
-                        key={c.id}
-                        onMouseEnter={() => setHoveredNode(c.id)}
-                        onMouseLeave={() => setHoveredNode(null)}
-                        onClick={() =>
-                          openDrilldown(`الحوادث المنفذة عبر: ${c.name_ar}`, {
-                            channel: c.id !== 'other_channel' ? c.id : undefined,
-                          })
-                        }
-                        className="p-1.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-200/80 shadow-xs flex items-center justify-between cursor-pointer transition text-[11px]"
-                      >
-                        <div className="flex items-center gap-1.5 truncate">
-                          <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: c.color }} />
-                          <span className="font-medium text-[#10213D] truncate">{c.name_ar}</span>
-                        </div>
-                        <span className="font-bold text-[#64748B] text-[10px]">{c.percentage}%</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
 
-                {/* Column 2 (MIDDLE): نوع الاحتيال */}
-                <div className="space-y-2">
-                  <div className="font-bold text-[11px] text-[#64748B] pb-1 text-center">
-                    نوع الاحتيال
-                  </div>
-                  <div className="space-y-1.5">
-                    {flow.typologies.map((t) => (
-                      <div
-                        key={t.id}
-                        onMouseEnter={() => setHoveredNode(t.id)}
-                        onMouseLeave={() => setHoveredNode(null)}
-                        onClick={() =>
-                          openDrilldown(`حوادث نوع: ${t.name_ar}`, {
-                            fraud_type: t.id !== 'other_fraud' ? t.id : undefined,
-                          })
-                        }
-                        className="p-1.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-200/80 shadow-xs flex items-center justify-between cursor-pointer transition text-[11px]"
-                      >
-                        <div className="flex items-center gap-1.5 truncate">
-                          <span className="w-1.5 h-3.5 rounded-xs shrink-0" style={{ backgroundColor: t.color }} />
-                          <span className="font-medium text-[#10213D] truncate">{t.name_ar}</span>
-                        </div>
-                        <span className="font-bold text-[#64748B] text-[10px]">{t.percentage}%</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                  {/* Column 2 (MIDDLE): نوع الاحتيال */}
+                  <div className="space-y-2">
+                    <div className="font-bold text-[11px] text-[#64748B] pb-1 text-center">
+                      نوع الاحتيال
+                    </div>
+                    <div className="space-y-1.5">
+                      {flow.typologies.map((t) => {
+                        const isHovered = hoveredNode === t.id;
+                        const isConnected = isNodeConnected(t.id);
+                        const isDimmed = hoveredNode !== null && !isHovered && !isConnected;
 
-                {/* Column 3 (LEFT): الجهات أو القطاعات المستهدفة */}
-                <div className="space-y-2">
-                  <div className="font-bold text-[11px] text-[#64748B] pb-1 text-center">
-                    الجهات أو القطاعات المستهدفة
+                        return (
+                          <div
+                            key={t.id}
+                            onMouseEnter={() => setHoveredNode(t.id)}
+                            onMouseLeave={() => setHoveredNode(null)}
+                            onClick={() =>
+                              openDrilldown(`حوادث نوع: ${t.name_ar}`, {
+                                fraud_type: t.id,
+                              })
+                            }
+                            className={`p-1.5 rounded-lg border transition-all duration-200 flex items-center justify-between cursor-pointer text-[11px] ${
+                              isHovered
+                                ? 'ring-2 ring-blue-500 bg-blue-50/90 border-blue-400 font-bold scale-[1.02] shadow-sm z-20'
+                                : isConnected
+                                ? 'ring-1 ring-blue-300 bg-slate-50 border-blue-300 font-semibold z-10'
+                                : isDimmed
+                                ? 'opacity-40 bg-white/70 border-slate-200'
+                                : 'bg-white hover:bg-slate-50 border-slate-200/80 shadow-xs'
+                            }`}
+                          >
+                            <div className="flex items-center gap-1.5 truncate">
+                              <span className="w-1.5 h-3.5 rounded-xs shrink-0" style={{ backgroundColor: t.color }} />
+                              <span className="font-medium text-[#10213D] truncate">{t.name_ar}</span>
+                            </div>
+                            <span className="font-bold text-[#64748B] text-[10px]">{t.percentage}%</span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                  <div className="space-y-1.5">
-                    {flow.sectors.map((s) => (
-                      <div
-                        key={s.id}
-                        onMouseEnter={() => setHoveredNode(s.id)}
-                        onMouseLeave={() => setHoveredNode(null)}
-                        onClick={() =>
-                          openDrilldown(`الحوادث المستهدفة لقطاع: ${s.name_ar}`, {
-                            sector: s.id !== 'other_sector' ? s.id : undefined,
-                          })
-                        }
-                        className="p-1.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-200/80 shadow-xs flex items-center justify-between cursor-pointer transition text-[11px]"
-                      >
-                        <div className="flex items-center gap-1.5 truncate">
-                          <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
-                          <span className="font-medium text-[#10213D] truncate">{s.name_ar}</span>
-                        </div>
-                        <span className="font-bold text-[#64748B] text-[10px]">{s.percentage}%</span>
-                      </div>
-                    ))}
+
+                  {/* Column 3 (LEFT): الجهات أو القطاعات المستهدفة */}
+                  <div className="space-y-2">
+                    <div className="font-bold text-[11px] text-[#64748B] pb-1 text-center">
+                      الجهات أو القطاعات المستهدفة
+                    </div>
+                    <div className="space-y-1.5">
+                      {flow.sectors.map((s) => {
+                        const isHovered = hoveredNode === s.id;
+                        const isConnected = isNodeConnected(s.id);
+                        const isDimmed = hoveredNode !== null && !isHovered && !isConnected;
+
+                        return (
+                          <div
+                            key={s.id}
+                            onMouseEnter={() => setHoveredNode(s.id)}
+                            onMouseLeave={() => setHoveredNode(null)}
+                            onClick={() =>
+                              openDrilldown(`الحوادث المستهدفة لقطاع: ${s.name_ar}`, {
+                                sector: s.id,
+                              })
+                            }
+                            className={`p-1.5 rounded-lg border transition-all duration-200 flex items-center justify-between cursor-pointer text-[11px] ${
+                              isHovered
+                                ? 'ring-2 ring-blue-500 bg-blue-50/90 border-blue-400 font-bold scale-[1.02] shadow-sm z-20'
+                                : isConnected
+                                ? 'ring-1 ring-blue-300 bg-slate-50 border-blue-300 font-semibold z-10'
+                                : isDimmed
+                                ? 'opacity-40 bg-white/70 border-slate-200'
+                                : 'bg-white hover:bg-slate-50 border-slate-200/80 shadow-xs'
+                            }`}
+                          >
+                            <div className="flex items-center gap-1.5 truncate">
+                              <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
+                              <span className="font-medium text-[#10213D] truncate">{s.name_ar}</span>
+                            </div>
+                            <span className="font-bold text-[#64748B] text-[10px]">{s.percentage}%</span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Column 3 (Right): ما الذي تغيّر؟ (~25%) */}
         <div
