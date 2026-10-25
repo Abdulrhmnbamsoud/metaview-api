@@ -74,7 +74,7 @@ export const FraudIntelligenceDashboard: React.FC = () => {
         if (isMounted) setData(res);
       } catch (err: any) {
         console.error('Failed to load dashboard view:', err);
-        if (isMounted) setError(err?.message || 'تعذر تحميل بيانات ميتا فيو الاحتيال');
+        if (isMounted) setError(err?.message || 'تعذر تحميل بيانات ميتا فيو');
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -189,7 +189,7 @@ export const FraudIntelligenceDashboard: React.FC = () => {
         {/* Title and Subtitle on the LEFT */}
         <div dir="rtl" className="text-right space-y-1">
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-[#10213D]">
-            ميتا فيو الإحتيال
+            ميتا فيو
           </h1>
           <p className="text-xs md:text-sm text-[#64748B]">
             رصد وتحليل اتجاهات الاحتيال المالي وبناء صورة ميتا فيو من مصادر موثوقة
