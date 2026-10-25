@@ -63,6 +63,10 @@ class IsolatedDB(unittest.TestCase):
         p = mock.patch.object(db_mod, "DB_PATH", os.path.join(self.tmp, "t.db"))
         p.start()
         self.addCleanup(p.stop)
+        from backend.app import config
+        p_cfg = mock.patch.object(config, "DB_PATH", os.path.join(self.tmp, "t.db"))
+        p_cfg.start()
+        self.addCleanup(p_cfg.stop)
         db_mod.init_db()
         self.items = load_items()
         self.aid = {}

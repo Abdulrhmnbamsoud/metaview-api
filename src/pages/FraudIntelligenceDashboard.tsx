@@ -239,10 +239,10 @@ export const FraudIntelligenceDashboard: React.FC = () => {
         {/* Title and Subtitle on the LEFT */}
         <div dir="rtl" className="text-right space-y-1">
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-[#10213D]">
-            ميتا فيو
+            استخبارات الاحتيال
           </h1>
           <p className="text-xs md:text-sm text-[#64748B]">
-            رصد وتحليل اتجاهات الاحتيال المالي وبناء صورة ميتا فيو من مصادر موثوقة
+            رصد وتحليل اتجاهات الاحتيال المالي وبناء صورة استخباراتية من مصادر موثوقة
           </p>
         </div>
 
@@ -269,7 +269,7 @@ export const FraudIntelligenceDashboard: React.FC = () => {
                 className="absolute right-0 top-full mt-1.5 w-64 bg-white border border-[#E7ECF3] rounded-2xl shadow-xl p-3 z-50 space-y-2 text-xs"
               >
                 <div className="text-[11px] font-bold text-[#64748B] pb-1 border-b border-slate-100">
-                  نطاق التحليل الزمني (تاريخ الرصد الأول)
+                  نطاق التحليل الزمني
                 </div>
                 <div className="space-y-1">
                   {[7, 30, 90].map((days) => (
@@ -341,8 +341,8 @@ export const FraudIntelligenceDashboard: React.FC = () => {
               onChange={(e) => setGeoFilter(e.target.value)}
               className="appearance-none flex items-center gap-2 px-3.5 py-2 pr-8 pl-4 bg-white border border-[#E7ECF3] rounded-xl text-xs font-semibold text-[#10213D] hover:bg-slate-50 transition shadow-xs cursor-pointer outline-none"
             >
-              <option value="السعودية">المملكة العربية السعودية</option>
-              <option value="العالم">جميع الدول (نطاق عالمي)</option>
+              <option value="السعودية">السعودية</option>
+              <option value="العالم">جميع الدول</option>
               <option value="AE">الإمارات</option>
               <option value="EG">مصر</option>
               <option value="US">الولايات المتحدة</option>
@@ -358,13 +358,13 @@ export const FraudIntelligenceDashboard: React.FC = () => {
               onChange={(e) => setFraudTypeFilter(e.target.value)}
               className="appearance-none flex items-center gap-2 px-3.5 py-2 pr-8 pl-4 bg-white border border-[#E7ECF3] rounded-xl text-xs font-semibold text-[#10213D] hover:bg-slate-50 transition shadow-xs cursor-pointer outline-none"
             >
-              <option value="all">جميع الأنواع (كل الأنماط)</option>
+              <option value="all">جميع الأنواع</option>
               <option value="gov_impersonation">انتحال جهات حكومية</option>
               <option value="bank_impersonation">انتحال بنوك ومصارف</option>
-              <option value="investment_fraud">احتيال استثماري وتداول</option>
-              <option value="phishing">تصيد احتيالي وروابط</option>
-              <option value="ecommerce_fraud">احتيال تجاري ومتاجر</option>
-              <option value="job_scam">احتيال وظيفي وعروض عمل</option>
+              <option value="investment_fraud">الاحتيال الاستثماري</option>
+              <option value="phishing">روابط التصيد الاحتيالي</option>
+              <option value="ecommerce_fraud">احتيال البيع والشراء</option>
+              <option value="job_scam">الاحتيال الوظيفي</option>
               <option value="romance_scam">احتيال عاطفي وابتزاز</option>
               <option value="other">أنواع أخرى</option>
             </select>
@@ -537,27 +537,27 @@ export const FraudIntelligenceDashboard: React.FC = () => {
                 </select>
               </div>
 
-              {/* View Presentation Toggles (Map vs List) */}
+              {/* Segmented [المناطق] [المدن] Toggle matching reference image */}
               <div className="flex items-center bg-slate-100 p-0.5 rounded-lg text-xs">
                 <button
-                  onClick={() => setMapViewType('map')}
+                  onClick={() => setMapMode('regions')}
                   className={`px-2.5 py-0.5 rounded-md font-medium transition ${
-                    mapViewType === 'map'
+                    mapMode === 'regions'
                       ? 'bg-[#2563EB] text-white shadow-xs'
                       : 'text-[#64748B] hover:text-[#10213D]'
                   }`}
                 >
-                  خريطة تفاعلية
+                  المناطق
                 </button>
                 <button
-                  onClick={() => setMapViewType('list')}
+                  onClick={() => setMapMode('cities')}
                   className={`px-2.5 py-0.5 rounded-md font-medium transition ${
-                    mapViewType === 'list'
+                    mapMode === 'cities'
                       ? 'bg-[#2563EB] text-white shadow-xs'
                       : 'text-[#64748B] hover:text-[#10213D]'
                   }`}
                 >
-                  قائمة التوزيع
+                  المدن
                 </button>
               </div>
             </div>
@@ -566,30 +566,6 @@ export const FraudIntelligenceDashboard: React.FC = () => {
             <div dir="rtl" className="flex items-center gap-1.5 text-sm font-bold text-[#10213D]">
               <span>خريطة الحوادث الموثقة</span>
               <Info className="w-4 h-4 text-[#64748B]" />
-            </div>
-          </div>
-
-          {/* Documented Breakdown Subheader (Total vs Mapped vs Unlocated: T = V + U) */}
-          <div className="flex items-center justify-between px-3 py-1.5 my-1.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[11px] font-semibold">
-            <div className="flex items-center gap-1.5">
-              <span className="text-[#64748B]">إجمالي الحوادث:</span>
-              <span className="font-extrabold text-[#10213D]">
-                {data?.saudi_stats?.total_saudi_incidents ?? data?.total_scope_incidents ?? mapPoints.length}
-              </span>
-            </div>
-            <div className="w-px h-3 bg-slate-200" />
-            <div className="flex items-center gap-1.5">
-              <span className="text-[#64748B]">بموقع محدد:</span>
-              <span className="font-extrabold text-blue-600">
-                {data?.saudi_stats?.verified_location_incidents ?? data?.mapped_incidents_count ?? mapPoints.length}
-              </span>
-            </div>
-            <div className="w-px h-3 bg-slate-200" />
-            <div className="flex items-center gap-1.5">
-              <span className="text-[#64748B]">موقع غير محدد:</span>
-              <span className="font-extrabold text-amber-600">
-                {data?.saudi_stats?.unknown_location_incidents ?? data?.unknown_location_count ?? 0}
-              </span>
             </div>
           </div>
 
@@ -809,28 +785,9 @@ export const FraudIntelligenceDashboard: React.FC = () => {
             </div>
           )}
 
-          {/* Section for Unknown Locations & Disclaimers */}
-          <div className="pt-2 text-[11px] flex flex-wrap items-center justify-between gap-2 border-t border-[#F1F5F9]">
-            <button
-              onClick={() =>
-                openDrilldown('الحوادث ذات الموقع غير المحدد داخل النطاق', {
-                  city: 'Unknown',
-                  country: geoFilter === 'السعودية' ? 'SA' : undefined,
-                  incident_ids:
-                    data?.unknown_location_incidents && data.unknown_location_incidents.length > 0
-                      ? data.unknown_location_incidents.join(',')
-                      : undefined,
-                })
-              }
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 transition text-xs font-semibold"
-            >
-              <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
-              <span>موقع غير محدد ({data?.saudi_stats?.unknown_location_incidents ?? data?.unknown_location_count ?? 0} حوادث)</span>
-              <ChevronLeft className="w-3 h-3 text-amber-600" />
-            </button>
-            <div className="text-[10.5px] text-[#64748B]">
-              تعكس المواقع الحوادث المرصودة في مصادرنا، وليست إحصائية رسمية لمعدلات الاحتيال.
-            </div>
+          {/* Caption at bottom matching screenshot */}
+          <div className="pt-2.5 text-center text-[10.5px] text-[#64748B] border-t border-[#F1F5F9]">
+            تعكس المواقع الحوادث المرصودة في مصادرنا، وليست إحصائية رسمية لمعدلات الاحتيال.
           </div>
         </div>
       </div>
@@ -986,40 +943,11 @@ export const FraudIntelligenceDashboard: React.FC = () => {
               dir="rtl"
               className="lg:col-span-5 bg-white border border-[#E7ECF3] rounded-2xl p-5 md:p-6 shadow-xs space-y-3 flex flex-col justify-between"
             >
-              {/* Header with Title and Mode Toggles */}
-              <div className="flex items-center justify-between pb-1 border-b border-[#F1F5F9]">
-                <div className="space-y-0.5 text-right">
-                  <h3 className="text-sm font-bold text-[#10213D]">
-                    كيف تحدث عمليات الاحتيال؟
-                  </h3>
-                  <p className="text-[10.5px] text-[#64748B]">
-                    تحليل مسارات الهجوم والآليات المرصودة بالأدلة
-                  </p>
-                </div>
-
-                {/* Mode toggle */}
-                <div className="flex items-center bg-slate-100 p-0.5 rounded-lg text-xs">
-                  <button
-                    onClick={() => setFlowViewType('sankey')}
-                    className={`px-2.5 py-0.5 rounded-md font-medium transition ${
-                      flowViewType === 'sankey'
-                        ? 'bg-[#2563EB] text-white shadow-xs'
-                        : 'text-[#64748B] hover:text-[#10213D]'
-                    }`}
-                  >
-                    مخطط التدفق
-                  </button>
-                  <button
-                    onClick={() => setFlowViewType('mechanisms')}
-                    className={`px-2.5 py-0.5 rounded-md font-medium transition ${
-                      flowViewType === 'mechanisms'
-                        ? 'bg-[#2563EB] text-white shadow-xs'
-                        : 'text-[#64748B] hover:text-[#10213D]'
-                    }`}
-                  >
-                    الآليات المرصودة
-                  </button>
-                </div>
+              {/* Header with Title matching reference screenshot */}
+              <div className="flex items-center justify-center pb-2 border-b border-[#F1F5F9]">
+                <h3 className="text-sm md:text-base font-bold text-[#10213D]">
+                  كيف تحدث عمليات الاحتيال؟
+                </h3>
               </div>
 
               {flowViewType === 'sankey' ? (
