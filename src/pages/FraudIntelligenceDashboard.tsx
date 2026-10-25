@@ -239,7 +239,7 @@ export const FraudIntelligenceDashboard: React.FC = () => {
         {/* Title and Subtitle on the LEFT */}
         <div dir="rtl" className="text-right space-y-1">
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-[#10213D]">
-            استخبارات الاحتيال
+            MetaView 3
           </h1>
           <p className="text-xs md:text-sm text-[#64748B]">
             رصد وتحليل اتجاهات الاحتيال المالي وبناء صورة استخباراتية من مصادر موثوقة
