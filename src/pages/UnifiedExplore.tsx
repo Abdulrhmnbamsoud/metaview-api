@@ -24,6 +24,7 @@ import {
 import { Chip, Unavailable, LoadingBlock, fmtDay } from '../components/ui';
 import { IncidentDetailModal } from '../components/IncidentDetailModal';
 import { FraudNewsDetailModal } from '../components/FraudNewsDetailModal';
+import { PatternDetailModal } from '../components/PatternDetailModal';
 import { getNewsImage } from '../utils/newsImages';
 
 type Scope = 'saudi' | 'global' | 'all';
@@ -91,6 +92,7 @@ export const UnifiedExplore: React.FC = () => {
   // Detail Modals state
   const [selectedIncident, setSelectedIncident] = useState<SaudiIncident | null>(null);
   const [selectedNews, setSelectedNews] = useState<SaudiFraudItem | null>(null);
+  const [selectedPattern, setSelectedPattern] = useState<SaudiPattern | null>(null);
 
   // Sync state when URL params change
   useEffect(() => {
@@ -128,6 +130,15 @@ export const UnifiedExplore: React.FC = () => {
       }
     } else if (selectedNews && !newsId) {
       setSelectedNews(null);
+    }
+
+    const patKey = params.get('pattern');
+    if (patKey) {
+      if (!selectedPattern || selectedPattern.key !== patKey) {
+        apiService.getSaudiPattern(patKey).then((res) => setSelectedPattern(res.pattern)).catch(() => {});
+      }
+    } else if (selectedPattern && !patKey) {
+      setSelectedPattern(null);
     }
   }, [params]);
 
@@ -271,14 +282,14 @@ export const UnifiedExplore: React.FC = () => {
             list.push({
               id: `pat-${p.key}`,
               type: 'pattern',
-              typeLabel: 'نمط احتيال',
+              typeLabel: p.pattern_tier_ar || 'تحذير من أسلوب احتيالي',
               title: p.label_ar,
-              summary: `نمط احتيالي متكرر مستخرج من ${p.incident_count} حوادث و${p.warning_article_count} تحذيرات.`,
+              summary: p.summary || `تحذير من أسلوب احتيالي مستخرج من الأدلة المرصودة.`,
               date: p.last_seen || p.first_seen,
               country: 'SA',
-              sourceCount: p.incident_count + p.warning_article_count,
-              sourceName: p.channels.join('، ') || 'قنوات متعددة',
-              bankRelevance: 'high',
+              sourceCount: p.source_count || Math.max(1, (p.incident_count || 0) + (p.warning_article_count || 0)),
+              sourceName: p.channels.join('، ') || (p.warning_articles?.[0]?.source || 'مصادر الرصد المعتمدة'),
+              bankRelevance: p.bank_relevance || 'medium',
               rawPattern: p,
             });
           });
@@ -430,6 +441,24 @@ export const UnifiedExplore: React.FC = () => {
     setParams((prev) => {
       const p = new URLSearchParams(prev);
       p.delete('news');
+      return p;
+    });
+  };
+
+  const handleOpenPattern = (pat: SaudiPattern) => {
+    setSelectedPattern(pat);
+    setParams((prev) => {
+      const p = new URLSearchParams(prev);
+      p.set('pattern', pat.key);
+      return p;
+    });
+  };
+
+  const handleClosePattern = () => {
+    setSelectedPattern(null);
+    setParams((prev) => {
+      const p = new URLSearchParams(prev);
+      p.delete('pattern');
       return p;
     });
   };
@@ -740,6 +769,8 @@ export const UnifiedExplore: React.FC = () => {
                 onClick={() => {
                   if (isInc && item.rawIncident) {
                     handleOpenIncident(item.rawIncident);
+                  } else if (item.type === 'pattern' && item.rawPattern) {
+                    handleOpenPattern(item.rawPattern);
                   } else if (item.rawNews) {
                     handleOpenNews(item.rawNews);
                   }
@@ -855,12 +886,46 @@ export const UnifiedExplore: React.FC = () => {
                       </div>
 
                       <div className="flex items-center gap-2">
-                        <span className="font-mono text-[11px] bg-stone-100 dark:bg-slate-800 px-2 py-0.5 rounded text-stone-600 dark:text-slate-300">
-                          {item.sourceCount} {isInc ? 'مصادر إخبارية' : 'مصدر أصلي'}
-                        </span>
-                        <span className="text-sky-600 dark:text-sky-400 text-xs font-medium hover:underline">
-                          {isInc ? 'عرض تفاصيل الحادثة والمؤشرات ←' : 'عرض التفاصيل والتحليل ←'}
-                        </span>
+                        {item.type === 'pattern' && item.rawPattern ? (
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="font-mono text-[11px] bg-stone-100 dark:bg-slate-800 px-2 py-0.5 rounded text-stone-600 dark:text-slate-300">
+                              حوادث: {item.rawPattern.incident_count}
+                            </span>
+                            <span className="font-mono text-[11px] bg-stone-100 dark:bg-slate-800 px-2 py-0.5 rounded text-stone-600 dark:text-slate-300">
+                              تحذيرات: {item.rawPattern.warning_article_count}
+                            </span>
+                            <span className="font-mono text-[11px] bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 px-2 py-0.5 rounded border border-sky-200 dark:border-sky-800 font-medium">
+                              مصادر: {item.sourceCount}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenPattern(item.rawPattern!);
+                              }}
+                              className="text-sky-600 dark:text-sky-400 text-xs font-semibold hover:underline cursor-pointer mr-1"
+                            >
+                              عرض التفاصيل والتحليل ←
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <span className="font-mono text-[11px] bg-stone-100 dark:bg-slate-800 px-2 py-0.5 rounded text-stone-600 dark:text-slate-300">
+                              {item.sourceCount} {isInc ? 'مصادر إخبارية' : 'مصدر أصلي'}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (isInc && item.rawIncident) handleOpenIncident(item.rawIncident);
+                                else if (item.rawNews) handleOpenNews(item.rawNews);
+                              }}
+                              className="text-sky-600 dark:text-sky-400 text-xs font-medium hover:underline cursor-pointer"
+                            >
+                              {isInc ? 'عرض تفاصيل الحادثة والمؤشرات ←' : 'عرض التفاصيل والتحليل ←'}
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -934,6 +999,21 @@ export const UnifiedExplore: React.FC = () => {
       <FraudNewsDetailModal
         item={selectedNews}
         onClose={handleCloseNews}
+      />
+
+      {/* Pattern Detail Modal */}
+      <PatternDetailModal
+        pattern={selectedPattern}
+        onClose={handleClosePattern}
+        onOpenIncident={(incId) => {
+          handleClosePattern();
+          const inc = incidents.find((i) => i.id === incId);
+          if (inc) {
+            handleOpenIncident(inc);
+          } else {
+            apiService.getSaudiIncident(incId).then(handleOpenIncident).catch(() => {});
+          }
+        }}
       />
     </div>
   );

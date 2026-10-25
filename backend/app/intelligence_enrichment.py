@@ -545,7 +545,15 @@ def enrich_intelligence(
 
     # Explicit country check if city was not found
     if incident_country == "Unknown":
-        if "السعوديه" in full_norm or "saudi arabia" in full_norm or "ksa" in full_norm:
+        if (
+            "السعوديه" in full_norm
+            or "السعودية" in full_norm
+            or "saudi arabia" in full_norm
+            or "ksa" in full_norm
+            or "الامن السعودي" in full_norm
+            or "الداخليه السعوديه" in full_norm
+            or ("المملكه" in full_norm and ("عصابي" in full_norm or "احتيال" in full_norm))
+        ):
             incident_country = "SA"
             incident_region = "المملكة العربية السعودية"
         elif "الامارات" in full_norm or "uae" in full_norm or "دبي" in full_norm:

@@ -21,6 +21,7 @@ import {
   SaudiNewsParams,
   SaudiFraudItem,
   SaudiSourceInfo,
+  SaudiPattern,
   SaudiPatternsResponse,
   SaudiRulesResponse,
   SaudiIncident,
@@ -349,6 +350,10 @@ export const apiService = {
 
   async getSaudiPatterns(): Promise<SaudiPatternsResponse> {
     return await requestWithRetry<SaudiPatternsResponse>('/saudi-fraud/patterns');
+  },
+
+  async getSaudiPattern(key: string): Promise<{ pattern: SaudiPattern }> {
+    return await requestWithRetry<{ pattern: SaudiPattern }>(`/saudi-fraud/patterns/${encodeURIComponent(key)}`);
   },
 
   async getSaudiRules(): Promise<SaudiRulesResponse> {
@@ -697,14 +702,26 @@ export const apiService = {
   async getFraudIntelligenceDashboardView(params: {
     windowDays?: number;
     geo?: string;
+    country?: string;
+    city?: string;
+    region?: string;
     mapMode?: string;
     fraudType?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    dateBasis?: string;
   } = {}): Promise<DashboardViewResponse> {
     const sp = new URLSearchParams();
     if (params.windowDays) sp.append('window_days', String(params.windowDays));
     if (params.geo) sp.append('geo', params.geo);
+    if (params.country) sp.append('country', params.country);
+    if (params.city) sp.append('city', params.city);
+    if (params.region) sp.append('region', params.region);
     if (params.mapMode) sp.append('map_mode', params.mapMode);
     if (params.fraudType) sp.append('fraud_type', params.fraudType);
+    if (params.dateFrom) sp.append('date_from', params.dateFrom);
+    if (params.dateTo) sp.append('date_to', params.dateTo);
+    if (params.dateBasis) sp.append('date_basis', params.dateBasis);
     const qs = sp.toString();
     return await requestWithRetry<DashboardViewResponse>(`/fraud-intelligence/dashboard-view${qs ? `?${qs}` : ''}`);
   },

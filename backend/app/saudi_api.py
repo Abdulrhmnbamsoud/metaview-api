@@ -459,6 +459,29 @@ def patterns() -> Dict[str, Any]:
     }
 
 
+@router.get("/patterns/{key}")
+def pattern_detail(key: str) -> Dict[str, Any]:
+    """Single fraud pattern intelligence detail with linked detection rules."""
+    con = get_db()
+    try:
+        pats = incidents.build_patterns(con)
+        matched = next((p for p in pats if p.get("key") == key), None)
+        if not matched:
+            raise HTTPException(status_code=404, detail="Pattern not found")
+        # Find linked rules for this pattern
+        rules_list = incidents.build_rules(con)
+        linked_rules = [r for r in rules_list if any(p.get("key") == key for p in r.get("evidence", {}).get("patterns", []))]
+        matched_copy = dict(matched)
+        matched_copy["linked_rules"] = [
+            {"rule_id": r["rule_id"], "name": r["name"], "hypothesis": r["hypothesis"], "logic": r.get("logic", "")}
+            for r in linked_rules
+        ]
+        return {"pattern": matched_copy}
+    finally:
+        con.close()
+
+
+
 @router.get("/rules")
 def rules() -> Dict[str, Any]:
     """Detection rules linked to incidents/patterns + approved analyst rules (drafts excluded)."""

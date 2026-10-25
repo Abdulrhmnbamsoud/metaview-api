@@ -300,15 +300,29 @@ export interface DataQualityStats {
 }
 
 export interface DashboardViewResponse {
+  is_empty?: boolean;
+  empty_message?: string | null;
   hero_insight: HeroInsight;
   map_points: MapPoint[];
   unknown_location_count?: number;
   unknown_location_incident_ids?: number[];
+  total_scope_incidents?: number;
+  mapped_incidents_count?: number;
   top_patterns: TopPatternItem[];
   relationship_flow: RelationshipFlowData;
   what_changed: WhatChangedItem[];
   latest_incidents: LatestTableIncident[];
   banking_implications: BankingImplicationItem[];
   data_quality_stats: DataQualityStats;
+  active_filters?: {
+    geo: string;
+    country: string;
+    fraud_type: string;
+    date_from: string;
+    date_to: string;
+    date_basis: string;
+    window_days: number;
+    map_mode?: string;
+  };
 }
 

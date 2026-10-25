@@ -121,14 +121,44 @@ export interface SaudiPattern {
   label_ar: string;
   origin: string;
   incident_count: number;
+  confirmed_incident_count?: number;
+  reported_incident_count?: number;
   warning_article_count: number;
+  source_count?: number;
+  pattern_tier?: 'confirmed_fraud_pattern' | 'observed_repeated_pattern' | 'reported_fraud_method' | 'warning_based_intelligence' | 'emerging_pattern' | 'insufficient_evidence';
+  pattern_tier_ar?: string;
+  classification_rationale?: string;
+  summary?: string;
+  bank_relevance?: 'high' | 'medium' | 'low';
+  bank_relevance_ar?: string;
+  bank_relevance_rationale?: string;
+  confidence_score?: number;
+  confidence_level?: 'high' | 'medium' | 'low';
+  confidence_level_ar?: string;
+  confidence_rationale?: string;
   support: string;
   categories: { label_ar: string; incidents: number }[];
   channels: string[];
   first_seen: string | null;
   last_seen: string | null;
-  incidents: { id: number; title: string; first_reported_at: string | null; article_count: number }[];
-  evidence: { type: string; incident_id?: number; title: string; quote: string; url: string; source: string }[];
+  how_it_works?: {
+    description: string;
+    steps: string[];
+    channels: string[];
+    impersonated_entities: string[];
+    targeted_victims: string[];
+  };
+  banking_analysis?: {
+    potential_bank_risks: string[];
+    fraud_indicators: string[];
+    detection_hypotheses: string[];
+    required_data: string[];
+    uncertainties_and_limitations: string[];
+  };
+  incidents: { id: number; title: string; first_reported_at: string | null; article_count: number; record_type?: string }[];
+  warning_articles?: { threat_id: number; title: string; url: string; source?: string; published_at?: string }[];
+  evidence: { type: string; incident_id?: number; threat_id?: number; title: string; quote: string; url: string; source: string }[];
+  linked_rules?: { rule_id: string; name: string; hypothesis: string; logic?: string }[];
 }
 
 export interface SaudiPatternsResponse {

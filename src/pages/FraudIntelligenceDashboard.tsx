@@ -29,6 +29,7 @@ import {
   MessageSquare,
   Plus,
   Minus,
+  RotateCcw,
 } from 'lucide-react';
 import { apiService } from '../services/api';
 import {
@@ -39,11 +40,17 @@ import {
 } from '../types/fraudIntelligence';
 
 export const FraudIntelligenceDashboard: React.FC = () => {
-  // Filter States
-  const [dateRange, setDateRange] = useState<number>(30);
+  // Centralized Global Filter States (Single Source of Truth)
+  const [datePreset, setDatePreset] = useState<7 | 30 | 90 | 'custom'>(30);
+  const [dateFrom, setDateFrom] = useState<string>('');
+  const [dateTo, setDateTo] = useState<string>('');
+  const [dateBasis, setDateBasis] = useState<'first_reported_at' | 'occurred_at'>('first_reported_at');
+  const [dateMenuOpen, setDateMenuOpen] = useState<boolean>(false);
+
   const [geoFilter, setGeoFilter] = useState<string>('السعودية');
-  const [fraudTypeFilter, setFraudTypeFilter] = useState<string>('جميع الأنواع');
+  const [fraudTypeFilter, setFraudTypeFilter] = useState<string>('all');
   const [mapMode, setMapMode] = useState<'regions' | 'cities'>('cities');
+
   const [selectedCityPoint, setSelectedCityPoint] = useState<MapPoint | null>(null);
   const [cityModalOpen, setCityModalOpen] = useState(false);
 
@@ -55,6 +62,9 @@ export const FraudIntelligenceDashboard: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Race condition protection ref
+  const reqSequenceRef = React.useRef<number>(0);
+
   // Drilldown Modal State
   const [drilldownOpen, setDrilldownOpen] = useState(false);
   const [drilldownTitle, setDrilldownTitle] = useState('');
@@ -62,32 +72,62 @@ export const FraudIntelligenceDashboard: React.FC = () => {
   const [drilldownData, setDrilldownData] = useState<DrilldownResponse | null>(null);
   const [selectedIncident, setSelectedIncident] = useState<EnrichedIncident | null>(null);
 
-  // Fetch Dashboard Data
+  // Reset all filters to default
+  const handleResetFilters = () => {
+    setDatePreset(30);
+    setDateFrom('');
+    setDateTo('');
+    setGeoFilter('السعودية');
+    setFraudTypeFilter('all');
+    setDateMenuOpen(false);
+  };
+
+  const isFiltered = datePreset !== 30 || geoFilter !== 'السعودية' || fraudTypeFilter !== 'all' || Boolean(dateFrom);
+
+  // Fetch Dashboard Data Centrally
   useEffect(() => {
     let isMounted = true;
+    const reqId = ++reqSequenceRef.current;
+
     const load = async () => {
       try {
         setLoading(true);
         setError(null);
+
+        const geoParam = geoFilter === 'السعودية' ? 'SA' : (geoFilter === 'العالم' ? 'ALL' : geoFilter);
+
         const res = await apiService.getFraudIntelligenceDashboardView({
-          windowDays: dateRange,
-          geo: geoFilter === 'السعودية' ? 'SA' : (geoFilter === 'العالم' ? 'ALL' : 'SA'),
+          windowDays: typeof datePreset === 'number' ? datePreset : 30,
+          geo: geoParam,
+          country: geoParam,
           mapMode: mapMode,
-          fraudType: fraudTypeFilter !== 'جميع الأنواع' ? fraudTypeFilter : undefined,
+          fraudType: fraudTypeFilter !== 'all' ? fraudTypeFilter : undefined,
+          dateFrom: datePreset === 'custom' && dateFrom ? dateFrom : undefined,
+          dateTo: datePreset === 'custom' && dateTo ? dateTo : undefined,
+          dateBasis: dateBasis,
         });
-        if (isMounted) setData(res);
+
+        // Drop stale responses if a newer request was dispatched
+        if (reqId === reqSequenceRef.current && isMounted) {
+          setData(res);
+        }
       } catch (err: any) {
-        console.error('Failed to load dashboard view:', err);
-        if (isMounted) setError(err?.message || 'تعذر تحميل بيانات ميتا فيو');
+        if (reqId === reqSequenceRef.current && isMounted) {
+          console.error('Failed to load dashboard view:', err);
+          setError(err?.message || 'تعذر تحميل بيانات ميتا فيو');
+        }
       } finally {
-        if (isMounted) setLoading(false);
+        if (reqId === reqSequenceRef.current && isMounted) {
+          setLoading(false);
+        }
       }
     };
+
     load();
     return () => {
       isMounted = false;
     };
-  }, [dateRange, geoFilter, mapMode, fraudTypeFilter]);
+  }, [datePreset, dateFrom, dateTo, dateBasis, geoFilter, mapMode, fraudTypeFilter]);
 
   // Open Drilldown Modal
   const openDrilldown = async (title: string, params: Record<string, any> = {}) => {
@@ -202,46 +242,140 @@ export const FraudIntelligenceDashboard: React.FC = () => {
 
         {/* Filters & Export controls on the RIGHT (Left-to-Right order matching image) */}
         <div dir="ltr" className="flex flex-wrap items-center gap-2.5">
-          {/* 1. Date Range Dropdown */}
+          {/* 1. Date Range Dropdown with Popover */}
           <div className="relative">
             <button
-              onClick={() => setDateRange(dateRange === 30 ? 7 : dateRange === 7 ? 90 : 30)}
+              onClick={() => setDateMenuOpen(!dateMenuOpen)}
               className="flex items-center gap-2 px-3.5 py-2 bg-white border border-[#E7ECF3] rounded-xl text-xs font-semibold text-[#10213D] hover:bg-slate-50 transition shadow-xs"
             >
               <Calendar className="w-3.5 h-3.5 text-[#64748B]" />
-              <span dir="rtl">آخر {dateRange} يوماً</span>
+              <span dir="rtl">
+                {datePreset === 'custom'
+                  ? `مخصص (${dateFrom || '...'} إلى ${dateTo || '...'})`
+                  : `آخر ${datePreset} يوماً`}
+              </span>
               <ChevronDown className="w-3.5 h-3.5 text-[#64748B]" />
             </button>
+
+            {dateMenuOpen && (
+              <div
+                dir="rtl"
+                className="absolute right-0 top-full mt-1.5 w-64 bg-white border border-[#E7ECF3] rounded-2xl shadow-xl p-3 z-50 space-y-2 text-xs"
+              >
+                <div className="text-[11px] font-bold text-[#64748B] pb-1 border-b border-slate-100">
+                  نطاق التحليل الزمني (تاريخ الرصد الأول)
+                </div>
+                <div className="space-y-1">
+                  {[7, 30, 90].map((days) => (
+                    <button
+                      key={days}
+                      onClick={() => {
+                        setDatePreset(days as 7 | 30 | 90);
+                        setDateFrom('');
+                        setDateTo('');
+                        setDateMenuOpen(false);
+                      }}
+                      className={`w-full text-right px-3 py-1.5 rounded-lg font-medium transition ${
+                        datePreset === days
+                          ? 'bg-blue-50 text-blue-600 font-bold'
+                          : 'hover:bg-slate-50 text-slate-700'
+                      }`}
+                    >
+                      آخر {days} يوماً
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => setDatePreset('custom')}
+                    className={`w-full text-right px-3 py-1.5 rounded-lg font-medium transition ${
+                      datePreset === 'custom'
+                        ? 'bg-blue-50 text-blue-600 font-bold'
+                        : 'hover:bg-slate-50 text-slate-700'
+                    }`}
+                  >
+                    نطاق زمني مخصص...
+                  </button>
+                </div>
+
+                {datePreset === 'custom' && (
+                  <div className="pt-2 border-t border-slate-100 space-y-2">
+                    <div>
+                      <label className="text-[10px] text-[#64748B] block mb-0.5">من تاريخ:</label>
+                      <input
+                        type="date"
+                        value={dateFrom}
+                        onChange={(e) => setDateFrom(e.target.value)}
+                        className="w-full px-2 py-1 border border-slate-200 rounded-lg text-xs outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-[#64748B] block mb-0.5">إلى تاريخ:</label>
+                      <input
+                        type="date"
+                        value={dateTo}
+                        onChange={(e) => setDateTo(e.target.value)}
+                        className="w-full px-2 py-1 border border-slate-200 rounded-lg text-xs outline-none"
+                      />
+                    </div>
+                    <button
+                      onClick={() => setDateMenuOpen(false)}
+                      className="w-full py-1.5 bg-[#102544] text-white rounded-lg text-xs font-semibold mt-1"
+                    >
+                      تطبيق النطاق
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* 2. Geographic Dropdown */}
           <div className="relative">
-            <button
-              onClick={() => setGeoFilter(geoFilter === 'السعودية' ? 'العالم' : 'السعودية')}
-              className="flex items-center gap-2 px-3.5 py-2 bg-white border border-[#E7ECF3] rounded-xl text-xs font-semibold text-[#10213D] hover:bg-slate-50 transition shadow-xs"
+            <select
+              value={geoFilter}
+              onChange={(e) => setGeoFilter(e.target.value)}
+              className="appearance-none flex items-center gap-2 px-3.5 py-2 pr-8 pl-4 bg-white border border-[#E7ECF3] rounded-xl text-xs font-semibold text-[#10213D] hover:bg-slate-50 transition shadow-xs cursor-pointer outline-none"
             >
-              <MapPin className="w-3.5 h-3.5 text-[#64748B]" />
-              <span>{geoFilter}</span>
-              <ChevronDown className="w-3.5 h-3.5 text-[#64748B]" />
-            </button>
+              <option value="السعودية">المملكة العربية السعودية</option>
+              <option value="العالم">جميع الدول (نطاق عالمي)</option>
+              <option value="AE">الإمارات</option>
+              <option value="EG">مصر</option>
+              <option value="US">الولايات المتحدة</option>
+              <option value="GB">بريطانيا</option>
+            </select>
+            <MapPin className="w-3.5 h-3.5 text-[#64748B] absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           </div>
 
-          {/* 3. Fraud Type Dropdown */}
+          {/* 3. Canonical Fraud Type Dropdown */}
           <div className="relative">
             <select
               value={fraudTypeFilter}
               onChange={(e) => setFraudTypeFilter(e.target.value)}
               className="appearance-none flex items-center gap-2 px-3.5 py-2 pr-8 pl-4 bg-white border border-[#E7ECF3] rounded-xl text-xs font-semibold text-[#10213D] hover:bg-slate-50 transition shadow-xs cursor-pointer outline-none"
             >
-              <option value="جميع الأنواع">جميع الأنواع</option>
+              <option value="all">جميع الأنواع (كل الأنماط)</option>
               <option value="gov_impersonation">انتحال جهات حكومية</option>
               <option value="bank_impersonation">انتحال بنوك ومصارف</option>
-              <option value="investment_fraud">احتيال استثماري</option>
-              <option value="phishing">تصيد روابط</option>
-              <option value="ecommerce_fraud">احتيال تجاري</option>
+              <option value="investment_fraud">احتيال استثماري وتداول</option>
+              <option value="phishing">تصيد احتيالي وروابط</option>
+              <option value="ecommerce_fraud">احتيال تجاري ومتاجر</option>
+              <option value="job_scam">احتيال وظيفي وعروض عمل</option>
+              <option value="romance_scam">احتيال عاطفي وابتزاز</option>
+              <option value="other">أنواع أخرى</option>
             </select>
             <ChevronDown className="w-3.5 h-3.5 text-[#64748B] absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           </div>
+
+          {/* Reset Filters button if modified */}
+          {isFiltered && (
+            <button
+              onClick={handleResetFilters}
+              title="إعادة ضبط الفلاتر إلى النطاق الافتراضي"
+              className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-[#64748B] hover:text-[#10213D] rounded-xl text-xs font-semibold transition"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>إعادة ضبط</span>
+            </button>
+          )}
 
           {/* 4. Export Button on the FAR RIGHT */}
           <button
@@ -362,6 +496,10 @@ export const FraudIntelligenceDashboard: React.FC = () => {
                 >
                   <option value="السعودية">السعودية</option>
                   <option value="العالم">العالم</option>
+                  <option value="AE">الإمارات</option>
+                  <option value="EG">مصر</option>
+                  <option value="US">الولايات المتحدة</option>
+                  <option value="GB">بريطانيا</option>
                 </select>
               </div>
 
@@ -394,6 +532,24 @@ export const FraudIntelligenceDashboard: React.FC = () => {
             <div dir="rtl" className="flex items-center gap-1.5 text-sm font-bold text-[#10213D]">
               <span>خريطة الحوادث الموثقة</span>
               <Info className="w-4 h-4 text-[#64748B]" />
+            </div>
+          </div>
+
+          {/* Documented Breakdown Subheader (Total vs Mapped vs Unlocated) */}
+          <div className="flex items-center justify-between px-3 py-1.5 my-1.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[11px] font-semibold">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[#64748B]">إجمالي الحوادث:</span>
+              <span className="font-extrabold text-[#10213D]">{data?.total_scope_incidents ?? mapPoints.length}</span>
+            </div>
+            <div className="w-px h-3 bg-slate-200" />
+            <div className="flex items-center gap-1.5">
+              <span className="text-[#64748B]">بموقع محدد:</span>
+              <span className="font-extrabold text-blue-600">{data?.mapped_incidents_count ?? mapPoints.length}</span>
+            </div>
+            <div className="w-px h-3 bg-slate-200" />
+            <div className="flex items-center gap-1.5">
+              <span className="text-[#64748B]">موقع غير محدد:</span>
+              <span className="font-extrabold text-amber-600">{data?.unknown_location_count ?? 0}</span>
             </div>
           </div>
 

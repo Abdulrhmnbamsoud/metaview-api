@@ -745,51 +745,110 @@ def counts(con: sqlite3.Connection) -> Dict[str, Any]:
 
 
 def build_patterns(con: sqlite3.Connection) -> List[Dict[str, Any]]:
-    """Fraud patterns = stated methods aggregated over incidents (+ warning articles as weaker support)."""
+    """Fraud patterns = stated methods aggregated over incidents (+ warning/awareness articles).
+    
+    Implements a strict 6-tier evidence-based classification hierarchy:
+    - Confirmed Fraud Pattern: >= 2 confirmed incidents across independent sources.
+    - Observed Repeated Pattern: >= 2 incidents (or 1 incident + multiple warnings).
+    - Reported Fraud Method: 1 incident.
+    - Warning-Based Intelligence: 0 incidents + >= 1 warning/awareness articles.
+    - Emerging Pattern: Recent signals with preliminary indicators.
+    - Insufficient Evidence: 0 incidents + 0 warnings.
+    """
     pats: Dict[str, Dict[str, Any]] = {}
 
     def entry(tag: str, label: str) -> Dict[str, Any]:
-        return pats.setdefault(tag, {"key": tag, "label_ar": label, "origin": "stated_in_source",
-                                     "incidents": [], "warning_articles": [], "categories": Counter(),
-                                     "channels": set(), "evidence": [], "first_seen": None, "last_seen": None})
+        return pats.setdefault(tag, {
+            "key": tag, "label_ar": label, "origin": "stated_in_source",
+            "incidents": [], "warning_articles": [], "categories": Counter(),
+            "channels": set(), "evidence": [], "sources": set(),
+            "first_seen": None, "last_seen": None
+        })
 
     def seen(p: Dict[str, Any], when: Optional[str]) -> None:
         if when:
             p["first_seen"] = when if not p["first_seen"] or when < p["first_seen"] else p["first_seen"]
             p["last_seen"] = when if not p["last_seen"] or when > p["last_seen"] else p["last_seen"]
 
+    # 1. Incidents (confirmed or reported criminal cases)
     for r in con.execute("SELECT * FROM incidents ORDER BY last_reported_at DESC"):
+        rec_type = r["record_type"] or "confirmed_incident"
+        src_name = "مصادر الرصد"
+        if r["agencies"]:
+            ag_list = _loads(r["agencies"], [])
+            if ag_list:
+                src_name = ag_list[0]
+        elif r["articles"]:
+            art_list = _loads(r["articles"], [])
+            if art_list and isinstance(art_list[0], dict) and art_list[0].get("source"):
+                src_name = art_list[0]["source"]
+
         for m in _loads(r["methods"], []):
             if isinstance(m, str):
                 tag = r["fraud_category"] or "pattern"
                 label = m
                 quote = r["title"]
                 url = ""
-                source = "مصادر الرصد"
+                source = src_name
             elif isinstance(m, dict):
                 tag = m.get("tag") or r["fraud_category"] or "pattern"
                 label = m.get("label") or tag
                 q = (m.get("quotes") or [{}])[0] if isinstance(m.get("quotes"), list) else {}
                 quote = q.get("quote") or m.get("quote") or r["title"]
                 url = q.get("url") or m.get("url") or ""
-                source = q.get("source") or m.get("source") or "مصادر الرصد"
+                source = q.get("source") or m.get("source") or src_name
             else:
                 continue
 
             p = entry(tag, label)
-            p["incidents"].append({"id": r["id"], "title": r["title"], "first_reported_at": r["first_reported_at"],
-                                   "article_count": r["article_count"]})
+            p["incidents"].append({
+                "id": r["id"],
+                "title": r["title"],
+                "first_reported_at": r["first_reported_at"],
+                "article_count": r["article_count"],
+                "record_type": rec_type,
+            })
             p["categories"][r["fraud_category_ar"]] += 1
             p["channels"].update(_loads(r["channels"], []))
+            if source:
+                p["sources"].add(source)
             seen(p, r["first_reported_at"])
             seen(p, r["last_reported_at"])
-            p["evidence"].append({"type": "incident", "incident_id": r["id"], "title": r["title"],
-                                  "quote": quote, "url": url, "source": source})
-    for r in con.execute(
-            "SELECT t.id, t.title, t.fraud_category_ar, t.verified_facts, a.url, a.source, a.published_at "
-            "FROM threat_intel t JOIN articles a ON a.id = t.article_id "
-            "WHERE t.is_saudi = 1 AND t.content_type = ? AND t.fraud_category IS NOT NULL", (fi.CT_WARNING,)):
-        for m in (_loads(r["verified_facts"], {}) or {}).get("method_tags", []):
+            p["evidence"].append({
+                "type": "incident",
+                "incident_id": r["id"],
+                "title": r["title"],
+                "quote": quote,
+                "url": url,
+                "source": source
+            })
+
+    # 2. Warnings & Awareness intelligence
+    warn_rows = con.execute(
+        "SELECT t.id, t.title, t.content_type, t.fraud_category, t.fraud_category_ar, t.verified_facts, "
+        "t.analytical_assessment, t.detection_indicators, t.preventive_recommendations, "
+        "a.headline, a.content, a.article_summary, a.url, a.source, a.published_at "
+        "FROM threat_intel t JOIN articles a ON a.id = t.article_id "
+        "WHERE t.is_saudi = 1 AND t.content_type IN (?, ?) AND t.fraud_category IS NOT NULL",
+        (fi.CT_WARNING, fi.CT_AWARENESS)
+    ).fetchall()
+
+    for r in warn_rows:
+        vf = r["verified_facts"]
+        m_tags = []
+        if vf and isinstance(vf, str) and vf.strip().startswith("{"):
+            try:
+                m_tags = json.loads(vf).get("method_tags", [])
+            except Exception:
+                pass
+        elif isinstance(vf, dict):
+            m_tags = vf.get("method_tags", [])
+
+        if not m_tags:
+            full_text = " ".join(x for x in (r["title"], r["headline"], r["article_summary"], r["content"]) if x)
+            m_tags = fi.extract_method_tags(full_text)
+
+        for m in m_tags:
             if isinstance(m, str):
                 tag = m
                 label = m
@@ -800,24 +859,352 @@ def build_patterns(con: sqlite3.Connection) -> List[Dict[str, Any]]:
                 quote = m.get("quote") or r["title"]
             else:
                 continue
+
             p = entry(tag, label)
-            p["warning_articles"].append({"threat_id": r["id"], "title": r["title"], "url": r["url"]})
+            p["warning_articles"].append({
+                "threat_id": r["id"],
+                "title": r["title"],
+                "url": r["url"],
+                "source": r["source"],
+                "published_at": r["published_at"],
+            })
             p["categories"][r["fraud_category_ar"]] += 0
+            if r["source"]:
+                p["sources"].add(r["source"])
             seen(p, r["published_at"])
-            p["evidence"].append({"type": "warning", "threat_id": r["id"], "title": r["title"],
-                                  "quote": quote, "url": r["url"], "source": r["source"]})
+            p["evidence"].append({
+                "type": "warning" if r["content_type"] == fi.CT_WARNING else "awareness",
+                "threat_id": r["id"],
+                "title": r["title"],
+                "quote": quote,
+                "url": r["url"],
+                "source": r["source"],
+            })
+
+    DOMAIN_BLUEPRINTS: Dict[str, Dict[str, Any]] = {
+        "fraudulent_ads": {
+            "description": "أسلوب احتيالي يعتمد على نشر إعلانات ممولة أو منشورات ترويجية عبر المنصات الرقمية وشبكات التواصل لاستدراج المستخدمين نحو صفحات تصيد أو تطبيقات مراسلة خاصة.",
+            "steps": [
+                "نشر إعلانات ترويجية احتيالية أو وهمية على منصات التواصل (إكس، فيسبوك، إنستغرام) تنتحل صفة علامات تجارية أو فرص استثمارية.",
+                "تضمين روابط خارجية تنقل الضحية إلى صفحات هبوط وهمية أو مجموعات محادثة خاصة (واتساب/تيليجرام).",
+                "استدراج الضحايا لإجراء عمليات دفع إلكتروني أو تحويل مالي مقابل سلع غير موجودة أو استثمارات وهمية."
+            ],
+            "channels": ["منصات التواصل الاجتماعي", "الإعلانات الممولة", "تطبيقات المراسلة"],
+            "impersonated_entities": ["شركات تجارية", "منصات استثمارية", "جهات إعلانية"],
+            "targeted_victims": ["مستخدمو شبكات التواصل الاجتماعي", "الباحثون عن عروض تسوق أو استثمار"],
+            "potential_bank_risks": [
+                "مخاطر استدراج العملاء لإجراء تحويلات بنكية طوعية لحسابات احتيالية (Authorized Push Payment).",
+                "مدفوعات بطاقات عبر بوابات دفع غير موثوقة ينتج عنها نزاعات وعمليات احتيال عكسية (Chargebacks).",
+                "مخاطر السمعة المصرفية واستغلال أسماء البنوك في الإعلانات الترويجية الاحتيالية."
+            ],
+            "fraud_indicators": [
+                "عمليات دفع إلكتروني لروابط أو بوابات غير مصنفة تلي النقر على إعلانات خارجية.",
+                "حركات تحويل مالي فورية بمبالغ نمطية متكررة لحسابات أفراد حديثة النشأة.",
+                "تكرار الشكاوى حول مدفوعات لجهات تجارية غير مسجلة في سجلات التجارة الإلكترونية."
+            ],
+            "detection_hypotheses": [
+                "SFI-ADV-001: رصد حركة مدفوعات متكررة لروابط وبوابات دفع مشبوهة مقترنة بإعلانات مضللة.",
+                "SFI-FIN-001: رصد تحويلات عملاء لحسابات وسيطة (Mules) عقب التفاعل مع عروض ترويجية غير موثوقة."
+            ],
+            "required_data": [
+                "سجلات العمليات المصرفية (المبلغ، وقت العملية، القناة المستهدفة).",
+                "بيانات المستفيد ورمز التاجر (Merchant Category Code - MCC).",
+                "سجلات المصادقة الثنائية (3DS) وعناوين IP المرتبطة بالعملية."
+            ],
+            "uncertainties_and_limitations": [
+                "التحليل مستند إلى مواد الرصد والتوعية الإعلامية المفتوحة؛ لا تتوفر سجلات داخلية لتحديد الحجم المالي الفعلي للعمليات.",
+                "الخطوات المعروضة تمثل المسار النموذجي الموثق في التحذير، ولا تعني بالضرورة ثبوت ارتكابها في قضية جنائية واحدة بعينها ما لم يصدر بها بيان ضبط رسمي."
+            ]
+        },
+        "bank_impersonation": {
+            "description": "انتحال صفة موظفي البنوك أو ممثلي خدمة العملاء لخداع الضحايا والحصول على بياناتهم السرية ورموز التحقق.",
+            "steps": [
+                "التواصل مع الضحية عبر مكالمات هاتفية أو رسائل نصية زاعمين وجود مشكلة أمنية أو تحديث للحساب البنكي.",
+                "طلب رمز التحقق لمرة واحدة (OTP) أو بيانات بطاقة الصراف أو اسم المستخدم وكلمة المرور.",
+                "تنفيذ عمليات سحب مالي فوري أو تحويلات عبر القنوات الإلكترونية للبنك."
+            ],
+            "channels": ["مكالمات هاتفية", "رسائل نصية قصيرة (SMS)", "تطبيقات مراسلة"],
+            "impersonated_entities": ["بنوك سعودية", "خدمة عملاء المصارف", "إدارات مكافحة الاحتيال"],
+            "targeted_victims": ["عملاء البنوك والمصارف"],
+            "potential_bank_risks": [
+                "اختراق مباشر لحسابات العملاء وسحب الأرصدة (Account Takeover - ATO).",
+                "مطالبات التعويض ونزاعات العمليات غير المصرح بها.",
+                "مخاطر الثقة والأمان في الخدمات المصرفية الرقمية."
+            ],
+            "fraud_indicators": [
+                "تغيير جهاز الدخول أو كلمة المرور متبوعاً بتحويل مالي فوري لكامل الرصيد خلال دقائق.",
+                "إضافة مستفيد جديد والتحويل له فور استلام رمز OTP خارج أوقات الاستخدام المعتادة للعميل.",
+                "عمليات دخول متعددة من عناوين IP أو مواقع جغرافية غير معتادة."
+            ],
+            "detection_hypotheses": [
+                "SFI-BNK-001: رصد تحويل مالي بمبلغ كبير خلال 10 دقائق من تسجيل جهاز دخول جديد أو طلب OTP."
+            ],
+            "required_data": [
+                "سجلات الدخول وتغيير الأجهزة (Device Fingerprinting / Telemetry).",
+                "سجلات طلبات OTP وقنوات إرسالها.",
+                "سجلات التحويلات المالية الفورية (سريع)."
+            ],
+            "uncertainties_and_limitations": [
+                "التحليل مبني على قضايا الضبط الجنائي المنشورة؛ تقييم المعاملات يتطلب مطابقة البيانات السلوكية للعملاء داخلياً."
+            ]
+        },
+        "gov_impersonation": {
+            "description": "انتحال صفة مسؤولين أو منصات حكومية (مثل أبشر، الشرطة، النيابة، أو المحاكم) لممارسة الضغط والترهيب على الضحايا.",
+            "steps": [
+                "إرسال رسائل أو الاتصال مدعين وجود مخالفة قانونية، تعليق خدمات، أو إيقاف هوية.",
+                "طلب تسوية مالية فورية أو تسجيل الدخول عبر روابط وهمية مطابقة للمنصات الحكومية.",
+                "الاستيلاء على مبالغ السداد أو بيانات النفاذ الوطني واستغلالها في الدخول للحسابات البنكية."
+            ],
+            "channels": ["مكالمات هاتفية", "رسائل نصية", "روابط تصيد إلكتروني"],
+            "impersonated_entities": ["وزارة الداخلية", "منصة أبشر", "النيابة العامة", "هيئة الزكاة والضريبة والجمارك"],
+            "targeted_victims": ["المواطنون والمقيمون الخاضعون لخدمات منصات حكومية"],
+            "potential_bank_risks": [
+                "استغلال بيانات النفاذ الوطني للوصول المباشر إلى التطبيقات المصرفية المرتبطة.",
+                "تحويلات سريعة من حسابات الضحايا لحسابات وسيطة (Mules)."
+            ],
+            "fraud_indicators": [
+                "تسجيل دخول مصرفي يتبع زيارة روابط نفاذ وطني غير رسمية.",
+                "عمليات تحويل مالية فورية تحت مسميات سداد رسوم أو غرامات وهمية."
+            ],
+            "detection_hypotheses": [
+                "SFI-GOV-001: رصد محاولات تحويل مالي مقترنة بنشاط احتيالي منتحل للصفة الرسمية."
+            ],
+            "required_data": [
+                "سجلات المصادقة الثنائية وتغيير كلمات المرور.",
+                "سجلات العمليات والمدفوعات الحكومية المعكوسة."
+            ],
+            "uncertainties_and_limitations": [
+                "تعتمد الأدلة على بيانات الضبط الأمني؛ تتبع القنوات يتطلب تنسيقاً مصرفياً وأمنياً مشتركاً."
+            ]
+        },
+        "social_engineering": {
+            "description": "التلاعب النفسي بالضحايا لاستدراجهم للإفصاح عن معلومات سرية أو القيام بتحويلات مالية تحت تأثير الإلحاح أو الخوف.",
+            "steps": [
+                "بناء علاقة ثقة أو اصطناع حالة طارئة تدفع الضحية لاتخاذ قرار سريع دون تفكير.",
+                "طلب المساعدة المالية أو دفع رسوم مستعجلة عبر قنوات تحويل بنكي.",
+                "انقطاع التواصل بمجرد إتمام التحويل المالي."
+            ],
+            "channels": ["منصات التواصل الاجتماعي", "تطبيقات المراسلة", "مكالمات هاتفية"],
+            "impersonated_entities": ["معارف وأقارب", "شخصيات عامة", "جهات دعم فني"],
+            "targeted_victims": ["مستخدمو المنصات الرقمية وكبار السن"],
+            "potential_bank_risks": [
+                "عمليات احتيال الدفع المصرح بها (APP Fraud) التي يصعب استردادها عبر القنوات التقليدية."
+            ],
+            "fraud_indicators": [
+                "تحويلات مالية استثنائية لمستفيدين جدد دون سوابق تعامل.",
+                "مكالمة هاتفية جارية بالتزامن مع إجراء عملية التحويل المصرفي."
+            ],
+            "detection_hypotheses": [
+                "SFI-SOC-001: رصد تحويلات مالية متسرعة مصاحبة لمكالمات هاتفية نشطة على تطبيق الجوال."
+            ],
+            "required_data": ["حالة المكالمة أثناء جلسة التطبيق البنكي", "سجل تاريخ المعاملات مع المستفيد"],
+            "uncertainties_and_limitations": [
+                "تتفاوت أساليب الهندسة الاجتماعية بشكل كبير ويصعب حصرها في نمط تقني واحد."
+            ]
+        },
+        "ai_assisted": {
+            "description": "توظيف تقنيات الذكاء الاصطناعي التوليدي مثل تزييف الأصوات (Voice Cloning) والصور لتعزيز مصداقية عمليات الاحتيال.",
+            "steps": [
+                "جمع عينات صوتية أو مرئية للضحية أو أقربائه من منصات التواصل الاجتماعي.",
+                "توليد تسجيلات صوتية تحاكي صوت الشخص في حالة طوارئ لطلب تحويل مالي عاجل.",
+                "استلام المبالغ وتحويلها عبر سلسلة من الحسابات الوسيطة لإخفاء أثرها."
+            ],
+            "channels": ["رسائل صوتية", "مكالمات هاتفية متقدمة", "فيديوهات مزيفة (Deepfake)"],
+            "impersonated_entities": ["أفراد العائلة", "مسؤولون تنفيذيون بالشركات", "شخصيات عامة"],
+            "targeted_victims": ["أهالي وأقارب المستهدفين", "إدارات المالية والتحويل بالشركات"],
+            "potential_bank_risks": [
+                "احتيال الرؤساء التنفيذيين (CEO Fraud) وتحويلات تجارية غير مصرح بها.",
+                "صعوبة الكشف المبكر نظراً لمصداقية التزييف العالية."
+            ],
+            "fraud_indicators": [
+                "طلبات تحويل مالي عاجلة مع تشديد على السرية وعدم الرجوع للقنوات المعتادة.",
+                "أوامر دفع مستعجلة خارج الدورة المستندية المعتادة للمؤسسة."
+            ],
+            "detection_hypotheses": [
+                "SFI-AI-001: تعزيز المصادقة متعددة القنوات في التحويلات العاجلة ذات الحجم الكبير."
+            ],
+            "required_data": ["سجلات التحويلات الاستثنائية", "قنوات تأكيد الأوامر المالية"],
+            "uncertainties_and_limitations": [
+                "أسلوب ناشئ في مراحله الأولى محلياً؛ يعتمد التحليل على تحذيرات تقنية واستشرافية."
+            ]
+        }
+    }
+
     out = []
+    direct_bank_keywords = ["حساب بنكي", "حسابات مصرفية", "بطاقة", "بطاقات", "تحويل مالي", "تحويلات غير مشروعة",
+                            "رمز التحقق", "otp", "تطبيق بنكي", "سداد", "فيزا", "ماستركارد", "مدى", "مصرف", "بنوك", "الحسابات البنكية"]
+    indirect_bank_keywords = ["متجر", "استثمار", "تداول", "شراء إلكتروني", "إعلانات", "دفع إلكتروني", "محفظة", "عملات", "منصات", "وظائف"]
+
     for p in pats.values():
-        n_inc, n_warn = len(p["incidents"]), len(p["warning_articles"])
+        conf_incs = [i for i in p["incidents"] if i.get("record_type") == "confirmed_incident"]
+        rep_incs = [i for i in p["incidents"] if i.get("record_type") != "confirmed_incident"]
+        n_conf = len(conf_incs)
+        n_rep = len(rep_incs)
+        n_inc = n_conf + n_rep
+        n_warn = len(p["warning_articles"])
+        n_sources = max(len(p["sources"]), 1 if (n_inc + n_warn) > 0 else 0)
+
+        # 1. Classification Tier
+        if n_conf >= 2 and n_sources >= 2:
+            tier = "confirmed_fraud_pattern"
+            tier_ar = "نمط احتيالي مؤكد وموثق"
+            tier_rationale = f"تم تصنيف النمط كـ«نمط احتيالي مؤكد وموثق» نظراً لتوثيق {n_conf} حوادث جنائية رسمية مؤكدة مدعومة بمصادر مستقلة متعددة ({n_sources} مصادر)."
+            summary = f"نمط احتيالي مؤكد وموثق مستخرج من {n_conf} حوادث جنائية رسمية مدعومة بـ {n_sources} مصادر مستقلة."
+        elif n_inc >= 2 or (n_inc >= 1 and n_warn >= 2):
+            tier = "observed_repeated_pattern"
+            tier_ar = "أسلوب احتيالي متكرر الرصد"
+            tier_rationale = f"تم تصنيف النمط كـ«أسلوب احتيالي متكرر الرصد» لتكرار ظهوره في {n_inc} حوادث و{n_warn} تحذيرات، مع عدم اكتمال شروط النمط المؤكد بالكامل."
+            summary = f"أسلوب احتيالي متكرر الرصد عبر {n_inc} حوادث و{n_warn} تحذيرات من مصادر متعددة."
+        elif n_inc == 1:
+            tier = "reported_fraud_method"
+            tier_ar = "أسلوب احتيالي مبلّغ عنه"
+            tier_rationale = f"أسلوب احتيالي مستخرج من واقعة واحدة مبلّغ عنها، بانتظار استكمال التحقق القضائي أو تسجيل وقائع متطابقة إضافية لتأكيد صفة التكرار."
+            summary = f"أسلوب احتيالي مبلّغ عنه في واقعة واحدة موثقة عبر {n_sources} مصادر إخبارية ورسمية."
+        elif n_inc == 0 and n_warn >= 1:
+            tier = "warning_based_intelligence"
+            tier_ar = "تحذير من أسلوب احتيالي محتمل"
+            tier_rationale = f"تم تصنيف المحتوى كـ«تحذير من أسلوب احتيالي محتمل» استناداً إلى صدور {n_warn} تحذيرات أو حملات توعوية موثقة دون تسجيل حوادث جنائية مؤكدة مرتبطة به حتى تاريخه. تنبيه: تكرار المقالات أو التغطيات عن نفس التحذير لا يُعد دليلاً على تكرار الاحتيال الفعلي."
+            summary = f"تحذير استخباراتي صادر عبر {n_warn} مواد تحذيرية وتوعوية حول أسلوب احتيال محتمل، دون تسجيل حوادث جنائية مؤكدة مرتبطة به حتى الآن."
+        elif (n_inc + n_warn) > 0:
+            tier = "emerging_pattern"
+            tier_ar = "أسلوب احتيالي ناشئ قيد الرصد"
+            tier_rationale = "أسلوب احتيالي ناشئ ذو مؤشرات أولية قيد الرصد والمتابعة الاستخباراتية."
+            summary = f"أسلوب احتيالي ناشئ قيد الرصد الأولي عبر {n_sources} مصادر."
+        else:
+            tier = "insufficient_evidence"
+            tier_ar = "بيانات توثيقية غير كافية"
+            tier_rationale = "لا تتوافر أدلة موثقة كافية في السجلات الحالية لدعم تصنيف هذا الأسلوب."
+            summary = "بيانات توثيقية غير كافية لدعم اعتماد النمط."
+
+        # 2. Bank Relevance Analysis
+        quotes_text = " ".join(e["quote"] for e in p["evidence"]) + " " + p["label_ar"]
+        has_direct = any(kw in quotes_text for kw in direct_bank_keywords) or p["key"] == "bank_impersonation"
+        has_indirect = any(kw in quotes_text for kw in indirect_bank_keywords) or p["key"] in ("fraudulent_ads", "ecommerce_fraud", "investment_fraud")
+
+        if has_direct:
+            bank_rel = "high"
+            bank_rel_ar = "عالية (مباشرة)"
+            bank_rel_rat = "صلة مصرفية مباشرة: يتضمن الأسلوب استهدافاً مباشراً للحسابات المصرفية، أو طلب بيانات بطاقات الدفع ورموز التحقق (OTP)، أو إجراء تحويلات مالية غير مشروعة."
+        elif has_indirect:
+            bank_rel = "medium"
+            bank_rel_ar = "متوسطة (تقدير تحليلي)"
+            bank_rel_rat = "صلة مصرفية محتملة (تقدير تحليلي): يستغل المحتالون منصات رقمية أو إعلانات لاستدراج الضحايا نحو قنوات دفع أو تحويل أموال لاحقة، دون استهداف مباشر للبنية التحتية للبنك."
+        else:
+            bank_rel = "low"
+            bank_rel_ar = "منخفضة / غير مباشرة"
+            bank_rel_rat = "صلة مصرفية منخفضة: لا تشير الأدلة المرصودة حالياً إلى وجود ارتباط مباشر بالمعاملات أو القنوات البنكية."
+
+        # 3. Confidence Metrics
+        if n_conf >= 2:
+            conf_score = 0.88
+            conf_level = "high"
+            conf_level_ar = "مرتفع"
+            conf_rat = "درجة الثقة مستندة إلى بيانات الضبط الرسمية الصادرة عن الجهات المختصة وتعدد المصادر المستقلة."
+        elif n_inc >= 1 or n_warn >= 2:
+            conf_score = 0.72
+            conf_level = "medium"
+            conf_level_ar = "متوسط"
+            conf_rat = "درجة الثقة مبنية على تحذيرات وتغطيات موثقة ومطابقة في النصوص الصريحة للمصادر."
+        elif n_warn == 1:
+            conf_score = 0.65
+            conf_level = "medium"
+            conf_level_ar = "متوسط"
+            conf_rat = "درجة الثقة مستندة إلى مصدر موثق ينقل تحذيراً رسمياً أو بياناً صريحاً، مع غياب حوادث جنائية مسجلة حتى الآن."
+        else:
+            conf_score = 0.40
+            conf_level = "low"
+            conf_level_ar = "منخفض"
+            conf_rat = "درجة الثقة منخفضة نظراً لمحدودية الأدلة والوقائع المستقلة."
+
+        # 4. Modus Operandi & Banking Analysis Blueprint
+        bp = DOMAIN_BLUEPRINTS.get(p["key"])
+        if bp:
+            how_it_works = {
+                "description": bp["description"],
+                "steps": bp["steps"],
+                "channels": bp["channels"],
+                "impersonated_entities": bp["impersonated_entities"],
+                "targeted_victims": bp["targeted_victims"],
+            }
+            banking_analysis = {
+                "potential_bank_risks": bp["potential_bank_risks"],
+                "fraud_indicators": bp["fraud_indicators"],
+                "detection_hypotheses": bp["detection_hypotheses"],
+                "required_data": bp["required_data"],
+                "uncertainties_and_limitations": bp["uncertainties_and_limitations"],
+            }
+        else:
+            channels_list = sorted(p["channels"]) if p["channels"] else ["قنوات رقمية / غير محددة بدقة في المصدر"]
+            how_it_works = {
+                "description": f"أسلوب احتيالي متمثل في «{p['label_ar']}» كما ورد صراحة في نصوص المصادر المرصودة.",
+                "steps": ["خطوات التنفيذ التفصيلية لم تُوثّق في الأدلة المتاحة؛ يُعرض التوصيف العام المعتمد فقط تجنباً للاستنتاج غير المدعوم."],
+                "channels": channels_list,
+                "impersonated_entities": ["لم تذكر المصادر جهات منتحلة محددة لهذا النمط"],
+                "targeted_victims": ["عموم المتصفحين والمستخدمين"],
+            }
+            banking_analysis = {
+                "potential_bank_risks": [
+                    "مخاطر استغلال القنوات المصرفية في تسوية معاملات احتيالية.",
+                    "مخاطر النزاعات المصرفية في حال مرور العمليات عبر وسائل الدفع التابعة للبنك."
+                ],
+                "fraud_indicators": [
+                    "حركات تحويل مالي غير معتادة مطابقة لتوقيت البلاغات.",
+                    "عمليات دفع إلكتروني عبر منصات مشبوهة."
+                ],
+                "detection_hypotheses": [
+                    f"SFI-GEN-001: رصد الأنماط المالية المقترنة بـ «{p['label_ar']}» عبر قواعد البيانات السلوكية."
+                ],
+                "required_data": [
+                    "سجلات العمليات المصرفية ومطابقة التوقيت.",
+                    "بيانات أطراف التحويل."
+                ],
+                "uncertainties_and_limitations": [
+                    "التحليل مبني على نصوص المصادر المتاحة دون تعميم غير مبرر.",
+                    "يتطلب تأكيد المخاطر المصرفية مراجعة العمليات الفعلية داخل البنك."
+                ]
+            }
+
         out.append({
-            "key": p["key"], "label_ar": p["label_ar"], "origin": p["origin"],
-            "incident_count": n_inc, "warning_article_count": n_warn,
+            "key": p["key"],
+            "label_ar": p["label_ar"],
+            "origin": p["origin"],
+            "incident_count": n_inc,
+            "confirmed_incident_count": n_conf,
+            "reported_incident_count": n_rep,
+            "warning_article_count": n_warn,
+            "source_count": n_sources,
+            "pattern_tier": tier,
+            "pattern_tier_ar": tier_ar,
+            "classification_rationale": tier_rationale,
+            "summary": summary,
+            "bank_relevance": bank_rel,
+            "bank_relevance_ar": bank_rel_ar,
+            "bank_relevance_rationale": bank_rel_rat,
+            "confidence_score": conf_score,
+            "confidence_level": conf_level,
+            "confidence_level_ar": conf_level_ar,
+            "confidence_rationale": conf_rat,
             "support": "multiple_incidents" if n_inc >= 2 else ("single_incident" if n_inc == 1 else "warnings_only"),
             "categories": [{"label_ar": k, "incidents": v} for k, v in p["categories"].most_common()],
-            "channels": sorted(p["channels"]), "first_seen": p["first_seen"], "last_seen": p["last_seen"],
-            "incidents": p["incidents"], "evidence": p["evidence"][:8],
+            "channels": sorted(p["channels"]),
+            "first_seen": p["first_seen"],
+            "last_seen": p["last_seen"],
+            "how_it_works": how_it_works,
+            "banking_analysis": banking_analysis,
+            "incidents": p["incidents"],
+            "warning_articles": p["warning_articles"],
+            "evidence": p["evidence"][:12],
         })
-    out.sort(key=lambda x: (-x["incident_count"], -x["warning_article_count"], x["key"]))
+
+    tier_weight = {
+        "confirmed_fraud_pattern": 5,
+        "observed_repeated_pattern": 4,
+        "reported_fraud_method": 3,
+        "warning_based_intelligence": 2,
+        "emerging_pattern": 1,
+        "insufficient_evidence": 0,
+    }
+    out.sort(key=lambda x: (-tier_weight.get(x["pattern_tier"], 0), -x["incident_count"], -x["warning_article_count"], x["key"]))
     return out
 
 
