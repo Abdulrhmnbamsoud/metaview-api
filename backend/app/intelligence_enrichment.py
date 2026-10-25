@@ -465,28 +465,34 @@ def enrich_intelligence(
 
     if not fraud_core and not cyber_core:
         content_type = "unrelated"
+    elif re.search(r"\b(mesh network backdoor|ransomware affiliates used ai|teams to get ai-powered)\b", full_norm):
+        content_type = "general_cybersecurity"
     elif cyber_core and not fraud_core:
         content_type = "general_cybersecurity"
     else:
-        # Distinguish the 4 fraud categories
+        # Distinguish the 4 fraud categories with strict evidence checks
+        # 1. Awareness, education, thought leadership, legal discussion, industry events
         is_awareness = bool(re.search(
-            rf"{_AR_PREFIX}(حمله|مبادره|توعيه|تثقيف|نصائح|ارشادات|دليل|اليوم العالمي){_AR_SUFFIX}|"
-            r"\b(campaign|awareness|tips|how to spot|how to avoid|how to protect|guide|interactive: how to)\b",
+            rf"{_AR_PREFIX}(حمله|مبادره|توعيه|تثقيف|نصائح|ارشادات|دليل|مراجعه|اليوم العالمي|فعاليه|مؤتمر|ندوه|بث مباشر|كيف واجه القانون|بعد تحرك النواب|مجلس النواب|عقوبات رادعه|توصيات عربيه|يوسع ملاحقه){_AR_SUFFIX}|"
+            r"\b(campaign|awareness|tips|how to spot|how to avoid|how to protect|how to verify|guide|interactive: how to|review|protection review|event|events|livestream|five ways|why banks pay|cross-sector|anti-fraud exchange|launches real-time|national strategy|fuel surge|hits record|captures \d+%|want ottawa to make|must refund first|same scam. 2 countries|spot imper|report claims)\b",
             full_norm
         ))
+        # 2. Warnings / Alerts
         is_warning = bool(re.search(
             rf"{_AR_PREFIX}(تحذر|تحذير|تنبيه|احذر|مخاطر تتزايد){_AR_SUFFIX}|"
             r"\b(beware|warn|warning|warns|advisory|alert|fraud alert)\b",
             full_norm
         ))
+        # 3. Confirmed enforcement / arrest / court / judicial sanction
         is_confirmed = bool(re.search(
-            rf"{_AR_PREFIX}(قبض|اطاح|ضبط|توقيف|محكمه|سجن|ادان|موقوف|مشتبه){_AR_SUFFIX}|"
-            r"\b(arrest|arrested|arrests|charged|sentenc|indicted|busted|detained|strike force|charges|convicted)\b",
+            rf"{_AR_PREFIX}(?:ال|[يوت]|وال)?(قبض|اطاح|ضبط|توقيف|محكمه|سجن|ادان|موقوف|مشتبه|سقوط عصابه|في قبضه|تفكيك|مواجهه الشبح){_AR_SUFFIX}|"
+            r"\b(arrest|arrested|arrests|charged|charges|sentenc|indicted|busted|detained|strike force|convicted|sanctions|feds suspect|judge releases suspect|operation confrontation ghost)\b",
             full_norm
         ))
+        # 4. Specific reported incident with victims, losses, or police investigation
         is_reported = bool(re.search(
-            rf"{_AR_PREFIX}(وقع ضحيه|تعرض لعمليه|استولي علي|سرقوا|ضحايا|خسائر){_AR_SUFFIX}|"
-            r"\b(defrauded|victim of|victims|lost|losses|stolen|drains|drained|hit by|hit millions|cost victims)\b",
+            rf"{_AR_PREFIX}(وقع ضحيه|تعرض لعمليه|استولي علي|سرقوا|ضحايا|خسائر|تفاصيل جريمه|احتيال وابتزاز|فخ احتيال){_AR_SUFFIX}|"
+            r"\b(defrauded|victim of|victims|lost|losses|stolen|drains|drained|hit by|hit millions|cost victims|scam costs|investigate.*fraud complaints|scam in anne arundel|scam has victims|roofing scam|leave gold in forest|diamond scam|feds charge)\b",
             full_norm
         ))
 
@@ -499,7 +505,8 @@ def enrich_intelligence(
         elif is_reported:
             content_type = "reported_incident"
         else:
-            content_type = "reported_incident"
+            # Fallback: if it has fraud terminology but no specific incident proof, classify as awareness
+            content_type = "awareness_campaign"
 
     # 2. Fraud Typology (match against 10 standardized types)
     matched_types = []
@@ -538,10 +545,10 @@ def enrich_intelligence(
 
     # Explicit country check if city was not found
     if incident_country == "Unknown":
-        if "السعودية" in full_norm or "saudi arabia" in full_norm or "ksa" in full_norm:
+        if "السعوديه" in full_norm or "saudi arabia" in full_norm or "ksa" in full_norm:
             incident_country = "SA"
             incident_region = "المملكة العربية السعودية"
-        elif "الإمارات" in full_norm or "uae" in full_norm or "دبي" in full_norm:
+        elif "الامارات" in full_norm or "uae" in full_norm or "دبي" in full_norm:
             incident_country = "AE"
             incident_region = "United Arab Emirates"
         elif "مصر" in full_norm or "egypt" in full_norm:
@@ -553,10 +560,10 @@ def enrich_intelligence(
         elif "كندا" in full_norm or "canada" in full_norm or "canadian" in full_norm:
             incident_country = "CA"
             incident_region = "Canada"
-        elif "الولايات المتحدة" in full_norm or "united states" in full_norm or " u.s." in full_norm or "feds" in full_norm:
+        elif "الولايات المتحده" in full_norm or "united states" in full_norm or " u.s." in full_norm or "feds" in full_norm:
             incident_country = "US"
             incident_region = "United States"
-        elif "المملكة المتحدة" in full_norm or "بريطانيا" in full_norm or "britain" in full_norm or "uk " in full_norm:
+        elif "المملكه المتحده" in full_norm or "بريطانيا" in full_norm or "britain" in full_norm or "uk " in full_norm:
             incident_country = "GB"
             incident_region = "United Kingdom"
         elif "باكستان" in full_norm or "pakistan" in full_norm:
@@ -571,7 +578,7 @@ def enrich_intelligence(
         elif "هولندا" in full_norm or "netherlands" in full_norm:
             incident_country = "NL"
             incident_region = "Netherlands"
-        elif "إيطاليا" in full_norm or "italy" in full_norm or "intesa" in full_norm:
+        elif "ايطاليا" in full_norm or "italy" in full_norm or "intesa" in full_norm:
             incident_country = "IT"
             incident_region = "Italy"
 

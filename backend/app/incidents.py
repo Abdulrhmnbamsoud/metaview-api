@@ -448,7 +448,7 @@ def build_incident(cl: Cluster) -> Dict[str, Any]:
     indicators = {
         "mentioned_in_source": [{"label": e["label"], "quote": e["quotes"][0]["quote"], "url": e["quotes"][0]["url"],
                                  "articles": e["articles"], "origin": "stated_in_source"} for e in method_list],
-        "suggested_by_system": {"origin": "system_template", "items": fi.INDICATORS_TEMPLATE[best.row["fraud_category"]]},
+        "suggested_by_system": {"origin": "system_template", "items": fi.INDICATORS_TEMPLATE.get(best.row["fraud_category"], [])},
     }
 
     bank_level = max((m.row["bank_relevance"] or "low" for m in cl.members), key=lambda x: _LEVEL.get(x, 0))

@@ -25,6 +25,11 @@ import {
   ChevronDown,
   Shield,
   Check,
+  Globe,
+  Radio,
+  LayoutGrid,
+  Settings,
+  FileText,
 } from 'lucide-react';
 import { apiService, getArabicOnly, setArabicOnly } from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -93,6 +98,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   // Dynamic Navigation based on RBAC Least Privilege
   const primaryNav = [
     { to: '/', label: 'الرئيسية', icon: Home, exact: true },
+    { to: '/fraud-intelligence', label: 'استخبارات الاحتيال', icon: Activity },
     { to: '/explore', label: 'الاستكشاف', icon: Compass },
     { to: '/rules', label: 'قواعد الكشف', icon: ListChecks },
     ...(can('rule.create') || can('incident.annotate') || role === 'analyst' || role === 'admin'
@@ -111,6 +117,87 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     { to: '/explore?type=pattern', label: 'الأنماط', icon: Network },
     { to: '/explore?type=awareness', label: 'التوعية', icon: BellRing },
   ];
+
+  const isFraudIntelPage =
+    location.pathname.startsWith('/fraud-intelligence') ||
+    location.pathname.startsWith('/intelligence');
+
+  if (isFraudIntelPage) {
+    const fraudIntelNav = [
+      { to: '/', label: 'الرئيسية', icon: Home },
+      { to: '/fraud-intelligence', label: 'استخبارات الاحتيال', icon: Activity, active: true },
+      { to: '/explore?type=incident', label: 'الحوادث', icon: ShieldAlert },
+      { to: '/explore?type=pattern', label: 'الأنماط', icon: Network },
+      { to: '/system', label: 'المصادر الإعلامية', icon: Globe },
+      { to: '/rules', label: 'تحليل التهديدات', icon: Radio },
+      { to: '/workspace', label: 'الجهات والقطاعات', icon: LayoutGrid },
+      { to: '/explore', label: 'التقارير', icon: FileText },
+      { to: '/team', label: 'الفريق', icon: Users },
+      { to: '/system', label: 'إعدادات النظام', icon: Settings },
+    ];
+
+    return (
+      <div dir="ltr" className="min-h-screen bg-[#F7F9FC] flex overflow-hidden font-sans antialiased text-[#10213D]">
+        {/* Left Sidebar Fixed (Matching reference image media_1792925929858.jpg) */}
+        <aside dir="rtl" className="w-56 shrink-0 bg-white border-r border-[#E7ECF3] hidden md:flex flex-col justify-between z-30 select-none py-6 px-4">
+          <div className="space-y-6">
+            {/* Logo */}
+            <div
+              onClick={() => navigate('/')}
+              className="flex items-center gap-3 cursor-pointer group px-2"
+            >
+              <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-xs">
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                  <circle cx="12" cy="12" r="3" fill="currentColor" />
+                  <path d="M12 2a10 10 0 0 1 10 10" />
+                  <path d="M12 22a10 10 0 0 1-10-10" />
+                  <circle cx="12" cy="2" r="1.5" fill="currentColor" />
+                  <circle cx="22" cy="12" r="1.5" fill="currentColor" />
+                  <circle cx="12" cy="22" r="1.5" fill="currentColor" />
+                  <circle cx="2" cy="12" r="1.5" fill="currentColor" />
+                </svg>
+              </div>
+              <div className="flex flex-col text-right">
+                <span className="text-sm font-extrabold tracking-tight text-[#102544] leading-none">
+                  MetaView 3
+                </span>
+                <span className="text-[10px] font-medium text-[#64748B] mt-1">
+                  Fraud Intelligence
+                </span>
+              </div>
+            </div>
+
+            {/* Navigation links */}
+            <nav className="space-y-1">
+              {fraudIntelNav.map((item) => {
+                const Icon = item.icon;
+                const isActive = item.active || location.pathname === item.to;
+                return (
+                  <NavLink
+                    key={item.label}
+                    to={item.to}
+                    className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                      isActive
+                        ? 'bg-[#EFF6FF] text-[#2563EB] shadow-xs'
+                        : 'text-[#64748B] hover:text-[#10213D] hover:bg-slate-50'
+                    }`}
+                  >
+                    <Icon className={`w-4 h-4 ${isActive ? 'text-[#2563EB]' : 'text-[#94A3B8]'}`} />
+                    <span>{item.label}</span>
+                  </NavLink>
+                );
+              })}
+            </nav>
+          </div>
+        </aside>
+
+        {/* Main Content Area */}
+        <main dir="rtl" className="flex-1 overflow-y-auto bg-[#F7F9FC]">
+          {children}
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-stone-100/70 dark:bg-[#070b14] text-stone-900 dark:text-stone-100 flex flex-col font-sans antialiased transition-colors duration-150">

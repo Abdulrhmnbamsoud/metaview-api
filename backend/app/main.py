@@ -40,6 +40,7 @@ app.add_middleware(
 from .auth import init_auth_tables
 from .auth_api import router as auth_router, team_router
 from .governance_api import router as governance_router
+from .fraud_intelligence_api import router as fraud_intel_router
 
 init_db()
 init_auth_tables()
@@ -47,9 +48,16 @@ app.include_router(auth_router)
 app.include_router(team_router)
 app.include_router(governance_router)
 app.include_router(saudi_router)
+app.include_router(fraud_intel_router)
+app.include_router(fraud_intel_router, prefix="/api")
 # Upgrade an existing DB in place: classify rows lacking content_type and derive incidents.
 # Additive + idempotent (never deletes articles); independent of SAUDI_AUTO_INGEST.
 run_startup_backfill()
+from .intelligence_builder import rebuild_fraud_intelligence
+try:
+    rebuild_fraud_intelligence(user_tag="startup_init")
+except Exception:
+    pass
 # Saudi Fraud Intelligence: periodic ingestion (enabled with SAUDI_AUTO_INGEST=true)
 start_saudi_scheduler()
 

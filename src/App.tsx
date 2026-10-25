@@ -6,6 +6,7 @@ import { Layout } from './components/Layout';
 
 // 4 Primary destinations
 import { ExecutiveOverview } from './pages/ExecutiveOverview';
+import { FraudIntelligenceDashboard } from './pages/FraudIntelligenceDashboard';
 import { UnifiedExplore } from './pages/UnifiedExplore';
 import { DetectionRules } from './pages/DetectionRules';
 import { SourcesAndSystem } from './pages/SourcesAndSystem';
@@ -45,6 +46,8 @@ export const App: React.FC = () => {
                 <Routes>
                   {/* Primary Destinations */}
                   <Route path="/" element={<ExecutiveOverview />} />
+                  <Route path="/fraud-intelligence" element={<FraudIntelligenceDashboard />} />
+                  <Route path="/intelligence" element={<FraudIntelligenceDashboard />} />
                   <Route path="/explore" element={<UnifiedExplore />} />
                   <Route path="/rules" element={<DetectionRules />} />
                   <Route path="/system" element={<SourcesAndSystem />} />

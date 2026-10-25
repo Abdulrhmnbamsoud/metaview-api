@@ -44,6 +44,19 @@ import {
   WorkspaceOverview,
   DetectionRuleTestResult,
 } from '../types/auth';
+import {
+  FraudIntelligenceSummary,
+  TrendResponse,
+  TypologyStat,
+  GeoResponse,
+  EntitiesAndSectorsResponse,
+  ChannelStat,
+  EnrichedIncident,
+  BankingRiskResponse,
+  DataQualityResponse,
+  DrilldownResponse,
+  DashboardViewResponse,
+} from '../types/fraudIntelligence';
 
 // Base URL resolution: Environment variable -> Vite Proxy (/api) -> direct localhost
 let API_BASE_URL: string;
@@ -598,6 +611,92 @@ export const apiService = {
       method: 'POST',
       body: JSON.stringify({ decision, reason, reviewer: reviewer || '' }),
     });
+  },
+
+  // --------------------------------------------------------------------------- //
+  // Fraud Intelligence Dashboard APIs (10 Sections & Drilldown)
+  // --------------------------------------------------------------------------- //
+  async getFraudIntelligenceSummary(): Promise<FraudIntelligenceSummary> {
+    return await requestWithRetry<FraudIntelligenceSummary>('/fraud-intelligence/summary');
+  },
+
+  async getFraudIntelligenceTrends(windowDays: number = 30): Promise<TrendResponse> {
+    return await requestWithRetry<TrendResponse>(`/fraud-intelligence/trends?window_days=${windowDays}`);
+  },
+
+  async getFraudIntelligenceTypologies(): Promise<TypologyStat[]> {
+    return await requestWithRetry<TypologyStat[]>('/fraud-intelligence/typologies');
+  },
+
+  async getFraudIntelligenceGeography(): Promise<GeoResponse> {
+    return await requestWithRetry<GeoResponse>('/fraud-intelligence/geography');
+  },
+
+  async getFraudIntelligenceEntitiesAndSectors(): Promise<EntitiesAndSectorsResponse> {
+    return await requestWithRetry<EntitiesAndSectorsResponse>('/fraud-intelligence/entities-and-sectors');
+  },
+
+  async getFraudIntelligenceChannels(): Promise<ChannelStat[]> {
+    return await requestWithRetry<ChannelStat[]>('/fraud-intelligence/channels');
+  },
+
+  async getFraudIntelligenceEmergingThreats(): Promise<EnrichedIncident[]> {
+    return await requestWithRetry<EnrichedIncident[]>('/fraud-intelligence/emerging-threats');
+  },
+
+  async getFraudIntelligenceBankingRisk(): Promise<BankingRiskResponse> {
+    return await requestWithRetry<BankingRiskResponse>('/fraud-intelligence/banking-risk');
+  },
+
+  async getFraudIntelligenceDataQuality(): Promise<DataQualityResponse> {
+    return await requestWithRetry<DataQualityResponse>('/fraud-intelligence/data-quality');
+  },
+
+  async getFraudIntelligenceIncidents(params: {
+    fraud_type?: string;
+    country?: string;
+    city?: string;
+    sector?: string;
+    channel?: string;
+    entity?: string;
+    record_type?: string;
+    is_emerging?: boolean;
+    q?: string;
+    page?: number;
+    page_size?: number;
+  } = {}): Promise<DrilldownResponse> {
+    const sp = new URLSearchParams();
+    if (params.fraud_type) sp.append('fraud_type', params.fraud_type);
+    if (params.country) sp.append('country', params.country);
+    if (params.city) sp.append('city', params.city);
+    if (params.sector) sp.append('sector', params.sector);
+    if (params.channel) sp.append('channel', params.channel);
+    if (params.entity) sp.append('entity', params.entity);
+    if (params.record_type) sp.append('record_type', params.record_type);
+    if (params.is_emerging !== undefined) sp.append('is_emerging', String(params.is_emerging));
+    if (params.q) sp.append('q', params.q);
+    if (params.page) sp.append('page', String(params.page));
+    if (params.page_size) sp.append('page_size', String(params.page_size));
+
+    const qs = sp.toString();
+    return await requestWithRetry<DrilldownResponse>(`/fraud-intelligence/incidents${qs ? `?${qs}` : ''}`);
+  },
+
+  async getFraudIntelligenceSingleIncident(incidentId: number): Promise<EnrichedIncident> {
+    return await requestWithRetry<EnrichedIncident>(`/fraud-intelligence/incidents/${incidentId}`);
+  },
+
+  async getFraudIntelligenceDashboardView(params: {
+    windowDays?: number;
+    geo?: string;
+    fraudType?: string;
+  } = {}): Promise<DashboardViewResponse> {
+    const sp = new URLSearchParams();
+    if (params.windowDays) sp.append('window_days', String(params.windowDays));
+    if (params.geo) sp.append('geo', params.geo);
+    if (params.fraudType) sp.append('fraud_type', params.fraudType);
+    const qs = sp.toString();
+    return await requestWithRetry<DashboardViewResponse>(`/fraud-intelligence/dashboard-view${qs ? `?${qs}` : ''}`);
   },
 
   /**
