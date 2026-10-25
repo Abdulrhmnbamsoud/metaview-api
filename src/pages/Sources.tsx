@@ -72,7 +72,7 @@ export const Sources: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-white/5">
         <div>
           <h1 className="text-2xl font-black text-white royal-gradient-text">
-            استخبارات المصادر الإخبارية (Source Intelligence)
+            رصد ميتا فيو للمصادر الإخبارية (Source Intelligence)
           </h1>
           <p className="text-xs text-gray-400 mt-1">
             تحليل شبكات وكالات الأنباء والصحف العالمية، وتتبع وتيرة النشر وحصة التغطية

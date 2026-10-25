@@ -28,6 +28,7 @@ import {
   SaudiIncidentReport,
   SaudiRuntime,
   MergeSuggestion,
+  CountryDistributionResponse,
 } from '../types/saudi';
 
 // Base URL resolution: Environment variable -> Vite Proxy (/api) -> direct localhost
@@ -251,9 +252,15 @@ export const apiService = {
     if (params.q) query.append('q', params.q);
     if (params.bank_relevance) query.append('bank_relevance', params.bank_relevance);
     if (params.content_type) query.append('content_type', params.content_type);
+    if (params.scope) query.append('scope', params.scope);
+    if (params.country) query.append('country', params.country);
     query.append('page', String(params.page || 1));
     query.append('page_size', String(params.page_size || 20));
     return await requestWithRetry<SaudiNewsResponse>(`/saudi-fraud/news?${query.toString()}`);
+  },
+
+  async getFraudCountries(scope: string = 'all'): Promise<CountryDistributionResponse> {
+    return await requestWithRetry<CountryDistributionResponse>(`/saudi-fraud/countries?scope=${encodeURIComponent(scope)}`);
   },
 
   async getSaudiNewsItem(id: number): Promise<SaudiFraudItem> {

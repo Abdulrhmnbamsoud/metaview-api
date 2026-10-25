@@ -358,18 +358,63 @@ if AUTO_INGEST:
 # Threat Intelligence Endpoints
 
 @app.get("/threats", response_model=Dict[str, Any])
-def list_threats(page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=200)):
-    """List threat intelligence records with pagination."""
+def list_threats(
+    scope: str = Query("all", pattern="^(saudi|global|all)$"),
+    country: Optional[str] = None,
+    q: Optional[str] = None,
+    category: Optional[str] = None,
+    bank_relevance: Optional[str] = Query(None, pattern="^(high|medium|low)$"),
+    content_type: Optional[str] = None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=200),
+):
+    """List threat intelligence records with pagination and filters."""
     offset = (page - 1) * page_size
     con = get_db()
     cur = con.cursor()
-    excl = "COALESCE(content_type, '') NOT IN ('general_cybersecurity', 'unrelated')"
-    total_count = cur.execute(f"SELECT COUNT(*) FROM threat_intel WHERE {excl}").fetchone()[0]
+    clauses = ["COALESCE(t.content_type, '') NOT IN ('general_cybersecurity', 'unrelated')", "t.fraud_category IS NOT NULL"]
+    params = []
+
+    if scope == "saudi":
+        clauses.append("t.is_saudi = 1")
+    elif scope == "global":
+        clauses.append("(t.is_saudi = 0 OR t.is_saudi IS NULL OR (a.country != '' AND a.country != 'SA'))")
+
+    if country and country != "all":
+        clauses.append("a.country = ?")
+        params.append(country.upper())
+
+    if category and category != "all":
+        clauses.append("t.fraud_category = ?")
+        params.append(category)
+
+    if bank_relevance and bank_relevance != "all":
+        clauses.append("t.bank_relevance = ?")
+        params.append(bank_relevance)
+
+    if content_type and content_type != "all":
+        clauses.append("t.content_type = ?")
+        params.append(content_type)
+
+    if q:
+        clauses.append("(t.title LIKE ? OR t.description LIKE ? OR a.headline LIKE ?)")
+        params += [f"%{q}%"] * 3
+
+    where = " AND ".join(clauses)
+    total_count = cur.execute(
+        f"SELECT COUNT(*) FROM threat_intel t JOIN articles a ON a.id = t.article_id WHERE {where}",
+        params
+    ).fetchone()[0]
+
     cur.execute(
         f"""
-        SELECT * FROM threat_intel WHERE {excl} ORDER BY id DESC LIMIT ? OFFSET ?
+        SELECT t.*, a.headline, a.source, a.country, a.domain, a.url, a.published_at, a.language
+        FROM threat_intel t JOIN articles a ON a.id = t.article_id
+        WHERE {where}
+        ORDER BY COALESCE(a.published_at, t.created_at) DESC, t.id DESC
+        LIMIT ? OFFSET ?
         """,
-        (page_size, offset),
+        params + [page_size, offset],
     )
     rows = cur.fetchall()
     con.close()
@@ -379,21 +424,22 @@ def list_threats(page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le
             "id": r["id"],
             "article_id": r["article_id"],
             "title": r["title"],
+            "headline": r["headline"],
             "description": r["description"],
             "threat_type": r["threat_type"],
-            "event_type": r["event_type"],
-            "evidence_confidence": r["evidence_confidence"],
-            "analysis_confidence": r["analysis_confidence"],
-            "verified_facts": r["verified_facts"],
-            "analytical_assessment": r["analytical_assessment"],
-            "detection_indicators": r["detection_indicators"],
-            "preventive_recommendations": r["preventive_recommendations"],
-            "evidence_urls": r["evidence_urls"],
-            "confidence": r["confidence"],
-            "original_url": r["original_url"],
-            "related_links": r["related_links"],
+            "fraud_category": r["fraud_category"],
+            "fraud_category_ar": r["fraud_category_ar"],
+            "content_type": r["content_type"],
+            "bank_relevance": r["bank_relevance"],
+            "country": r["country"] or ("SA" if r["is_saudi"] else "Global"),
+            "source": r["source"],
+            "domain": r["domain"],
+            "original_url": r["original_url"] or r["url"],
+            "published_at": r["published_at"],
             "is_saudi": bool(r["is_saudi"]),
             "is_financial": bool(r["is_financial"]),
+            "confidence": r["confidence"],
+            "evidence_confidence": r["evidence_confidence"],
             "created_at": r["created_at"],
             "updated_at": r["updated_at"],
         })

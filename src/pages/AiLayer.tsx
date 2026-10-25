@@ -55,7 +55,7 @@ export const AiLayer: React.FC = () => {
       icon: HeartPulse,
     },
     {
-      title: 'الاستخبارات اللغوية والترجمة الفورية (Multilingual Intelligence)',
+      title: 'تحليل ميتا فيو اللغوي والترجمة الفورية (Multilingual Intelligence)',
       status: 'مخطط للتطوير',
       statusType: 'planned',
       desc: 'ترجمة فورية لعناوين وملخصات وكالات الأنباء الدولية (مثل لوموند ودويتشه فيله) إلى العربية مع الاحتفاظ بالنص الأصلي كاملاً.',
@@ -80,7 +80,7 @@ export const AiLayer: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-white/5">
         <div>
           <h1 className="text-2xl font-black text-white royal-gradient-text">
-            طبقة الذكاء الاصطناعي والاستخبارات المتقدمة (AI Intelligence Layer)
+            طبقة الذكاء الاصطناعي وتقنيات ميتا فيو المتقدمة (AI Intelligence Layer)
           </h1>
           <p className="text-xs text-gray-400 mt-1">
             البنية المعمارية المخططة لخدمات التحليل الذكي المستقلة

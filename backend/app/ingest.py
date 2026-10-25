@@ -83,10 +83,26 @@ async def ingest_once(
                     if img_url:
                         with_images += 1
 
+                    # Determine clean publisher name from entry or feed metadata
+                    real_publisher = None
+                    src_obj = getattr(e, "source", None)
+                    if isinstance(src_obj, dict) and src_obj.get("title"):
+                        real_publisher = src_obj["title"].strip()
+                    elif getattr(e, "author", None):
+                        real_publisher = e.author.strip()
+
+                    item_country = country
+                    if "gl=US" in feed_url: item_country = "US"
+                    elif "gl=GB" in feed_url: item_country = "GB"
+                    elif "gl=CA" in feed_url: item_country = "CA"
+                    elif "gl=AU" in feed_url: item_country = "AU"
+                    elif "gl=AE" in feed_url: item_country = "AE"
+                    elif "gl=EG" in feed_url: item_country = "EG"
+
                     item = {
-                        "source": src_name,
+                        "source": real_publisher or src_name,
                         "domain": extract_domain(link),
-                        "country": country,
+                        "country": item_country,
                         "headline": headline,
                         "content": "",
                         "article_summary": summary,

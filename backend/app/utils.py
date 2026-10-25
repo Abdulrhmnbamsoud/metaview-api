@@ -7,6 +7,24 @@ import re
 
 def normalize_source_name(feed_url: str) -> str:
     u = feed_url.lower()
+    # Specialized global fraud feeds
+    if "news.google.com" in u:
+        if "gl=us" in u:
+            if "investment" in u: return "gnews_us_invest"
+            return "gnews_us_fraud"
+        if "gl=gb" in u:
+            if "financial" in u: return "gnews_uk_fraud"
+            return "gnews_uk_scam"
+        if "gl=ca" in u: return "gnews_ca_fraud"
+        if "gl=au" in u: return "gnews_au_fraud"
+        if "gl=ae" in u: return "gnews_ae_fraud"
+        if "gl=eg" in u: return "gnews_eg_fraud"
+        return "gnews_global_fraud"
+    if "bleepingcomputer" in u: return "bleeping_computer"
+    if "krebsonsecurity" in u: return "krebs_security"
+    if "feedburner" in u or "thehackersnews" in u: return "the_hackers_news"
+    if "securelist" in u: return "securelist"
+    # General news feeds
     if "reuters" in u: return "reuters"
     if "bloomberg" in u: return "bloomberg"
     if "dj.com" in u or "wsj" in u: return "wsj"

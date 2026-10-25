@@ -76,8 +76,19 @@ export interface SaudiFraudItem {
   preventive_recommendations?: { origin: string; items: string[] } | null;
   required_data?: string[] | null;
   matched_terms?: string[] | null;
-  language?: string | null;
+  country?: string | null;
+  domain?: string | null;
+  is_saudi?: boolean;
   content_excerpt?: string;
+}
+
+export interface CountryCount {
+  country: string;
+  count: number;
+}
+
+export interface CountryDistributionResponse {
+  countries: CountryCount[];
 }
 
 export interface SaudiNewsResponse {
@@ -160,6 +171,8 @@ export interface SaudiNewsParams {
   q?: string;
   bank_relevance?: string;
   content_type?: string;
+  scope?: 'saudi' | 'global' | 'all';
+  country?: string;
   page?: number;
   page_size?: number;
 }

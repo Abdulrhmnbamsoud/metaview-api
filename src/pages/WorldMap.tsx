@@ -71,7 +71,7 @@ export const WorldMap: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-white/5">
         <div>
           <h1 className="text-2xl font-black text-white royal-gradient-text">
-            الخريطة العالمية واستخبارات التوزيع الجغرافي
+            الخريطة العالمية ورصد ميتا فيو للتوزيع الجغرافي
           </h1>
           <p className="text-xs text-gray-400 mt-1">
             استكشاف مراكز انطلاق وتوزيع الأخبار العالمية مع التمييز الدقيق بين موقع الناشر وموقع الحدث

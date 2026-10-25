@@ -71,6 +71,9 @@ def _item(r, detail: bool = False) -> Dict[str, Any]:
         "content_type": r["content_type"] or "unclassified",
         "content_type_ar": CONTENT_TYPE_AR.get(r["content_type"], "غير مصنّف"),
         "incident_id": r["incident_id"],
+        "country": r["country"] if ("country" in r.keys() and r["country"]) else ("SA" if r["is_saudi"] else "Global"),
+        "domain": r["domain"] if "domain" in r.keys() else None,
+        "is_saudi": bool(r["is_saudi"]),
     }
     if detail:
         for f in ("verified_facts", "analytical_assessment", "detection_indicators",
@@ -83,40 +86,67 @@ def _item(r, detail: bool = False) -> Dict[str, Any]:
 
 _SELECT = """
     SELECT t.*, a.headline, a.source, a.url, a.published_at, a.fetched_at, a.source_code,
-           a.language, a.content
+           a.language, a.content, a.country, a.domain
     FROM threat_intel t JOIN articles a ON a.id = t.article_id
 """
 
 
 def _where(category: Optional[str], source: Optional[str], q: Optional[str],
            date_from: Optional[str], date_to: Optional[str], bank: Optional[str],
-           content_type: Optional[str] = None):
-    if content_type:
-        # explicit request (may be an excluded type, e.g. to audit what was left out of the indicators)
-        clauses = [_ANY_SAUDI_WHERE, "t.content_type = ?"]
-        params: List[Any] = [content_type]
+           content_type: Optional[str] = None, scope: str = "saudi", country: Optional[str] = None):
+    clauses = []
+    params: List[Any] = []
+
+    # Scope condition
+    if scope == "saudi":
+        clauses.append("t.is_saudi = 1")
+    elif scope == "global":
+        clauses.append("(t.is_saudi = 0 OR t.is_saudi IS NULL)")
+    elif scope == "all":
+        pass  # Both Saudi and Global
     else:
-        clauses = [_BASE_WHERE]
-        params = []
-    if category:
+        clauses.append("t.is_saudi = 1")
+
+    clauses.append("t.fraud_category IS NOT NULL")
+
+    if content_type:
+        clauses.append("t.content_type = ?")
+        params.append(content_type)
+    else:
+        clauses.append(f"t.content_type IN ('{_VISIBLE_TYPES}')")
+
+    if country and country != "all":
+        if country.upper() == "SA":
+            clauses.append("(t.is_saudi = 1 OR a.country = 'SA')")
+        else:
+            clauses.append("a.country = ?")
+            params.append(country.upper())
+
+    if category and category != "all":
         clauses.append("t.fraud_category = ?")
         params.append(category)
-    if source:
+
+    if source and source != "all":
         clauses.append("(a.source_code = ? OR a.source = ?)")
         params += [source, source]
-    if bank:
+
+    if bank and bank != "all":
         clauses.append("t.bank_relevance = ?")
         params.append(bank)
+
     if q:
-        clauses.append("(t.title LIKE ? OR t.description LIKE ? OR a.headline LIKE ?)")
-        params += [f"%{q}%"] * 3
+        clauses.append("(t.title LIKE ? OR t.description LIKE ? OR a.headline LIKE ? OR t.fraud_category LIKE ? OR t.fraud_category_ar LIKE ? OR t.channels LIKE ?)")
+        params += [f"%{q}%"] * 6
+
     if date_from:
         clauses.append("a.published_at >= ?")
         params.append(date_from)
+
     if date_to:
         clauses.append("a.published_at <= ?")
         params.append(date_to + "T23:59:59" if len(date_to) == 10 else date_to)
-    return " AND ".join(clauses), params
+
+    return (" AND ".join(clauses) if clauses else "1=1"), params
 
 
 @router.get("/overview")
@@ -186,12 +216,13 @@ def news(
     bank_relevance: Optional[str] = Query(None, pattern="^(high|medium|low)$"),
     content_type: Optional[str] = Query(
         None, pattern="^(confirmed_incident|reported_incident|fraud_warning|awareness_campaign|general_cybersecurity|unrelated)$"),
+    scope: str = Query("saudi", pattern="^(saudi|global|all)$"),
+    country: Optional[str] = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ) -> Dict[str, Any]:
-    """Articles. By default only fraud-relevant content types; general_cybersecurity / unrelated
-    are stored but only returned when requested explicitly via ``content_type``."""
-    where, params = _where(category, source, q, date_from, date_to, bank_relevance, content_type)
+    """Articles across Saudi or Global scope. By default only fraud-relevant content types."""
+    where, params = _where(category, source, q, date_from, date_to, bank_relevance, content_type, scope=scope, country=country)
     con = get_db()
     try:
         total = con.execute(
@@ -206,15 +237,40 @@ def news(
             "items": [_item(r) for r in rows]}
 
 
+@router.get("/countries")
+def fraud_countries(scope: str = Query("all", pattern="^(saudi|global|all)$")) -> Dict[str, Any]:
+    """List countries having fraud intelligence records."""
+    con = get_db()
+    try:
+        where = f"t.fraud_category IS NOT NULL AND t.content_type IN ('{_VISIBLE_TYPES}')"
+        if scope == "saudi":
+            where += " AND t.is_saudi = 1"
+        elif scope == "global":
+            where += " AND (t.is_saudi = 0 OR t.is_saudi IS NULL)"
+        rows = con.execute(
+            f"""
+            SELECT COALESCE(NULLIF(a.country, ''), CASE WHEN t.is_saudi=1 THEN 'SA' ELSE 'Global' END) AS country,
+                   COUNT(*) as count
+            FROM threat_intel t JOIN articles a ON a.id = t.article_id
+            WHERE {where}
+            GROUP BY country
+            ORDER BY count DESC
+            """
+        ).fetchall()
+    finally:
+        con.close()
+    return {"countries": [{"country": r["country"], "count": r["count"]} for r in rows if r["country"]]}
+
+
 @router.get("/news/{threat_id}")
 def news_detail(threat_id: int) -> Dict[str, Any]:
     con = get_db()
     try:
-        r = con.execute(f"{_SELECT} WHERE t.id = ? AND {_ANY_SAUDI_WHERE}", (threat_id,)).fetchone()
+        r = con.execute(f"{_SELECT} WHERE t.id = ?", (threat_id,)).fetchone()
     finally:
         con.close()
     if not r:
-        raise HTTPException(status_code=404, detail="Saudi fraud item not found")
+        raise HTTPException(status_code=404, detail="Fraud item not found")
     return _item(r, detail=True)
 
 

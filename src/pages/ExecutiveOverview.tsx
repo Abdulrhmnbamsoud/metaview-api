@@ -338,7 +338,7 @@ export const ExecutiveOverview: React.FC = () => {
   };
 
   if (loading && !ov) {
-    return <LoadingBlock label="جارٍ تحميل لوحة الاستخبارات والرصد المباشر…" />;
+    return <LoadingBlock label="جارٍ تحميل لوحة ميتا فيو والرصد المباشر…" />;
   }
 
   if (error && !ov) {
@@ -912,7 +912,7 @@ WHERE t.channel IN ('IPM_SARIE', 'ATM_WITHDRAWAL')
                 ) : (
                   <div className="p-3.5 rounded-xl bg-stone-50 dark:bg-slate-900/60 border border-stone-200/70 dark:border-slate-800 flex items-center justify-between text-xs">
                     <span className="text-stone-600 dark:text-slate-300">
-                      رصد آلي معتمد من قنوات الاستخبارات المفتوحة.
+                      رصد آلي معتمد من قنوات ميتا فيو المفتوحة.
                     </span>
                     <button
                       onClick={() =>
@@ -933,7 +933,7 @@ WHERE t.channel IN ('IPM_SARIE', 'ATM_WITHDRAWAL')
             </div>
           ) : (
             <div className="p-12 text-center bg-white dark:bg-[#0f172a] rounded-2xl border border-stone-200/80 dark:border-slate-800 text-stone-400 text-xs">
-              اختر حادثة من القائمة لعرض ملف الاستخبارات المباشر.
+              اختر حادثة من القائمة لعرض ملف ميتا فيو المباشر.
             </div>
           )}
         </div>
