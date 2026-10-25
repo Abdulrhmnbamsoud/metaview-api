@@ -19,8 +19,16 @@ import {
   X,
   User,
   Activity,
+  Briefcase,
+  Users,
+  LogOut,
+  ChevronDown,
+  Shield,
+  Check,
 } from 'lucide-react';
 import { apiService, getArabicOnly, setArabicOnly } from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import { UserRole } from '../types/auth';
 import { HealthStatus } from '../types';
 import { SaudiOverview } from '../types/saudi';
 import { getStoredTheme, applyTheme, Theme } from '../utils/theme';
@@ -41,7 +49,9 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     time: '',
   });
   const [overview, setOverview] = useState<SaudiOverview | null>(null);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
 
+  const { user, role, can, logout, switchPersona } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -80,12 +90,20 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   const isOnline = health.status !== 'offline' && health.status !== 'checking';
 
-  // 4 Primary destinations
+  // Dynamic Navigation based on RBAC Least Privilege
   const primaryNav = [
     { to: '/', label: 'الرئيسية', icon: Home, exact: true },
     { to: '/explore', label: 'الاستكشاف', icon: Compass },
     { to: '/rules', label: 'قواعد الكشف', icon: ListChecks },
-    { to: '/system', label: 'المصادر والنظام', icon: Server },
+    ...(can('rule.create') || can('incident.annotate') || role === 'analyst' || role === 'admin'
+      ? [{ to: '/workspace', label: 'مساحة العمل', icon: Briefcase }]
+      : []),
+    ...(can('source.manage') || role === 'admin'
+      ? [{ to: '/system', label: 'المصادر والنظام', icon: Server }]
+      : []),
+    ...(can('team.manage') || role === 'admin'
+      ? [{ to: '/team', label: 'إدارة الفريق', icon: Users }]
+      : []),
   ];
 
   // Focus areas (مناطق التركيز)
@@ -241,9 +259,108 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-stone-600" />}
               </button>
 
-              {/* Profile Avatar */}
-              <div className="w-8 h-8 rounded-full bg-stone-200 dark:bg-slate-700 flex items-center justify-center text-stone-600 dark:text-slate-300">
-                <User className="w-4 h-4" />
+              {/* User Profile & Persona Switcher */}
+              <div className="relative">
+                {user ? (
+                  <button
+                    onClick={() => setUserMenuOpen(!userMenuOpen)}
+                    className="flex items-center gap-2 p-1.5 pr-2.5 rounded-xl border border-stone-200 dark:border-slate-700 hover:bg-stone-50 dark:hover:bg-slate-800 transition-colors"
+                  >
+                    <div className="w-6 h-6 rounded-lg bg-blue-600 text-white flex items-center justify-center text-[10px] font-bold">
+                      {user.full_name?.charAt(0) || 'U'}
+                    </div>
+                    <div className="hidden sm:flex flex-col text-right leading-tight">
+                      <span className="text-xs font-bold text-stone-900 dark:text-white">
+                        {user.full_name}
+                      </span>
+                      <span className="text-[10px] text-blue-600 dark:text-blue-400 font-medium">
+                        {role === 'admin' ? 'مدير المنصة' : role === 'analyst' ? 'محلل استخبارات' : 'مستعرض'}
+                      </span>
+                    </div>
+                    <ChevronDown className="w-3.5 h-3.5 text-stone-400" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => navigate('/login')}
+                    className="px-3 py-1.5 rounded-xl bg-blue-600 text-white text-xs font-semibold shadow-xs hover:bg-blue-700"
+                  >
+                    تسجيل الدخول
+                  </button>
+                )}
+
+                {/* Dropdown Menu */}
+                {userMenuOpen && user && (
+                  <div className="absolute left-0 mt-2 w-64 bg-white dark:bg-[#0f172a] rounded-2xl border border-stone-200 dark:border-slate-800 shadow-xl p-2 space-y-2 z-50 text-right">
+                    <div className="p-2 border-b border-stone-100 dark:border-slate-800">
+                      <div className="text-xs font-bold text-stone-900 dark:text-white">{user.full_name}</div>
+                      <div className="text-[11px] text-stone-400 font-mono" dir="ltr">{user.email}</div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <div className="text-[10px] font-semibold text-stone-400 px-2 py-0.5">
+                        تبديل الدور للتجربة (Evaluation Switcher):
+                      </div>
+                      <button
+                        onClick={() => {
+                          switchPersona('admin');
+                          setUserMenuOpen(false);
+                        }}
+                        className={`w-full text-right px-2.5 py-1.5 rounded-xl text-xs flex items-center justify-between transition-colors ${
+                          role === 'admin'
+                            ? 'bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 font-bold'
+                            : 'hover:bg-stone-50 dark:hover:bg-slate-800 text-stone-700 dark:text-slate-300'
+                        }`}
+                      >
+                        <span>مدير المنصة (ADMIN)</span>
+                        {role === 'admin' && <Check className="w-3.5 h-3.5" />}
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          switchPersona('analyst');
+                          setUserMenuOpen(false);
+                        }}
+                        className={`w-full text-right px-2.5 py-1.5 rounded-xl text-xs flex items-center justify-between transition-colors ${
+                          role === 'analyst'
+                            ? 'bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 font-bold'
+                            : 'hover:bg-stone-50 dark:hover:bg-slate-800 text-stone-700 dark:text-slate-300'
+                        }`}
+                      >
+                        <span>محلل استخبارات (ANALYST)</span>
+                        {role === 'analyst' && <Check className="w-3.5 h-3.5" />}
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          switchPersona('viewer');
+                          setUserMenuOpen(false);
+                        }}
+                        className={`w-full text-right px-2.5 py-1.5 rounded-xl text-xs flex items-center justify-between transition-colors ${
+                          role === 'viewer'
+                            ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 font-bold'
+                            : 'hover:bg-stone-50 dark:hover:bg-slate-800 text-stone-700 dark:text-slate-300'
+                        }`}
+                      >
+                        <span>مستعرض مصرح (VIEWER)</span>
+                        {role === 'viewer' && <Check className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+
+                    <div className="pt-1 border-t border-stone-100 dark:border-slate-800">
+                      <button
+                        onClick={() => {
+                          logout();
+                          setUserMenuOpen(false);
+                          navigate('/login');
+                        }}
+                        className="w-full text-right px-2.5 py-1.5 rounded-xl text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 flex items-center gap-2 transition-colors"
+                      >
+                        <LogOut className="w-3.5 h-3.5" />
+                        <span>تسجيل الخروج</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </header>

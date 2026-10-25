@@ -30,6 +30,20 @@ import {
   MergeSuggestion,
   CountryDistributionResponse,
 } from '../types/saudi';
+import {
+  User,
+  UserRole,
+  UserStatus,
+  Invitation,
+  AuditLog,
+  AnalystNote,
+  SavedIncidentItem,
+  CustomPattern,
+  CustomRule,
+  ReviewRequest,
+  WorkspaceOverview,
+  DetectionRuleTestResult,
+} from '../types/auth';
 
 // Base URL resolution: Environment variable -> Vite Proxy (/api) -> direct localhost
 let API_BASE_URL: string;
@@ -71,6 +85,24 @@ const withLang = (query: URLSearchParams): URLSearchParams => {
   return query;
 };
 
+let _sessionToken: string | null = null;
+
+export const setSessionToken = (token: string | null) => {
+  _sessionToken = token;
+  if (token) {
+    sessionStorage.setItem('metaview_session_token', token);
+  } else {
+    sessionStorage.removeItem('metaview_session_token');
+  }
+};
+
+export const getSessionToken = (): string | null => {
+  if (!_sessionToken) {
+    _sessionToken = sessionStorage.getItem('metaview_session_token');
+  }
+  return _sessionToken;
+};
+
 interface FetchOptions extends RequestInit {
   timeoutMs?: number;
   retries?: number;
@@ -87,12 +119,19 @@ async function requestWithRetry<T>(endpoint: string, options: FetchOptions = {})
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
+      const token = getSessionToken();
+      const authHeader: Record<string, string> = {};
+      if (token) {
+        authHeader['Authorization'] = `Bearer ${token}`;
+      }
+
       const response = await fetch(url, {
         ...fetchOptions,
         signal: controller.signal,
         headers: {
           'Accept': 'application/json',
           'Content-Type': 'application/json',
+          ...authHeader,
           ...(fetchOptions.headers || {}),
         },
       });
@@ -100,13 +139,29 @@ async function requestWithRetry<T>(endpoint: string, options: FetchOptions = {})
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
+        let errorMsg = `HTTP error ${response.status}: ${response.statusText}`;
+        try {
+          const errJson = await response.json();
+          if (errJson?.detail) {
+            errorMsg = typeof errJson.detail === 'string' ? errJson.detail : JSON.stringify(errJson.detail);
+          }
+        } catch {
+          // non-json response
+        }
+        const err: any = new Error(errorMsg);
+        err.status = response.status;
+        throw err;
       }
 
       return (await response.json()) as T;
     } catch (err: any) {
       clearTimeout(timeoutId);
       lastError = err;
+
+      // Don't retry client 4xx errors
+      if (err.status && err.status >= 400 && err.status < 500) {
+        throw err;
+      }
 
       // Don't retry if aborted explicitly by user
       if (err.name === 'AbortError' && attempt === retries) {
@@ -312,6 +367,237 @@ export const apiService = {
 
   async getSaudiRuntime(): Promise<SaudiRuntime> {
     return await requestWithRetry<SaudiRuntime>('/saudi-fraud/runtime');
+  },
+
+  // --------------------------------------------------------------------------- //
+  // Authentication & Session Endpoints
+  // --------------------------------------------------------------------------- //
+  async login(payload: { email: string; password: string }): Promise<{ token: string; user: User; message: string }> {
+    const res = await requestWithRetry<{ token: string; user: User; message: string }>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    setSessionToken(res.token);
+    return res;
+  },
+
+  async logout(): Promise<{ message: string }> {
+    try {
+      const res = await requestWithRetry<{ message: string }>('/auth/logout', {
+        method: 'POST',
+      });
+      return res;
+    } finally {
+      setSessionToken(null);
+    }
+  },
+
+  async getMe(): Promise<User> {
+    return await requestWithRetry<User>('/auth/me');
+  },
+
+  async acceptInvitation(payload: { token: string; full_name: string; password: string }): Promise<{ token: string; user: User; message: string }> {
+    const res = await requestWithRetry<{ token: string; user: User; message: string }>('/auth/invitations/accept', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    setSessionToken(res.token);
+    return res;
+  },
+
+  // --------------------------------------------------------------------------- //
+  // Team Management (Admin Only)
+  // --------------------------------------------------------------------------- //
+  async getTeamMembers(): Promise<{ members: User[]; total: number }> {
+    return await requestWithRetry<{ members: User[]; total: number }>('/team/members');
+  },
+
+  async inviteMember(payload: { email: string; role: UserRole }): Promise<{
+    invitation_id: number;
+    email: string;
+    role: UserRole;
+    expires_at: string;
+    invite_token: string;
+    invite_url: string;
+    message: string;
+  }> {
+    return await requestWithRetry('/team/invite', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async getTeamInvitations(): Promise<{ invitations: Invitation[]; total: number }> {
+    return await requestWithRetry<{ invitations: Invitation[]; total: number }>('/team/invitations');
+  },
+
+  async revokeInvitation(invitationId: number): Promise<{ message: string }> {
+    return await requestWithRetry<{ message: string }>(`/team/invitations/${invitationId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  async updateMemberRole(userId: number, role: UserRole): Promise<{ message: string; user: User }> {
+    return await requestWithRetry<{ message: string; user: User }>(`/team/members/${userId}/role`, {
+      method: 'POST',
+      body: JSON.stringify({ role }),
+    });
+  },
+
+  async updateMemberStatus(userId: number, status: UserStatus): Promise<{ message: string; user: User }> {
+    return await requestWithRetry<{ message: string; user: User }>(`/team/members/${userId}/status`, {
+      method: 'POST',
+      body: JSON.stringify({ status }),
+    });
+  },
+
+  async getTeamAuditLogs(limit: number = 50): Promise<{ logs: AuditLog[]; total: number }> {
+    return await requestWithRetry<{ logs: AuditLog[]; total: number }>(`/team/audit-logs?limit=${limit}`);
+  },
+
+  async getRolesMatrix(): Promise<Record<string, any>> {
+    return await requestWithRetry<Record<string, any>>('/team/roles-matrix');
+  },
+
+  // --------------------------------------------------------------------------- //
+  // Incident Notes & Collaboration
+  // --------------------------------------------------------------------------- //
+  async getIncidentNotes(incidentId: number): Promise<{ incident_id: number; notes: AnalystNote[]; total: number }> {
+    return await requestWithRetry<{ incident_id: number; notes: AnalystNote[]; total: number }>(`/incidents/${incidentId}/notes`);
+  },
+
+  async addIncidentNote(incidentId: number, payload: { note_type: string; content: string }): Promise<AnalystNote> {
+    return await requestWithRetry<AnalystNote>(`/incidents/${incidentId}/notes`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async deleteIncidentNote(incidentId: number, noteId: number): Promise<{ message: string }> {
+    return await requestWithRetry<{ message: string }>(`/incidents/${incidentId}/notes/${noteId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  // --------------------------------------------------------------------------- //
+  // Saved Incidents (Analyst Watchlist)
+  // --------------------------------------------------------------------------- //
+  async getSavedIncidents(): Promise<{ items: SavedIncidentItem[]; total: number }> {
+    return await requestWithRetry<{ items: SavedIncidentItem[]; total: number }>('/workspace/saved-incidents');
+  },
+
+  async saveIncident(incidentId: number, notes?: string): Promise<{ message: string; saved_id: number }> {
+    return await requestWithRetry<{ message: string; saved_id: number }>('/workspace/saved-incidents', {
+      method: 'POST',
+      body: JSON.stringify({ incident_id: incidentId, notes: notes || '' }),
+    });
+  },
+
+  async unsaveIncident(incidentId: number): Promise<{ message: string }> {
+    return await requestWithRetry<{ message: string }>(`/workspace/saved-incidents/${incidentId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  // --------------------------------------------------------------------------- //
+  // Custom Patterns Lifecycle
+  // --------------------------------------------------------------------------- //
+  async getWorkspacePatterns(): Promise<{ patterns: CustomPattern[]; total: number }> {
+    return await requestWithRetry<{ patterns: CustomPattern[]; total: number }>('/workspace/patterns');
+  },
+
+  async createPatternDraft(payload: {
+    key: string;
+    label_ar: string;
+    description?: string;
+    modus_operandi?: string;
+    channels?: string[];
+    target_groups?: string[];
+    banking_relevance?: string;
+    linked_incident_ids?: number[];
+    hypothesis?: string;
+    evidence_summary?: string;
+  }): Promise<{ id: number; key: string; status: string; message: string }> {
+    return await requestWithRetry('/workspace/patterns', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async submitPatternForReview(key: string, notes?: string): Promise<{ key: string; status: string; message: string }> {
+    return await requestWithRetry(`/workspace/patterns/${encodeURIComponent(key)}/submit`, {
+      method: 'POST',
+      body: JSON.stringify({ notes: notes || '' }),
+    });
+  },
+
+  async decidePatternReview(key: string, decision: 'approved' | 'changes_requested' | 'rejected', reviewNotes: string): Promise<{ key: string; status: string; message: string }> {
+    return await requestWithRetry(`/workspace/patterns/${encodeURIComponent(key)}/decide`, {
+      method: 'POST',
+      body: JSON.stringify({ decision, review_notes: reviewNotes }),
+    });
+  },
+
+  // --------------------------------------------------------------------------- //
+  // Custom Rules Lifecycle
+  // --------------------------------------------------------------------------- //
+  async getWorkspaceRules(): Promise<{ rules: CustomRule[]; total: number }> {
+    return await requestWithRetry<{ rules: CustomRule[]; total: number }>('/workspace/rules');
+  },
+
+  async createRuleDraft(payload: {
+    rule_id: string;
+    name: string;
+    hypothesis: string;
+    logic: string;
+    pattern_key?: string;
+    required_data?: string[];
+    exceptions?: any;
+    false_positive_risk?: string;
+  }): Promise<{ id: number; rule_id: string; status: string; message: string }> {
+    return await requestWithRetry('/workspace/rules', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async testDetectionRule(ruleId: string): Promise<{ rule_id: string; test_result: DetectionRuleTestResult; message: string }> {
+    return await requestWithRetry(`/workspace/rules/${encodeURIComponent(ruleId)}/test`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+  },
+
+  async submitRuleForReview(ruleId: string, notes?: string): Promise<{ rule_id: string; status: string; message: string }> {
+    return await requestWithRetry(`/workspace/rules/${encodeURIComponent(ruleId)}/submit`, {
+      method: 'POST',
+      body: JSON.stringify({ notes: notes || '' }),
+    });
+  },
+
+  async decideRuleReview(ruleId: string, decision: 'approved' | 'changes_requested' | 'rejected', reviewNotes: string): Promise<{ rule_id: string; status: string; message: string }> {
+    return await requestWithRetry(`/workspace/rules/${encodeURIComponent(ruleId)}/decide`, {
+      method: 'POST',
+      body: JSON.stringify({ decision, review_notes: reviewNotes }),
+    });
+  },
+
+  // --------------------------------------------------------------------------- //
+  // Governance Review Requests & Workspace Overview
+  // --------------------------------------------------------------------------- //
+  async getPendingReviews(status: string = 'pending'): Promise<{ reviews: ReviewRequest[]; total: number }> {
+    return await requestWithRetry<{ reviews: ReviewRequest[]; total: number }>(`/governance/reviews?status=${encodeURIComponent(status)}`);
+  },
+
+  async getWorkspaceOverview(): Promise<WorkspaceOverview> {
+    return await requestWithRetry<WorkspaceOverview>('/workspace/overview');
+  },
+
+  async decideMergeSuggestion(suggestionId: number, decision: 'approved' | 'rejected', reason: string, reviewer?: string): Promise<any> {
+    return await requestWithRetry(`/saudi-fraud/incidents/merge-suggestions/${suggestionId}/decision`, {
+      method: 'POST',
+      body: JSON.stringify({ decision, reason, reviewer: reviewer || '' }),
+    });
   },
 
   /**

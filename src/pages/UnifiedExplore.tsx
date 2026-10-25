@@ -53,6 +53,7 @@ interface UnifiedItem {
   country?: string | null;
   sourceCount: number;
   sourceName?: string | null;
+  sourceCode?: string | null;
   domain?: string | null;
   url?: string | null;
   fraudCategory?: string | null;
@@ -73,6 +74,7 @@ export const UnifiedExplore: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState(params.get('q') || '');
   const [scope, setScope] = useState<Scope>((params.get('scope') as Scope) || 'saudi');
   const [selectedCountry, setSelectedCountry] = useState<string>(params.get('country') || 'all');
+  const [selectedSource, setSelectedSource] = useState<string>(params.get('source') || 'all');
   const [itemType, setItemType] = useState<ItemType>((params.get('type') as ItemType) || 'all');
   const [bankRel, setBankRel] = useState<BankRel>((params.get('bank') as BankRel) || 'all');
   const [sortBy, setSortBy] = useState<SortOption>('newest');
@@ -94,6 +96,7 @@ export const UnifiedExplore: React.FC = () => {
     const q = params.get('q') || '';
     const sc = (params.get('scope') as Scope) || 'saudi';
     const c = params.get('country') || 'all';
+    const s = params.get('source') || 'all';
     const ty = (params.get('type') as ItemType) || 'all';
     const bk = (params.get('bank') as BankRel) || 'all';
     const p = Number(params.get('p')) || 1;
@@ -103,6 +106,7 @@ export const UnifiedExplore: React.FC = () => {
     if (q !== searchQuery) setSearchQuery(q);
     if (sc !== scope) setScope(sc);
     if (c !== selectedCountry) setSelectedCountry(c);
+    if (s !== selectedSource) setSelectedSource(s);
     if (ty !== itemType) setItemType(ty);
     if (bk !== bankRel) setBankRel(bk);
     if (p !== currentPage) setCurrentPage(p);
@@ -132,6 +136,7 @@ export const UnifiedExplore: React.FC = () => {
       q: string;
       scope: Scope;
       country: string;
+      source: string;
       type: ItemType;
       bank: BankRel;
       p: number;
@@ -140,6 +145,7 @@ export const UnifiedExplore: React.FC = () => {
     const nextQ = updates.q !== undefined ? updates.q : searchQuery;
     const nextScope = updates.scope !== undefined ? updates.scope : scope;
     const nextCountry = updates.country !== undefined ? updates.country : selectedCountry;
+    const nextSource = updates.source !== undefined ? updates.source : selectedSource;
     const nextType = updates.type !== undefined ? updates.type : itemType;
     const nextBank = updates.bank !== undefined ? updates.bank : bankRel;
     const nextP = updates.p !== undefined ? updates.p : 1;
@@ -148,6 +154,7 @@ export const UnifiedExplore: React.FC = () => {
     if (nextQ.trim()) p.set('q', nextQ.trim());
     if (nextScope && nextScope !== 'saudi') p.set('scope', nextScope);
     if (nextCountry && nextCountry !== 'all') p.set('country', nextCountry);
+    if (nextSource && nextSource !== 'all') p.set('source', nextSource);
     if (nextType && nextType !== 'all') p.set('type', nextType);
     if (nextBank && nextBank !== 'all') p.set('bank', nextBank);
     if (nextP > 1) p.set('p', String(nextP));
@@ -311,6 +318,7 @@ export const UnifiedExplore: React.FC = () => {
         country: n.country || (n.is_saudi ? 'SA' : 'Global'),
         sourceCount: 1,
         sourceName: n.source,
+        sourceCode: n.source_code,
         domain: n.domain,
         url: n.original_url,
         fraudCategory: n.fraud_category,
@@ -324,6 +332,34 @@ export const UnifiedExplore: React.FC = () => {
     let filtered = list;
     if (bankRel !== 'all') {
       filtered = filtered.filter((i) => i.bankRelevance === bankRel);
+    }
+
+    // Apply Source filter
+    if (selectedSource !== 'all') {
+      filtered = filtered.filter((i) => {
+        if (i.sourceCode === selectedSource) return true;
+        if (selectedSource === 'x_thehackersnews') {
+          return (
+            i.domain === 'thehackernews.com' ||
+            (i.sourceName && i.sourceName.toLowerCase().includes('hacker news')) ||
+            (i.url && i.url.toLowerCase().includes('thehackernews'))
+          );
+        }
+        if (selectedSource === 'x_k_h_almuzaini') {
+          return (
+            (i.sourceName && i.sourceName.includes('المزيني')) ||
+            (i.url && i.url.includes('AlMuzaini'))
+          );
+        }
+        return (
+          (i.sourceName && i.sourceName.toLowerCase().includes(selectedSource.toLowerCase())) ||
+          (i.rawIncident?.articles?.some(
+            (a) =>
+              a.source_code === selectedSource ||
+              (a.source && a.source.toLowerCase().includes(selectedSource.toLowerCase()))
+          ))
+        );
+      });
     }
 
     // Sorting
@@ -341,7 +377,7 @@ export const UnifiedExplore: React.FC = () => {
       // default: newest
       return (b.date || '').localeCompare(a.date || '');
     });
-  }, [scope, itemType, bankRel, sortBy, selectedCountry, incidents, news, patterns]);
+  }, [scope, itemType, bankRel, sortBy, selectedCountry, selectedSource, incidents, news, patterns]);
 
   // Pagination calculation
   const totalPages = Math.max(1, Math.ceil(unifiedItems.length / ITEMS_PER_PAGE));
@@ -546,6 +582,28 @@ export const UnifiedExplore: React.FC = () => {
               </div>
             )}
 
+            {/* Source filter */}
+            <div className="flex items-center gap-1">
+              <Filter className="w-3.5 h-3.5 text-stone-400" />
+              <select
+                value={selectedSource}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSelectedSource(val);
+                  updateFilter({ source: val, p: 1 });
+                }}
+                className="bg-stone-50 dark:bg-slate-900 border border-stone-200 dark:border-slate-700 rounded-lg px-2.5 py-1 text-xs text-stone-700 dark:text-slate-300 outline-none"
+              >
+                <option value="all">كافة المصادر</option>
+                <option value="x_thehackersnews">The Hacker News (@thehackersnews)</option>
+                <option value="x_k_h_almuzaini">د. خالد بن حمد المزيني (@K_H_AlMuzaini)</option>
+                <option value="spa">واس (SPA)</option>
+                <option value="sabq">صحيفة سبق</option>
+                <option value="okaz">صحيفة عكاظ</option>
+                <option value="saudigazette">Saudi Gazette</option>
+              </select>
+            </div>
+
             {/* Banking relevance filter */}
             <select
               value={bankRel}
@@ -688,6 +746,14 @@ export const UnifiedExplore: React.FC = () => {
                         {item.needsReview && (
                           <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
                             تنتظر مراجعة
+                          </span>
+                        )}
+
+                        {/* X Platform Badge */}
+                        {(item.sourceCode?.startsWith('x_') || item.sourceName?.includes('@')) && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono bg-black text-white dark:bg-stone-800 dark:text-stone-200">
+                            <span className="font-bold">𝕏</span>
+                            <span>{item.sourceCode === 'x_k_h_almuzaini' ? '@K_H_AlMuzaini' : '@thehackersnews'}</span>
                           </span>
                         )}
                       </div>

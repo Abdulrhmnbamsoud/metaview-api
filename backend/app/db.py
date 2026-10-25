@@ -249,6 +249,10 @@ def init_db() -> None:
     _ensure_column(con, "articles", "source_code", "TEXT")
     _ensure_column(con, "articles", "language", "TEXT")
 
+    # Source registry extra metadata
+    _ensure_column(con, "source_registry", "handle", "TEXT")
+    _ensure_column(con, "source_registry", "notes", "TEXT")
+
     # Fraud intelligence fields on the existing threat_intel table
     _ensure_column(con, "threat_intel", "fraud_category", "TEXT")
     _ensure_column(con, "threat_intel", "fraud_category_ar", "TEXT")
@@ -342,8 +346,79 @@ def init_db() -> None:
             [(detect_language(r["headline"], r["article_summary"]), r["id"]) for r in untagged],
         )
 
+    seed_source_registry(con)
+
     con.commit()
     con.close()
+
+
+def seed_source_registry(con: sqlite3.Connection) -> None:
+    """Populate source_registry with Saudi sources and X social sources."""
+    cur = con.cursor()
+    # 1. Saudi sources
+    try:
+        from .saudi_sources import SAUDI_SOURCES
+        for s in SAUDI_SOURCES:
+            cur.execute(
+                """
+                INSERT INTO source_registry (code, name, url, kind, country, lang, official, enabled, notes)
+                VALUES (?, ?, ?, ?, 'SA', ?, ?, ?, ?)
+                ON CONFLICT(code) DO UPDATE SET
+                    name=excluded.name, url=excluded.url, kind=excluded.kind,
+                    lang=excluded.lang, official=excluded.official, notes=excluded.notes
+                """,
+                (s.code, s.name, s.url, s.kind, s.lang, int(s.official), int(s.enabled), s.notes),
+            )
+    except Exception:
+        pass
+
+    # 2. X social accounts
+    try:
+        from .x_sources import X_SOURCES, get_x_bearer_token
+        has_token = bool(get_x_bearer_token())
+        for x in X_SOURCES:
+            initial_status = "requires_integration" if (not has_token and not x.publisher_feed) else "ok"
+            initial_error = (
+                "يتطلب تكامل X API (Requires Integration - X_BEARER_TOKEN) للوصول المصرح إلى المنشورات."
+                if (not has_token and not x.publisher_feed)
+                else None
+            )
+            cur.execute("SELECT code, last_status FROM source_registry WHERE code = ?", (x.code,))
+            existing = cur.fetchone()
+            if not existing:
+                cur.execute(
+                    """
+                    INSERT INTO source_registry (
+                        code, name, url, kind, country, lang, official, enabled, handle, notes, last_status, last_error
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)
+                    """,
+                    (x.code, x.name, x.url, x.kind, x.country, x.lang, int(x.official), x.handle, x.notes, initial_status, initial_error),
+                )
+            else:
+                cur.execute(
+                    """
+                    UPDATE source_registry
+                    SET name = ?, url = ?, kind = ?, country = ?, lang = ?, official = ?, handle = ?, notes = ?
+                    WHERE code = ?
+                    """,
+                    (x.name, x.url, x.kind, x.country, x.lang, int(x.official), x.handle, x.notes, x.code),
+                )
+    except Exception:
+        pass
+
+    # Link existing articles to source_code if not yet set
+    try:
+        cur.execute(
+            """
+            UPDATE articles
+            SET source_code = 'x_thehackersnews'
+            WHERE (source_code IS NULL OR source_code = '')
+              AND (domain = 'thehackernews.com' OR url LIKE '%thehackernews%')
+            """
+        )
+    except Exception:
+        pass
+
 
 # Auto-initialize database on import
 init_db()

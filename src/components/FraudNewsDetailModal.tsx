@@ -217,23 +217,43 @@ export const FraudNewsDetailModal: React.FC<FraudNewsDetailModalProps> = ({
             </div>
           )}
 
-          {/* Action button: Original URL */}
-          {item.original_url && (
-            <div className="pt-2 flex items-center justify-between">
-              <a
-                href={item.original_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-700 text-white font-medium text-xs shadow-sm transition-colors"
-              >
-                <span>فتح المقال والمصدر الأصلي</span>
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
-              <span className="text-xs text-stone-400">
-                المصدر الأصلي: {item.source}
-              </span>
+          {/* Action buttons: Original URL & X post link */}
+          <div className="pt-2 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {item.original_url && (
+                <a
+                  href={item.original_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-700 text-white font-medium text-xs shadow-sm transition-colors"
+                >
+                  <span>فتح المقال الأصلي</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              )}
+              {(item.source_code?.startsWith('x_') || item.source?.includes('@')) && (
+                <a
+                  href={
+                    item.source_code === 'x_k_h_almuzaini'
+                      ? 'https://x.com/K_H_AlMuzaini'
+                      : 'https://x.com/thehackersnews'
+                  }
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-black hover:bg-stone-800 text-white font-medium text-xs shadow-sm transition-colors dark:bg-stone-800 dark:hover:bg-stone-700"
+                >
+                  <span className="font-bold">𝕏</span>
+                  <span>
+                    حساب {item.source_code === 'x_k_h_almuzaini' ? '@K_H_AlMuzaini' : '@thehackersnews'}
+                  </span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              )}
             </div>
-          )}
+            <span className="text-xs text-stone-400 font-mono">
+              المصدر: {item.source}
+            </span>
+          </div>
         </div>
       </div>
     </div>

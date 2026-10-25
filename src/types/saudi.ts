@@ -103,6 +103,9 @@ export interface SaudiSourceInfo {
   name: string;
   url: string;
   kind: string;
+  country?: string;
+  handle?: string;
+  notes?: string;
   official: number;
   last_status: string | null;
   last_success_at: string | null;

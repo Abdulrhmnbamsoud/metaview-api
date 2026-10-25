@@ -76,6 +76,15 @@ export const SourcesAndSystem: React.FC = () => {
   if (loading && !runtime) return <LoadingBlock label="جارٍ تحميل معلومات المصادر والنظام…" />;
   if (error && !runtime) return <ErrorBlock message={error} onRetry={load} />;
 
+  const [sourceKindFilter, setSourceKindFilter] = useState<'all' | 'x_social' | 'official' | 'news'>('all');
+
+  const filteredSources = sources.filter((s) => {
+    if (sourceKindFilter === 'x_social') return s.kind === 'x_social';
+    if (sourceKindFilter === 'official') return s.official === 1;
+    if (sourceKindFilter === 'news') return s.kind !== 'x_social' && s.official !== 1;
+    return true;
+  });
+
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
       {/* Header */}
@@ -117,55 +126,121 @@ export const SourcesAndSystem: React.FC = () => {
       {/* TAB 1: Sources */}
       {tab === 'sources' && (
         <div className="space-y-4">
+          {/* Sub-filter chips */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-1.5 text-xs">
+              {[
+                { key: 'all', label: `كافة المصادر (${sources.length})` },
+                { key: 'x_social', label: `منصات X والتواصل (${sources.filter((s) => s.kind === 'x_social').length})` },
+                { key: 'official', label: `جهات رسمية (${sources.filter((s) => s.official === 1).length})` },
+                { key: 'news', label: `صحف وموجزات (${sources.filter((s) => s.kind !== 'x_social' && s.official !== 1).length})` },
+              ].map((f) => (
+                <button
+                  key={f.key}
+                  onClick={() => setSourceKindFilter(f.key as any)}
+                  className={`px-3 py-1 rounded-lg border text-xs font-medium transition-colors ${
+                    sourceKindFilter === f.key
+                      ? 'bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 border-sky-300 dark:border-sky-800 font-semibold'
+                      : 'border-stone-200 dark:border-slate-800 text-stone-600 dark:text-slate-400 hover:text-stone-900 dark:hover:text-stone-200'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+
+            <span className="text-xs text-stone-400 font-mono">
+              إجمالي {filteredSources.length} مصدر
+            </span>
+          </div>
+
           <div className="panel overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-right text-xs">
                 <thead>
                   <tr className="bg-stone-50 dark:bg-slate-900/60 text-stone-500 dark:text-slate-400 border-b border-stone-200 dark:border-slate-800 font-mono text-[11px]">
-                    <th className="py-3 px-4">اسم المصدر</th>
+                    <th className="py-3 px-4">اسم المصدر والمعرّف</th>
                     <th className="py-3 px-4">النوع</th>
-                    <th className="py-3 px-4">الحالة الأخيرة</th>
+                    <th className="py-3 px-4">نطاق التغطية</th>
+                    <th className="py-3 px-4">حالة الاتصال</th>
                     <th className="py-3 px-4">آخر جلب ناجح</th>
                     <th className="py-3 px-4">المقالات المخزنة</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-stone-100 dark:divide-slate-800/60">
-                  {sources.map((s) => {
+                  {filteredSources.map((s) => {
+                    const isX = s.kind === 'x_social';
+                    const isReqInt = s.last_status === 'requires_integration';
                     const ok = s.last_status === 'ok';
                     const never = !s.last_status;
                     return (
                       <tr key={s.code} className="hover:bg-stone-50/60 dark:hover:bg-slate-800/40">
                         <td className="py-3 px-4 font-semibold text-stone-900 dark:text-stone-100">
-                          <div className="flex items-center gap-1.5">
-                            <span>{s.name}</span>
-                            <a
-                              href={s.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-stone-400 hover:text-sky-600 p-0.5"
-                            >
-                              <ExternalLink className="w-3 h-3" />
-                            </a>
+                          <div className="flex flex-col gap-0.5">
+                            <div className="flex items-center gap-1.5">
+                              <span>{s.name}</span>
+                              <a
+                                href={s.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-stone-400 hover:text-sky-600 p-0.5"
+                                title="فتح الرابط الأصلي للمصدر"
+                              >
+                                <ExternalLink className="w-3 h-3" />
+                              </a>
+                            </div>
+                            {s.handle && (
+                              <span className="text-[11px] font-mono text-stone-500 dark:text-slate-400 font-normal" dir="ltr">
+                                {s.handle}
+                              </span>
+                            )}
                           </div>
                         </td>
                         <td className="py-3 px-4">
-                          <Chip tone={s.official ? 'brand' : 'plain'}>
-                            {s.official ? 'رسمي حكومي' : 'صحيفة إعلامية'}
-                          </Chip>
+                          {isX ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-black text-white dark:bg-stone-800 dark:text-stone-200">
+                              <span className="font-bold">𝕏</span>
+                              <span>شبكات اجتماعية</span>
+                            </span>
+                          ) : (
+                            <Chip tone={s.official ? 'brand' : 'plain'}>
+                              {s.official ? 'رسمي حكومي' : 'صحيفة إعلامية'}
+                            </Chip>
+                          )}
                         </td>
                         <td className="py-3 px-4">
-                          {never ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-mono text-stone-600 dark:text-slate-300">
+                            {s.country === 'SA' ? '🇸🇦 السعودية' : '🌐 العالمي'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          {isReqInt ? (
+                            <div className="space-y-0.5">
+                              <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400 font-mono font-medium text-[11px]">
+                                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                                يتطلب ربط API (Requires Integration)
+                              </span>
+                              <p className="text-[10px] text-stone-500 dark:text-slate-400 max-w-xs leading-tight">
+                                {s.last_error || 'يتطلب إعداد X API Bearer Token للوصول المصرح.'}
+                              </p>
+                            </div>
+                          ) : never ? (
                             <span className="text-stone-400 text-[11px] font-mono">لم يُجلب</span>
                           ) : ok ? (
-                            <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-mono font-medium">
+                            <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-mono font-medium text-[11px]">
                               <CheckCircle2 className="w-3.5 h-3.5" />
                               يعمل (OK)
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 text-red-600 dark:text-red-400 font-mono font-medium">
-                              <AlertTriangle className="w-3.5 h-3.5" />
-                              تعذر الجلب
-                            </span>
+                            <div className="space-y-0.5">
+                              <span className="inline-flex items-center gap-1 text-red-600 dark:text-red-400 font-mono font-medium text-[11px]">
+                                <AlertTriangle className="w-3.5 h-3.5" />
+                                تعذر الجلب
+                              </span>
+                              {s.last_error && (
+                                <p className="text-[10px] text-red-500 max-w-xs leading-tight">{s.last_error}</p>
+                              )}
+                            </div>
                           )}
                         </td>
                         <td className="py-3 px-4 font-mono text-stone-500 dark:text-slate-400">

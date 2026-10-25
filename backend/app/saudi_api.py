@@ -17,6 +17,7 @@ from .config import ADMIN_TOKEN, DATA_DIR, DB_PATH, SAUDI_AUTO_INGEST, SAUDI_ING
 from .db import get_db
 from . import incidents, saudi_ingest
 from .fraud_intel import CATEGORY_AR, CATEGORY_ORDER, CONTENT_TYPE_AR, VISIBLE_CONTENT_TYPES
+from .auth import validate_session
 
 router = APIRouter(prefix="/saudi-fraud", tags=["saudi-fraud-intelligence"])
 
@@ -326,12 +327,22 @@ def incidents_list(
             "items": [incidents.incident_to_dict(r) for r in rows]}
 
 
-def _check_admin(x_admin_token: Optional[str]) -> None:
-    """Fail-closed admin gate shared by every state-changing endpoint."""
-    if not ADMIN_TOKEN:
+def _check_admin(
+    x_admin_token: Optional[str] = None,
+    authorization: Optional[str] = None,
+    required_permission: str = "incident.approve_merge",
+) -> Optional[Any]:
+    """Admin gate: accepts legacy X-Admin-Token or Bearer session token with required permission."""
+    if x_admin_token and ADMIN_TOKEN and hmac.compare_digest(x_admin_token.encode(), ADMIN_TOKEN.encode()):
+        return None
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.split("Bearer ", 1)[1].strip()
+        user = validate_session(token)
+        if user and user.can(required_permission):
+            return user
+    if not ADMIN_TOKEN and not authorization:
         raise HTTPException(status_code=503, detail="Disabled: ADMIN_TOKEN is not configured")
-    if not x_admin_token or not hmac.compare_digest(x_admin_token.encode(), ADMIN_TOKEN.encode()):
-        raise HTTPException(status_code=401, detail="Invalid admin token")
+    raise HTTPException(status_code=401, detail="Invalid admin token or missing permission")
 
 
 @router.get("/incidents/merge-suggestions")
@@ -354,11 +365,17 @@ class MergeDecision(BaseModel):
 
 
 @router.post("/incidents/merge-suggestions/{suggestion_id}/decision")
-def merge_decision(suggestion_id: int, body: MergeDecision, x_admin_token: Optional[str] = Header(None)) -> Dict[str, Any]:
+def merge_decision(
+    suggestion_id: int,
+    body: MergeDecision,
+    x_admin_token: Optional[str] = Header(None),
+    authorization: Optional[str] = Header(None),
+) -> Dict[str, Any]:
     """Record a reviewer decision (admin only). The incident set is rebuilt; no article is ever deleted."""
-    _check_admin(x_admin_token)
+    user = _check_admin(x_admin_token, authorization, required_permission="incident.approve_merge")
+    reviewer_name = body.reviewer or (user.full_name if user else "Admin")
     try:
-        return incidents.decide_suggestion(suggestion_id, body.decision, body.reviewer, body.reason)
+        return incidents.decide_suggestion(suggestion_id, body.decision, reviewer_name, body.reason)
     except LookupError:
         raise HTTPException(status_code=404, detail="Merge suggestion not found")
 
@@ -395,10 +412,40 @@ def incident_detail(incident_id: int) -> Dict[str, Any]:
 
 @router.get("/patterns")
 def patterns() -> Dict[str, Any]:
-    """Fraud patterns = methods stated in the sources, aggregated over incidents (warnings = weaker support)."""
+    """Fraud patterns = methods stated in the sources + approved analyst patterns (drafts excluded)."""
     con = get_db()
     try:
         pats = incidents.build_patterns(con)
+        # Append approved analyst custom patterns (viewer safe)
+        try:
+            approved_custom = con.execute("""
+                SELECT cp.*, u.full_name as author_name, r.full_name as reviewer_name
+                FROM custom_patterns cp
+                LEFT JOIN users u ON cp.author_id = u.id
+                LEFT JOIN users r ON cp.reviewed_by = r.id
+                WHERE cp.status = 'approved'
+            """).fetchall()
+            for row in approved_custom:
+                pats.append({
+                    "pattern": row["key"],
+                    "pattern_ar": row["label_ar"],
+                    "category": "custom",
+                    "category_ar": "نمط معتمد من المحللين",
+                    "description": row["description"] or "",
+                    "modus_operandi": row["modus_operandi"] or "",
+                    "channels": _loads(row["channels"]) or [],
+                    "target_groups": _loads(row["target_groups"]) or [],
+                    "banking_relevance": row["banking_relevance"] or "",
+                    "linked_incidents_count": len(_loads(row["linked_incident_ids"]) or []),
+                    "status": "approved",
+                    "author": row["author_name"],
+                    "approved_by": row["reviewer_name"],
+                    "approved_at": row["approved_at"],
+                    "is_custom": True,
+                })
+        except Exception:
+            pass  # If table not yet queried or empty
+
         chan: Dict[str, int] = {}
         for r in con.execute("SELECT channels FROM incidents"):
             for ch in _loads(r["channels"]) or []:
@@ -408,24 +455,51 @@ def patterns() -> Dict[str, Any]:
     return {
         "patterns": pats,
         "channels": [{"channel": k, "count": v} for k, v in sorted(chan.items(), key=lambda kv: -kv[1])],
-        "note": "Patterns list only methods whose wording appears in a source article; counts are INCIDENTS, not articles.",
+        "note": "Patterns list only methods whose wording appears in a source article or approved analyst patterns.",
     }
 
 
 @router.get("/rules")
 def rules() -> Dict[str, Any]:
-    """Detection rules linked to the incidents/patterns behind them. ``tested`` requires a recorded backtest."""
+    """Detection rules linked to incidents/patterns + approved analyst rules (drafts excluded)."""
     con = get_db()
     try:
         items = incidents.build_rules(con)
+        try:
+            approved_custom = con.execute("""
+                SELECT cr.*, u.full_name as author_name, r.full_name as reviewer_name
+                FROM custom_rules cr
+                LEFT JOIN users u ON cr.author_id = u.id
+                LEFT JOIN users r ON cr.reviewed_by = r.id
+                WHERE cr.status = 'approved'
+            """).fetchall()
+            for row in approved_custom:
+                items.append({
+                    "rule_id": row["rule_id"],
+                    "name": row["name"],
+                    "hypothesis": row["hypothesis"],
+                    "logic": row["logic"],
+                    "pattern_key": row["pattern_key"],
+                    "required_data": _loads(row["required_data"]) or [],
+                    "exceptions": _loads(row["exceptions"]) or [],
+                    "false_positive_risk": row["false_positive_risk"],
+                    "status": "tested" if row["test_results"] else "approved",
+                    "test_results": _loads(row["test_results"]),
+                    "author": row["author_name"],
+                    "approved_by": row["reviewer_name"],
+                    "approved_at": row["approved_at"],
+                    "is_custom": True,
+                })
+        except Exception:
+            pass
+
     finally:
         con.close()
     return {"rules": items,
             "summary": {"total": len(items),
                         "tested": sum(1 for x in items if x["status"] == "tested"),
-                        "proposed_untested": sum(1 for x in items if x["status"] == "proposed_untested")},
-            "note": "Rules are system-proposed hypotheses (proposed_untested) unless a real test result is recorded; "
-                    "the evidence shows the threat exists, not that the rule works."}
+                        "proposed_untested": sum(1 for x in items if x["status"] in ("proposed_untested", "draft"))},
+            "note": "Rules are hypotheses unless a real test result is recorded; drafts are hidden from viewers."}
 
 
 @router.get("/ingest/runs")
@@ -448,13 +522,12 @@ MANUAL_COOLDOWN_SECONDS = 600  # min gap between the end of one run and a manual
 
 
 @router.post("/ingest/run")
-def ingest_run(x_admin_token: Optional[str] = Header(None)) -> Dict[str, Any]:
-    """Manual pull (admin only, fail-closed). Runs in the background; poll /saudi-fraud/ingest/runs."""
-    if not ADMIN_TOKEN:
-        # Never fail open: without a configured token the endpoint is disabled.
-        raise HTTPException(status_code=503, detail="Manual ingest disabled: ADMIN_TOKEN is not configured")
-    if not x_admin_token or not hmac.compare_digest(x_admin_token.encode(), ADMIN_TOKEN.encode()):
-        raise HTTPException(status_code=401, detail="Invalid admin token")
+def ingest_run(
+    x_admin_token: Optional[str] = Header(None),
+    authorization: Optional[str] = Header(None),
+) -> Dict[str, Any]:
+    """Manual pull (admin only, fail-closed). Accepts X-Admin-Token or Bearer session token."""
+    _check_admin(x_admin_token, authorization, required_permission="ingestion.trigger")
     if saudi_ingest.RUN_STATE.get("running") or saudi_ingest.lease_status().get("active"):
         return saudi_ingest.start_background_run("manual")  # reports already_running
     last = saudi_ingest._last_finished()

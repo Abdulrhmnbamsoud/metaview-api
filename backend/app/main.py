@@ -37,7 +37,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from .auth import init_auth_tables
+from .auth_api import router as auth_router, team_router
+from .governance_api import router as governance_router
+
 init_db()
+init_auth_tables()
+app.include_router(auth_router)
+app.include_router(team_router)
+app.include_router(governance_router)
 app.include_router(saudi_router)
 # Upgrade an existing DB in place: classify rows lacking content_type and derive incidents.
 # Additive + idempotent (never deletes articles); independent of SAUDI_AUTO_INGEST.
