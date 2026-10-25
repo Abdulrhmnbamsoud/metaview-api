@@ -675,6 +675,7 @@ export const apiService = {
     record_type?: string;
     is_emerging?: boolean;
     q?: string;
+    incident_ids?: string;
     page?: number;
     page_size?: number;
   } = {}): Promise<DrilldownResponse> {
@@ -688,6 +689,7 @@ export const apiService = {
     if (params.record_type) sp.append('record_type', params.record_type);
     if (params.is_emerging !== undefined) sp.append('is_emerging', String(params.is_emerging));
     if (params.q) sp.append('q', params.q);
+    if (params.incident_ids) sp.append('incident_ids', params.incident_ids);
     if (params.page) sp.append('page', String(params.page));
     if (params.page_size) sp.append('page_size', String(params.page_size));
 

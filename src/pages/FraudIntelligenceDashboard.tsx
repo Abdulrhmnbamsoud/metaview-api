@@ -54,6 +54,10 @@ export const FraudIntelligenceDashboard: React.FC = () => {
   const [selectedCityPoint, setSelectedCityPoint] = useState<MapPoint | null>(null);
   const [cityModalOpen, setCityModalOpen] = useState(false);
 
+  // View presentation states for Adaptive UI (Map vs List, Sankey vs Mechanisms)
+  const [mapViewType, setMapViewType] = useState<'map' | 'list'>('map');
+  const [flowViewType, setFlowViewType] = useState<'sankey' | 'mechanisms'>('sankey');
+
   // Active Flow Hover State (for Sankey highlighting)
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
 
@@ -114,7 +118,7 @@ export const FraudIntelligenceDashboard: React.FC = () => {
       } catch (err: any) {
         if (reqId === reqSequenceRef.current && isMounted) {
           console.error('Failed to load dashboard view:', err);
-          setError(err?.message || 'تعذر تحميل بيانات ميتا فيو');
+          setError(err?.message || 'تعذر تحميل بيانات استخبارات الاحتيال');
         }
       } finally {
         if (reqId === reqSequenceRef.current && isMounted) {
@@ -141,6 +145,8 @@ export const FraudIntelligenceDashboard: React.FC = () => {
         channel: params.channel,
         sector: params.sector,
         city: params.city,
+        country: params.country,
+        incident_ids: params.incident_ids,
       });
       setDrilldownData(res);
     } catch (err) {
@@ -233,10 +239,10 @@ export const FraudIntelligenceDashboard: React.FC = () => {
         {/* Title and Subtitle on the LEFT */}
         <div dir="rtl" className="text-right space-y-1">
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-[#10213D]">
-            ميتا فيو
+            استخبارات الاحتيال
           </h1>
           <p className="text-xs md:text-sm text-[#64748B]">
-            رصد وتحليل اتجاهات الاحتيال المالي وبناء صورة ميتا فيو من مصادر موثوقة
+            رصد وتحليل اتجاهات الاحتيال المالي وبناء صورة استخباراتية من مصادر موثوقة
           </p>
         </div>
 
@@ -391,6 +397,30 @@ export const FraudIntelligenceDashboard: React.FC = () => {
       {/* ------------------------------------------------------------------- */}
       {/* 2. Top Row: (Left: Hero Insight | Right: Geographic Map)            */}
       {/* ------------------------------------------------------------------- */}
+      {/* Insufficient Evidence State Alert (Phase 4 Adaptive UI) */}
+      {data?.data_state === 'insufficient_evidence' && (
+        <div dir="rtl" className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-900 animate-in fade-in duration-200">
+          <div className="flex items-center gap-2.5">
+            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+            <div>
+              <span className="font-bold block text-sm text-[#10213D]">حالة محدودية الأدلة — لا توجد حوادث مسجلة بالمعايير الحالية</span>
+              <span className="text-[#64748B] text-xs">
+                لم يتم رصد حوادث احتيال موثقة تطابق النطاق المحدد ({geoFilter} • {datePreset === 'custom' ? `${dateFrom} إلى ${dateTo}` : `آخر ${datePreset} يوماً`} • {fraudTypeFilter !== 'all' ? fraudTypeFilter : 'جميع الأنواع'}). لا يتم توليد أنماط أو استنتاجات تقديرية دون أدلة كافية.
+              </span>
+            </div>
+          </div>
+          <button
+            onClick={handleResetFilters}
+            className="shrink-0 px-3.5 py-1.5 bg-[#102544] text-white rounded-xl text-xs font-semibold hover:bg-[#1a3860] transition"
+          >
+            إعادة ضبط الفلاتر
+          </button>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------------- */}
+      {/* 2. Top Row: (Left: Hero Insight | Right: Geographic Map)            */}
+      {/* ------------------------------------------------------------------- */}
       <div dir="ltr" className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
         {/* Hero Intelligence Insight (Approx 7 of 12 cols = ~58%) */}
         {hero && (
@@ -398,15 +428,17 @@ export const FraudIntelligenceDashboard: React.FC = () => {
             dir="rtl"
             className="lg:col-span-7 relative overflow-hidden bg-white border border-[#E7ECF3] rounded-2xl p-6 md:p-7 shadow-xs flex flex-col justify-between min-h-[310px]"
           >
-            {/* Background Riyadh Skyline on the LEFT fading smoothly to pure white on the right */}
-            <div
-              className="absolute inset-y-0 left-0 w-[45%] bg-cover bg-center pointer-events-none opacity-85 hidden sm:block"
-              style={{
-                backgroundImage: 'url(/riyadh_skyline.jpg)',
-                maskImage: 'linear-gradient(to right, rgba(0,0,0,1) 0%, rgba(0,0,0,0.5) 60%, rgba(0,0,0,0) 100%)',
-                WebkitMaskImage: 'linear-gradient(to right, rgba(0,0,0,1) 0%, rgba(0,0,0,0.5) 60%, rgba(0,0,0,0) 100%)',
-              }}
-            />
+            {/* Background Riyadh Skyline: Only shown when Saudi is selected and insight is not a generic neutral summary */}
+            {(geoFilter === 'السعودية' || geoFilter === 'SA') && !hero.is_neutral && (
+              <div
+                className="absolute inset-y-0 left-0 w-[45%] bg-cover bg-center pointer-events-none opacity-85 hidden sm:block"
+                style={{
+                  backgroundImage: 'url(/riyadh_skyline.jpg)',
+                  maskImage: 'linear-gradient(to right, rgba(0,0,0,1) 0%, rgba(0,0,0,0.5) 60%, rgba(0,0,0,0) 100%)',
+                  WebkitMaskImage: 'linear-gradient(to right, rgba(0,0,0,1) 0%, rgba(0,0,0,0.5) 60%, rgba(0,0,0,0) 100%)',
+                }}
+              />
+            )}
 
             {/* Top Content: Badge, Headline, Summary */}
             <div className="relative z-10 space-y-3.5 max-w-xl text-right">
@@ -457,7 +489,7 @@ export const FraudIntelligenceDashboard: React.FC = () => {
                 <div className="flex items-center gap-2">
                   <div className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#FEF2F2] text-[#EF4444] text-xs font-bold">
                     <TrendingUp className="w-3.5 h-3.5" />
-                    <span>{hero.growth_pct}</span>
+                    <span>{hero.growth_note || hero.growth_pct}</span>
                   </div>
                   <span className="text-[11px] text-[#64748B]">مقارنة بالشهر السابق</span>
                 </div>
@@ -467,7 +499,9 @@ export const FraudIntelligenceDashboard: React.FC = () => {
               <button
                 onClick={() =>
                   openDrilldown(`الحوادث الداعمة للاتجاه: ${hero.headline}`, {
-                    fraud_type: 'gov_impersonation',
+                    fraud_type: hero.fraud_type !== 'all' ? hero.fraud_type : undefined,
+                    incident_ids: hero.incident_ids && hero.incident_ids.length > 0 ? hero.incident_ids.join(',') : undefined,
+                    country: geoFilter === 'السعودية' ? 'SA' : undefined,
                   })
                 }
                 className="flex items-center gap-2 px-4 py-2 bg-[#102544] hover:bg-[#1a3860] text-white rounded-xl text-xs font-bold transition shadow-xs"
@@ -503,27 +537,27 @@ export const FraudIntelligenceDashboard: React.FC = () => {
                 </select>
               </div>
 
-              {/* Mode toggles */}
+              {/* View Presentation Toggles (Map vs List) */}
               <div className="flex items-center bg-slate-100 p-0.5 rounded-lg text-xs">
                 <button
-                  onClick={() => setMapMode('regions')}
+                  onClick={() => setMapViewType('map')}
                   className={`px-2.5 py-0.5 rounded-md font-medium transition ${
-                    mapMode === 'regions'
+                    mapViewType === 'map'
                       ? 'bg-[#2563EB] text-white shadow-xs'
                       : 'text-[#64748B] hover:text-[#10213D]'
                   }`}
                 >
-                  المناطق
+                  خريطة تفاعلية
                 </button>
                 <button
-                  onClick={() => setMapMode('cities')}
+                  onClick={() => setMapViewType('list')}
                   className={`px-2.5 py-0.5 rounded-md font-medium transition ${
-                    mapMode === 'cities'
+                    mapViewType === 'list'
                       ? 'bg-[#2563EB] text-white shadow-xs'
                       : 'text-[#64748B] hover:text-[#10213D]'
                   }`}
                 >
-                  المدن
+                  قائمة التوزيع
                 </button>
               </div>
             </div>
@@ -535,181 +569,263 @@ export const FraudIntelligenceDashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* Documented Breakdown Subheader (Total vs Mapped vs Unlocated) */}
+          {/* Documented Breakdown Subheader (Total vs Mapped vs Unlocated: T = V + U) */}
           <div className="flex items-center justify-between px-3 py-1.5 my-1.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[11px] font-semibold">
             <div className="flex items-center gap-1.5">
               <span className="text-[#64748B]">إجمالي الحوادث:</span>
-              <span className="font-extrabold text-[#10213D]">{data?.total_scope_incidents ?? mapPoints.length}</span>
+              <span className="font-extrabold text-[#10213D]">
+                {data?.saudi_stats?.total_saudi_incidents ?? data?.total_scope_incidents ?? mapPoints.length}
+              </span>
             </div>
             <div className="w-px h-3 bg-slate-200" />
             <div className="flex items-center gap-1.5">
               <span className="text-[#64748B]">بموقع محدد:</span>
-              <span className="font-extrabold text-blue-600">{data?.mapped_incidents_count ?? mapPoints.length}</span>
+              <span className="font-extrabold text-blue-600">
+                {data?.saudi_stats?.verified_location_incidents ?? data?.mapped_incidents_count ?? mapPoints.length}
+              </span>
             </div>
             <div className="w-px h-3 bg-slate-200" />
             <div className="flex items-center gap-1.5">
               <span className="text-[#64748B]">موقع غير محدد:</span>
-              <span className="font-extrabold text-amber-600">{data?.unknown_location_count ?? 0}</span>
+              <span className="font-extrabold text-amber-600">
+                {data?.saudi_stats?.unknown_location_incidents ?? data?.unknown_location_count ?? 0}
+              </span>
             </div>
           </div>
 
-          {/* Interactive Map Canvas */}
-          <div className="relative h-56 md:h-64 my-2 flex items-center justify-center overflow-hidden">
-            {/* Saudi Map Silhouette SVG */}
-            <svg
-              viewBox="0 0 500 400"
-              className="w-full h-full text-slate-100 select-none drop-shadow-xs"
-              style={{ maxHeight: '250px' }}
-            >
-              <defs>
-                <linearGradient id="saudiGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#F8FAFC" />
-                  <stop offset="100%" stopColor="#E2E8F0" />
-                </linearGradient>
-              </defs>
-              {/* Generalized Saudi territory polygon */}
-              <path
-                d="M 90 80 
-                   L 140 70 
-                   L 200 65 
-                   L 270 85 
-                   L 340 100 
-                   L 390 120 
-                   L 440 135 
-                   L 460 160 
-                   L 420 200 
-                   L 435 240 
-                   L 400 270 
-                   L 360 300 
-                   L 310 325 
-                   L 250 330 
-                   L 210 300 
-                   L 180 270 
-                   L 140 230 
-                   L 110 180 
-                   L 80 130 
-                   Z"
-                fill="url(#saudiGrad)"
-                stroke="#CBD5E1"
-                strokeWidth="1.5"
-                strokeLinejoin="round"
-              />
-              {/* Regional contours */}
-              <path
-                d="M 140 70 Q 180 140 250 160 T 360 300"
-                fill="none"
-                stroke="#E2E8F0"
-                strokeWidth="1"
-                strokeDasharray="3 3"
-              />
-              <path
-                d="M 110 180 Q 200 200 310 325"
-                fill="none"
-                stroke="#E2E8F0"
-                strokeWidth="1"
-                strokeDasharray="3 3"
-              />
-              <path
-                d="M 270 85 Q 280 180 250 330"
-                fill="none"
-                stroke="#E2E8F0"
-                strokeWidth="1"
-                strokeDasharray="3 3"
-              />
-            </svg>
+          {/* Map Body: either Interactive Canvas or Analytical List (Adaptive UI) */}
+          {mapViewType === 'map' ? (
+            <div className="relative h-56 md:h-64 my-2 flex items-center justify-center overflow-hidden">
+              {/* Saudi Map Silhouette SVG */}
+              <svg
+                viewBox="0 0 500 400"
+                className="w-full h-full text-slate-100 select-none drop-shadow-xs"
+                style={{ maxHeight: '250px' }}
+              >
+                <defs>
+                  <linearGradient id="saudiGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#F8FAFC" />
+                    <stop offset="100%" stopColor="#E2E8F0" />
+                  </linearGradient>
+                </defs>
+                {/* Generalized Saudi territory polygon */}
+                <path
+                  d="M 90 80 
+                     L 140 70 
+                     L 200 65 
+                     L 270 85 
+                     L 340 100 
+                     L 390 120 
+                     L 440 135 
+                     L 460 160 
+                     L 420 200 
+                     L 435 240 
+                     L 400 270 
+                     L 360 300 
+                     L 310 325 
+                     L 250 330 
+                     L 210 300 
+                     L 180 270 
+                     L 140 230 
+                     L 110 180 
+                     L 80 130 
+                     Z"
+                  fill="url(#saudiGrad)"
+                  stroke="#CBD5E1"
+                  strokeWidth="1.5"
+                  strokeLinejoin="round"
+                />
+                {/* Regional contours */}
+                <path
+                  d="M 140 70 Q 180 140 250 160 T 360 300"
+                  fill="none"
+                  stroke="#E2E8F0"
+                  strokeWidth="1"
+                  strokeDasharray="3 3"
+                />
+                <path
+                  d="M 110 180 Q 200 200 310 325"
+                  fill="none"
+                  stroke="#E2E8F0"
+                  strokeWidth="1"
+                  strokeDasharray="3 3"
+                />
+                <path
+                  d="M 270 85 Q 280 180 250 330"
+                  fill="none"
+                  stroke="#E2E8F0"
+                  strokeWidth="1"
+                  strokeDasharray="3 3"
+                />
+              </svg>
 
-            {/* Bubble Pins placed at exact coordinates */}
-            {mapPoints.map((pt) => {
-              const pos = { top: `${pt.y}%`, left: `${pt.x}%` };
+              {/* Bubble Pins placed at exact coordinates */}
+              {mapPoints.map((pt) => {
+                const pos = { top: `${pt.y}%`, left: `${pt.x}%` };
 
-              return (
+                return (
+                  <div
+                    key={pt.id || pt.name}
+                    style={{ top: pos.top, left: pos.left }}
+                    onClick={() => {
+                      setSelectedCityPoint(pt);
+                      setCityModalOpen(true);
+                    }}
+                    className="absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer group z-20"
+                  >
+                    <div className="relative flex items-center justify-center">
+                      {/* Outer pulse glow for prominent hotspots */}
+                      {pt.count >= 6 && (
+                        <span className="animate-ping absolute inline-flex h-8 w-8 rounded-full bg-red-400 opacity-30"></span>
+                      )}
+
+                      {/* Bubble pin */}
+                      <div
+                        style={{
+                          backgroundColor: pt.color,
+                          width: `${Math.max(22, Math.min(36, 18 + pt.count * 1.5))}px`,
+                          height: `${Math.max(22, Math.min(36, 18 + pt.count * 1.5))}px`,
+                        }}
+                        className="rounded-full text-white font-extrabold text-xs flex items-center justify-center shadow-md border-2 border-white group-hover:scale-110 transition-transform"
+                      >
+                        {pt.count}
+                      </div>
+
+                      {/* Location Name Label */}
+                      <span className="absolute top-full mt-1 px-1.5 py-0.5 rounded bg-white/95 shadow-xs border border-slate-200 text-[10px] font-bold text-[#10213D] whitespace-nowrap opacity-90 group-hover:opacity-100 group-hover:scale-105 transition">
+                        {pt.name}
+                      </span>
+
+                      {/* Hover Tooltip */}
+                      <div className="hidden group-hover:block absolute bottom-full mb-2 right-1/2 translate-x-1/2 p-2 bg-slate-900/95 text-white rounded-lg shadow-lg text-[10px] whitespace-nowrap z-50 pointer-events-none">
+                        <div className="font-bold text-amber-300">{pt.name} ({pt.count} حوادث موثقة)</div>
+                        {pt.top_fraud_types && pt.top_fraud_types.length > 0 && (
+                          <div className="text-slate-300 mt-0.5">
+                            النمط: {pt.top_fraud_types[0].type_ar}
+                          </div>
+                        )}
+                        <div className="text-[9px] text-blue-300 mt-0.5">اضغط لعرض الأدلة والحوادث ←</div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Map Zoom Controls on bottom-left of map canvas */}
+              <div className="absolute bottom-2 left-2 flex flex-col gap-1 bg-white border border-[#E7ECF3] rounded-lg shadow-xs p-0.5 z-10">
+                <button className="p-1 text-[#64748B] hover:text-[#10213D] hover:bg-slate-50 rounded">
+                  <Plus className="w-3.5 h-3.5" />
+                </button>
+                <button className="p-1 text-[#64748B] hover:text-[#10213D] hover:bg-slate-50 rounded">
+                  <Minus className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              {/* Legend on the right side */}
+              <div className="absolute top-2 right-2 bg-white/95 backdrop-blur-xs border border-[#E7ECF3] rounded-xl p-2.5 shadow-xs space-y-1 text-[10px] z-10 text-right">
+                <div className="font-bold text-[#10213D] pb-0.5">عدد الحوادث</div>
+                <div className="flex items-center gap-1.5 justify-end">
+                  <span className="text-[#64748B]">+10</span>
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#EF4444]" />
+                </div>
+                <div className="flex items-center gap-1.5 justify-end">
+                  <span className="text-[#64748B]">6 - 10</span>
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#F97316]" />
+                </div>
+                <div className="flex items-center gap-1.5 justify-end">
+                  <span className="text-[#64748B]">3 - 5</span>
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#FBBF24]" />
+                </div>
+                <div className="flex items-center gap-1.5 justify-end">
+                  <span className="text-[#64748B]">1 - 2</span>
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#3B82F6]" />
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* Analytical Geographic List (Phase 3 Spec) */
+            <div className="my-2 h-56 md:h-64 overflow-y-auto space-y-2 p-1">
+              {mapPoints.map((pt) => (
                 <div
-                  key={pt.id || pt.name}
-                  style={{ top: pos.top, left: pos.left }}
+                  key={pt.name}
                   onClick={() => {
                     setSelectedCityPoint(pt);
                     setCityModalOpen(true);
                   }}
-                  className="absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer group z-20"
+                  className="p-3 bg-slate-50 hover:bg-blue-50/60 border border-slate-200/80 rounded-xl cursor-pointer flex items-center justify-between transition"
                 >
-                  <div className="relative flex items-center justify-center">
-                    {/* Outer pulse glow for prominent hotspots */}
-                    {pt.count >= 6 && (
-                      <span className="animate-ping absolute inline-flex h-8 w-8 rounded-full bg-red-400 opacity-30"></span>
-                    )}
-
-                    {/* Bubble pin */}
-                    <div
-                      style={{
-                        backgroundColor: pt.color,
-                        width: `${Math.max(22, Math.min(36, 18 + pt.count * 1.5))}px`,
-                        height: `${Math.max(22, Math.min(36, 18 + pt.count * 1.5))}px`,
-                      }}
-                      className="rounded-full text-white font-extrabold text-xs flex items-center justify-center shadow-md border-2 border-white group-hover:scale-110 transition-transform"
-                    >
-                      {pt.count}
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-xs">
+                      <MapPin className="w-3.5 h-3.5" />
                     </div>
-
-                    {/* Location Name Label */}
-                    <span className="absolute top-full mt-1 px-1.5 py-0.5 rounded bg-white/95 shadow-xs border border-slate-200 text-[10px] font-bold text-[#10213D] whitespace-nowrap opacity-90 group-hover:opacity-100 group-hover:scale-105 transition">
-                      {pt.name}
+                    <div>
+                      <div className="font-bold text-xs text-[#10213D]">{pt.name}</div>
+                      <div className="text-[10px] text-[#64748B]">
+                        {pt.region} • النمط السائد: {pt.top_fraud_types?.[0]?.type_ar || 'متعدد'}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[11px] font-extrabold">
+                      {pt.count} حوادث موثقة
                     </span>
+                    <ChevronLeft className="w-4 h-4 text-slate-400" />
+                  </div>
+                </div>
+              ))}
 
-                    {/* Hover Tooltip */}
-                    <div className="hidden group-hover:block absolute bottom-full mb-2 right-1/2 translate-x-1/2 p-2 bg-slate-900/95 text-white rounded-lg shadow-lg text-[10px] whitespace-nowrap z-50 pointer-events-none">
-                      <div className="font-bold text-amber-300">{pt.name} ({pt.count} حوادث موثقة)</div>
-                      {pt.top_fraud_types && pt.top_fraud_types.length > 0 && (
-                        <div className="text-slate-300 mt-0.5">
-                          النمط: {pt.top_fraud_types[0].type_ar}
-                        </div>
-                      )}
-                      <div className="text-[9px] text-blue-300 mt-0.5">اضغط لعرض الأدلة والحوادث ←</div>
+              {/* Unknown location entry in analytical list */}
+              <div
+                onClick={() =>
+                  openDrilldown('الحوادث ذات الموقع غير المحدد داخل النطاق', {
+                    city: 'Unknown',
+                    country: geoFilter === 'السعودية' ? 'SA' : undefined,
+                    incident_ids:
+                      data?.unknown_location_incidents && data.unknown_location_incidents.length > 0
+                        ? data.unknown_location_incidents.join(',')
+                        : undefined,
+                  })
+                }
+                className="p-3 bg-amber-50/70 hover:bg-amber-100/70 border border-amber-200/80 rounded-xl cursor-pointer flex items-center justify-between transition"
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center font-bold text-xs">
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                  </div>
+                  <div>
+                    <div className="font-bold text-xs text-amber-950">موقع غير محدد (نطاق عام)</div>
+                    <div className="text-[10px] text-amber-800">
+                      حوادث مؤكدة في النطاق ولكن المصدر لم يذكر مدينة بعينها
                     </div>
                   </div>
                 </div>
-              );
-            })}
-
-            {/* Map Zoom Controls on bottom-left of map canvas */}
-            <div className="absolute bottom-2 left-2 flex flex-col gap-1 bg-white border border-[#E7ECF3] rounded-lg shadow-xs p-0.5 z-10">
-              <button className="p-1 text-[#64748B] hover:text-[#10213D] hover:bg-slate-50 rounded">
-                <Plus className="w-3.5 h-3.5" />
-              </button>
-              <button className="p-1 text-[#64748B] hover:text-[#10213D] hover:bg-slate-50 rounded">
-                <Minus className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            {/* Legend on the right side */}
-            <div className="absolute top-2 right-2 bg-white/95 backdrop-blur-xs border border-[#E7ECF3] rounded-xl p-2.5 shadow-xs space-y-1 text-[10px] z-10 text-right">
-              <div className="font-bold text-[#10213D] pb-0.5">عدد الحوادث</div>
-              <div className="flex items-center gap-1.5 justify-end">
-                <span className="text-[#64748B]">+10</span>
-                <span className="w-2.5 h-2.5 rounded-full bg-[#EF4444]" />
-              </div>
-              <div className="flex items-center gap-1.5 justify-end">
-                <span className="text-[#64748B]">6 - 10</span>
-                <span className="w-2.5 h-2.5 rounded-full bg-[#F97316]" />
-              </div>
-              <div className="flex items-center gap-1.5 justify-end">
-                <span className="text-[#64748B]">3 - 5</span>
-                <span className="w-2.5 h-2.5 rounded-full bg-[#FBBF24]" />
-              </div>
-              <div className="flex items-center gap-1.5 justify-end">
-                <span className="text-[#64748B]">1 - 2</span>
-                <span className="w-2.5 h-2.5 rounded-full bg-[#3B82F6]" />
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 text-[11px] font-extrabold">
+                    {data?.saudi_stats?.unknown_location_incidents ?? data?.unknown_location_count ?? 0} حوادث
+                  </span>
+                  <ChevronLeft className="w-4 h-4 text-amber-600" />
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Section for Unknown Locations & Disclaimers */}
           <div className="pt-2 text-[11px] flex flex-wrap items-center justify-between gap-2 border-t border-[#F1F5F9]">
             <button
-              onClick={() => openDrilldown('الحوادث ذات الموقع غير المحدد (موقع غير محدد)', { city: 'Unknown' })}
+              onClick={() =>
+                openDrilldown('الحوادث ذات الموقع غير المحدد داخل النطاق', {
+                  city: 'Unknown',
+                  country: geoFilter === 'السعودية' ? 'SA' : undefined,
+                  incident_ids:
+                    data?.unknown_location_incidents && data.unknown_location_incidents.length > 0
+                      ? data.unknown_location_incidents.join(',')
+                      : undefined,
+                })
+              }
               className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 transition text-xs font-semibold"
             >
               <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
-              <span>موقع غير محدد ({data?.unknown_location_count ?? 0} حوادث)</span>
+              <span>موقع غير محدد ({data?.saudi_stats?.unknown_location_incidents ?? data?.unknown_location_count ?? 0} حوادث)</span>
               <ChevronLeft className="w-3 h-3 text-amber-600" />
             </button>
             <div className="text-[10.5px] text-[#64748B]">
@@ -733,6 +849,7 @@ export const FraudIntelligenceDashboard: React.FC = () => {
               <span>أبرز الأنماط والاتجاهات</span>
               <Info className="w-4 h-4 text-[#64748B]" />
             </div>
+            <span className="text-[11px] text-[#64748B]">مقارنة بفترة سابقة مماثلة</span>
           </div>
 
           <div className="space-y-3">
@@ -740,7 +857,11 @@ export const FraudIntelligenceDashboard: React.FC = () => {
               <div
                 key={p.key}
                 onClick={() =>
-                  openDrilldown(`الحوادث المصنفة كـ: ${p.name_ar}`, { fraud_type: p.key })
+                  openDrilldown(`الحوادث المصنفة كـ: ${p.name_ar}`, {
+                    fraud_type: p.key,
+                    incident_ids: p.incident_ids && p.incident_ids.length > 0 ? p.incident_ids.join(',') : undefined,
+                    country: geoFilter === 'السعودية' ? 'SA' : undefined,
+                  })
                 }
                 className="group cursor-pointer p-3 rounded-xl bg-white hover:bg-[#F8FAFC] border border-[#E7ECF3] hover:border-[#CBD5E1] transition-all flex items-center justify-between"
               >
@@ -777,14 +898,17 @@ export const FraudIntelligenceDashboard: React.FC = () => {
                 </div>
 
                 {/* Left: Change % + Mini Sparkline + Chevron */}
-                <div className="flex items-center gap-2">
+                <div
+                  className="flex items-center gap-2"
+                  title={p.calculation_tooltip || 'معدل التغير المحسوب بمقارنة الفترة الحالية بالسابقة المماثلة'}
+                >
                   <span
                     className={`text-xs font-bold flex items-center gap-0.5 ${
                       p.direction === 'up' ? 'text-[#EF4444]' : 'text-[#10B981]'
                     }`}
                   >
                     {p.direction === 'up' ? '↑' : '↓'}
-                    {p.change_pct > 0 ? `+${p.change_pct}%` : `${p.change_pct}%`}
+                    {p.change_label ? p.change_label : (p.change_pct && p.change_pct > 0 ? `+${p.change_pct}%` : `${p.change_pct}%`)}
                   </span>
 
                   {/* Sparkline */}
@@ -792,7 +916,7 @@ export const FraudIntelligenceDashboard: React.FC = () => {
                     {p.sparkline.map((val, sIdx) => (
                       <div
                         key={sIdx}
-                        style={{ height: `${(val / 7) * 16}px` }}
+                        style={{ height: `${Math.max(2, (val / 7) * 16)}px` }}
                         className={`w-1 rounded-t-xs ${
                           p.direction === 'up' ? 'bg-[#EF4444]' : 'bg-[#10B981]'
                         }`}
@@ -807,8 +931,7 @@ export const FraudIntelligenceDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Column 2 (Middle): كيف تحدث عمليات الاحتيال؟ (Sankey Flow Diagram in RTL Order) (~42%) */}
-        {/* Column 2 (Middle): كيف تحدث عمليات الاحتيال؟ (Sankey Flow Diagram in RTL Order) (~42%) */}
+        {/* Column 2 (Middle): كيف تحدث عمليات الاحتيال؟ (Dual View: Sankey vs Observed Mechanisms) (~42%) */}
         {flow && (() => {
           const isNodeConnected = (nodeId: string) => {
             if (!hoveredNode) return false;
@@ -863,195 +986,282 @@ export const FraudIntelligenceDashboard: React.FC = () => {
               dir="rtl"
               className="lg:col-span-5 bg-white border border-[#E7ECF3] rounded-2xl p-5 md:p-6 shadow-xs space-y-3 flex flex-col justify-between"
             >
-              <div className="space-y-1 text-center">
-                <h3 className="text-sm font-bold text-[#10213D]">
-                  كيف تحدث عمليات الاحتيال؟
-                </h3>
-                <p className="text-[11px] text-[#64748B]">
-                  مرر مؤشر الفأرة لاستعراض مسار التدفق، أو انقر على أي عنصر لاستعراض الحوادث الموثقة
-                </p>
+              {/* Header with Title and Mode Toggles */}
+              <div className="flex items-center justify-between pb-1 border-b border-[#F1F5F9]">
+                <div className="space-y-0.5 text-right">
+                  <h3 className="text-sm font-bold text-[#10213D]">
+                    كيف تحدث عمليات الاحتيال؟
+                  </h3>
+                  <p className="text-[10.5px] text-[#64748B]">
+                    تحليل مسارات الهجوم والآليات المرصودة بالأدلة
+                  </p>
+                </div>
+
+                {/* Mode toggle */}
+                <div className="flex items-center bg-slate-100 p-0.5 rounded-lg text-xs">
+                  <button
+                    onClick={() => setFlowViewType('sankey')}
+                    className={`px-2.5 py-0.5 rounded-md font-medium transition ${
+                      flowViewType === 'sankey'
+                        ? 'bg-[#2563EB] text-white shadow-xs'
+                        : 'text-[#64748B] hover:text-[#10213D]'
+                    }`}
+                  >
+                    مخطط التدفق
+                  </button>
+                  <button
+                    onClick={() => setFlowViewType('mechanisms')}
+                    className={`px-2.5 py-0.5 rounded-md font-medium transition ${
+                      flowViewType === 'mechanisms'
+                        ? 'bg-[#2563EB] text-white shadow-xs'
+                        : 'text-[#64748B] hover:text-[#10213D]'
+                    }`}
+                  >
+                    الآليات المرصودة
+                  </button>
+                </div>
               </div>
 
-              {/* 3 Columns Layout: Right = Channels, Center = Typologies, Left = Sectors (RTL Flow) */}
-              <div dir="rtl" className="relative pt-1 min-h-[270px]">
-                {/* Dynamic SVG Alluvial Ribbon Overlay connecting Col 1 (Right) -> Col 2 (Mid) -> Col 3 (Left) */}
-                <svg
-                  className="absolute inset-0 w-full h-full pointer-events-none z-0"
-                  preserveAspectRatio="none"
-                  viewBox="0 0 300 240"
-                >
-                  {flow.flows.map((f, idx) => {
-                    const cIdx = flow.channels.findIndex((c) => c.id === f.from);
-                    const tIdx = flow.typologies.findIndex((t) => t.id === f.to);
-                    const tIdx2 = flow.typologies.findIndex((t) => t.id === f.from);
-                    const sIdx = flow.sectors.findIndex((s) => s.id === f.to);
+              {flowViewType === 'sankey' ? (
+                /* 3 Columns Layout: Right = Channels, Center = Typologies, Left = Sectors (RTL Flow) */
+                <div dir="rtl" className="relative pt-1 min-h-[270px]">
+                  {/* Dynamic SVG Alluvial Ribbon Overlay connecting Col 1 (Right) -> Col 2 (Mid) -> Col 3 (Left) */}
+                  <svg
+                    className="absolute inset-0 w-full h-full pointer-events-none z-0"
+                    preserveAspectRatio="none"
+                    viewBox="0 0 300 240"
+                  >
+                    {flow.flows.map((f, idx) => {
+                      const cIdx = flow.channels.findIndex((c) => c.id === f.from);
+                      const tIdx = flow.typologies.findIndex((t) => t.id === f.to);
+                      const tIdx2 = flow.typologies.findIndex((t) => t.id === f.from);
+                      const sIdx = flow.sectors.findIndex((s) => s.id === f.to);
 
-                    let x1 = 0, y1 = 0, x2 = 0, y2 = 0;
-                    let strokeColor = '#3B82F6';
+                      let x1 = 0, y1 = 0, x2 = 0, y2 = 0;
+                      let strokeColor = '#3B82F6';
 
-                    if (cIdx >= 0 && tIdx >= 0) {
-                      x1 = 205;
-                      y1 = 26 + cIdx * 34.5;
-                      x2 = 185;
-                      y2 = 26 + tIdx * 34.5;
-                      strokeColor = flow.channels[cIdx]?.color || '#3B82F6';
-                    } else if (tIdx2 >= 0 && sIdx >= 0) {
-                      x1 = 115;
-                      y1 = 26 + tIdx2 * 34.5;
-                      x2 = 95;
-                      y2 = 26 + sIdx * 34.5;
-                      strokeColor = flow.typologies[tIdx2]?.color || '#EF4444';
-                    } else {
-                      return null;
-                    }
+                      if (cIdx >= 0 && tIdx >= 0) {
+                        x1 = 205;
+                        y1 = 26 + cIdx * 34.5;
+                        x2 = 185;
+                        y2 = 26 + tIdx * 34.5;
+                        strokeColor = flow.channels[cIdx]?.color || '#3B82F6';
+                      } else if (tIdx2 >= 0 && sIdx >= 0) {
+                        x1 = 115;
+                        y1 = 26 + tIdx2 * 34.5;
+                        x2 = 95;
+                        y2 = 26 + sIdx * 34.5;
+                        strokeColor = flow.typologies[tIdx2]?.color || '#EF4444';
+                      } else {
+                        return null;
+                      }
 
-                    const highlighted = isFlowHighlighted(f.from, f.to);
-                    const dimmed = hoveredNode !== null && !highlighted;
+                      const highlighted = isFlowHighlighted(f.from, f.to);
+                      const dimmed = hoveredNode !== null && !highlighted;
 
-                    return (
-                      <path
-                        key={`flow-${f.from}-${f.to}-${idx}`}
-                        d={`M ${x1} ${y1} C ${(x1 + x2) / 2} ${y1}, ${(x1 + x2) / 2} ${y2}, ${x2} ${y2}`}
-                        fill="none"
-                        stroke={strokeColor}
-                        strokeWidth={highlighted ? Math.max(3, f.pct / 3) : Math.max(1.2, f.pct / 6)}
-                        strokeOpacity={highlighted ? 0.95 : dimmed ? 0.05 : 0.35}
-                        strokeLinecap="round"
-                        className="transition-all duration-300"
-                      />
-                    );
-                  })}
-                </svg>
+                      return (
+                        <path
+                          key={`flow-${f.from}-${f.to}-${idx}`}
+                          d={`M ${x1} ${y1} C ${(x1 + x2) / 2} ${y1}, ${(x1 + x2) / 2} ${y2}, ${x2} ${y2}`}
+                          fill="none"
+                          stroke={strokeColor}
+                          strokeWidth={highlighted ? Math.max(3, f.pct / 3) : Math.max(1.2, f.pct / 6)}
+                          strokeOpacity={highlighted ? 0.95 : dimmed ? 0.05 : 0.35}
+                          strokeLinecap="round"
+                          className="transition-all duration-300"
+                        />
+                      );
+                    })}
+                  </svg>
 
-                {/* 3 Interactive Node Columns in Arabic Flow: Channels -> Types -> Sectors */}
-                <div className="relative z-10 grid grid-cols-3 gap-3 text-xs">
-                  {/* Column 1 (RIGHT): القنوات المستخدمة */}
-                  <div className="space-y-2">
-                    <div className="font-bold text-[11px] text-[#64748B] pb-1 text-center">
-                      القنوات المستخدمة
-                    </div>
-                    <div className="space-y-1.5">
-                      {flow.channels.map((c) => {
-                        const isHovered = hoveredNode === c.id;
-                        const isConnected = isNodeConnected(c.id);
-                        const isDimmed = hoveredNode !== null && !isHovered && !isConnected;
+                  {/* 3 Interactive Node Columns in Arabic Flow: Channels -> Types -> Sectors */}
+                  <div className="relative z-10 grid grid-cols-3 gap-3 text-xs">
+                    {/* Column 1 (RIGHT): القنوات المستخدمة */}
+                    <div className="space-y-2">
+                      <div className="font-bold text-[11px] text-[#64748B] pb-1 text-center">
+                        القنوات المستخدمة
+                      </div>
+                      <div className="space-y-1.5">
+                        {flow.channels.map((c) => {
+                          const isHovered = hoveredNode === c.id;
+                          const isConnected = isNodeConnected(c.id);
+                          const isDimmed = hoveredNode !== null && !isHovered && !isConnected;
 
-                        return (
-                          <div
-                            key={c.id}
-                            onMouseEnter={() => setHoveredNode(c.id)}
-                            onMouseLeave={() => setHoveredNode(null)}
-                            onClick={() =>
-                              openDrilldown(`الحوادث المنفذة عبر: ${c.name_ar}`, {
-                                channel: c.id,
-                              })
-                            }
-                            className={`p-1.5 rounded-lg border transition-all duration-200 flex items-center justify-between cursor-pointer text-[11px] ${
-                              isHovered
-                                ? 'ring-2 ring-blue-500 bg-blue-50/90 border-blue-400 font-bold scale-[1.02] shadow-sm z-20'
-                                : isConnected
-                                ? 'ring-1 ring-blue-300 bg-slate-50 border-blue-300 font-semibold z-10'
-                                : isDimmed
-                                ? 'opacity-40 bg-white/70 border-slate-200'
-                                : 'bg-white hover:bg-slate-50 border-slate-200/80 shadow-xs'
-                            }`}
-                          >
-                            <div className="flex items-center gap-1.5 truncate">
-                              <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: c.color }} />
-                              <span className="font-medium text-[#10213D] truncate">{c.name_ar}</span>
+                          return (
+                            <div
+                              key={c.id}
+                              title={c.pct_basis || `${c.count} حوادث من أصل ${data?.total_scope_incidents}`}
+                              onMouseEnter={() => setHoveredNode(c.id)}
+                              onMouseLeave={() => setHoveredNode(null)}
+                              onClick={() =>
+                                openDrilldown(`الحوادث المنفذة عبر: ${c.name_ar}`, {
+                                  channel: c.id,
+                                  country: geoFilter === 'السعودية' ? 'SA' : undefined,
+                                })
+                              }
+                              className={`p-1.5 rounded-lg border transition-all duration-200 flex items-center justify-between cursor-pointer text-[11px] ${
+                                isHovered
+                                  ? 'ring-2 ring-blue-500 bg-blue-50/90 border-blue-400 font-bold scale-[1.02] shadow-sm z-20'
+                                  : isConnected
+                                  ? 'ring-1 ring-blue-300 bg-slate-50 border-blue-300 font-semibold z-10'
+                                  : isDimmed
+                                  ? 'opacity-40 bg-white/70 border-slate-200'
+                                  : 'bg-white hover:bg-slate-50 border-slate-200/80 shadow-xs'
+                              }`}
+                            >
+                              <div className="flex items-center gap-1.5 truncate">
+                                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: c.color }} />
+                                <span className="font-medium text-[#10213D] truncate">{c.name_ar}</span>
+                              </div>
+                              <span className="font-bold text-[#64748B] text-[10px]">{c.percentage}%</span>
                             </div>
-                            <span className="font-bold text-[#64748B] text-[10px]">{c.percentage}%</span>
-                          </div>
-                        );
-                      })}
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
 
-                  {/* Column 2 (MIDDLE): نوع الاحتيال */}
-                  <div className="space-y-2">
-                    <div className="font-bold text-[11px] text-[#64748B] pb-1 text-center">
-                      نوع الاحتيال
-                    </div>
-                    <div className="space-y-1.5">
-                      {flow.typologies.map((t) => {
-                        const isHovered = hoveredNode === t.id;
-                        const isConnected = isNodeConnected(t.id);
-                        const isDimmed = hoveredNode !== null && !isHovered && !isConnected;
+                    {/* Column 2 (MIDDLE): نوع الاحتيال */}
+                    <div className="space-y-2">
+                      <div className="font-bold text-[11px] text-[#64748B] pb-1 text-center">
+                        نوع الاحتيال
+                      </div>
+                      <div className="space-y-1.5">
+                        {flow.typologies.map((t) => {
+                          const isHovered = hoveredNode === t.id;
+                          const isConnected = isNodeConnected(t.id);
+                          const isDimmed = hoveredNode !== null && !isHovered && !isConnected;
 
-                        return (
-                          <div
-                            key={t.id}
-                            onMouseEnter={() => setHoveredNode(t.id)}
-                            onMouseLeave={() => setHoveredNode(null)}
-                            onClick={() =>
-                              openDrilldown(`حوادث نوع: ${t.name_ar}`, {
-                                fraud_type: t.id,
-                              })
-                            }
-                            className={`p-1.5 rounded-lg border transition-all duration-200 flex items-center justify-between cursor-pointer text-[11px] ${
-                              isHovered
-                                ? 'ring-2 ring-blue-500 bg-blue-50/90 border-blue-400 font-bold scale-[1.02] shadow-sm z-20'
-                                : isConnected
-                                ? 'ring-1 ring-blue-300 bg-slate-50 border-blue-300 font-semibold z-10'
-                                : isDimmed
-                                ? 'opacity-40 bg-white/70 border-slate-200'
-                                : 'bg-white hover:bg-slate-50 border-slate-200/80 shadow-xs'
-                            }`}
-                          >
-                            <div className="flex items-center gap-1.5 truncate">
-                              <span className="w-1.5 h-3.5 rounded-xs shrink-0" style={{ backgroundColor: t.color }} />
-                              <span className="font-medium text-[#10213D] truncate">{t.name_ar}</span>
+                          return (
+                            <div
+                              key={t.id}
+                              title={t.pct_basis || `${t.count} حوادث من أصل ${data?.total_scope_incidents}`}
+                              onMouseEnter={() => setHoveredNode(t.id)}
+                              onMouseLeave={() => setHoveredNode(null)}
+                              onClick={() =>
+                                openDrilldown(`حوادث نوع: ${t.name_ar}`, {
+                                  fraud_type: t.id,
+                                  country: geoFilter === 'السعودية' ? 'SA' : undefined,
+                                })
+                              }
+                              className={`p-1.5 rounded-lg border transition-all duration-200 flex items-center justify-between cursor-pointer text-[11px] ${
+                                isHovered
+                                  ? 'ring-2 ring-blue-500 bg-blue-50/90 border-blue-400 font-bold scale-[1.02] shadow-sm z-20'
+                                  : isConnected
+                                  ? 'ring-1 ring-blue-300 bg-slate-50 border-blue-300 font-semibold z-10'
+                                  : isDimmed
+                                  ? 'opacity-40 bg-white/70 border-slate-200'
+                                  : 'bg-white hover:bg-slate-50 border-slate-200/80 shadow-xs'
+                              }`}
+                            >
+                              <div className="flex items-center gap-1.5 truncate">
+                                <span className="w-1.5 h-3.5 rounded-xs shrink-0" style={{ backgroundColor: t.color }} />
+                                <span className="font-medium text-[#10213D] truncate">{t.name_ar}</span>
+                              </div>
+                              <span className="font-bold text-[#64748B] text-[10px]">{t.percentage}%</span>
                             </div>
-                            <span className="font-bold text-[#64748B] text-[10px]">{t.percentage}%</span>
-                          </div>
-                        );
-                      })}
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
 
-                  {/* Column 3 (LEFT): الجهات أو القطاعات المستهدفة */}
-                  <div className="space-y-2">
-                    <div className="font-bold text-[11px] text-[#64748B] pb-1 text-center">
-                      الجهات أو القطاعات المستهدفة
-                    </div>
-                    <div className="space-y-1.5">
-                      {flow.sectors.map((s) => {
-                        const isHovered = hoveredNode === s.id;
-                        const isConnected = isNodeConnected(s.id);
-                        const isDimmed = hoveredNode !== null && !isHovered && !isConnected;
+                    {/* Column 3 (LEFT): الجهات أو القطاعات المستهدفة */}
+                    <div className="space-y-2">
+                      <div className="font-bold text-[11px] text-[#64748B] pb-1 text-center">
+                        الجهات أو القطاعات المستهدفة
+                      </div>
+                      <div className="space-y-1.5">
+                        {flow.sectors.map((s) => {
+                          const isHovered = hoveredNode === s.id;
+                          const isConnected = isNodeConnected(s.id);
+                          const isDimmed = hoveredNode !== null && !isHovered && !isConnected;
 
-                        return (
-                          <div
-                            key={s.id}
-                            onMouseEnter={() => setHoveredNode(s.id)}
-                            onMouseLeave={() => setHoveredNode(null)}
-                            onClick={() =>
-                              openDrilldown(`الحوادث المستهدفة لقطاع: ${s.name_ar}`, {
-                                sector: s.id,
-                              })
-                            }
-                            className={`p-1.5 rounded-lg border transition-all duration-200 flex items-center justify-between cursor-pointer text-[11px] ${
-                              isHovered
-                                ? 'ring-2 ring-blue-500 bg-blue-50/90 border-blue-400 font-bold scale-[1.02] shadow-sm z-20'
-                                : isConnected
-                                ? 'ring-1 ring-blue-300 bg-slate-50 border-blue-300 font-semibold z-10'
-                                : isDimmed
-                                ? 'opacity-40 bg-white/70 border-slate-200'
-                                : 'bg-white hover:bg-slate-50 border-slate-200/80 shadow-xs'
-                            }`}
-                          >
-                            <div className="flex items-center gap-1.5 truncate">
-                              <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
-                              <span className="font-medium text-[#10213D] truncate">{s.name_ar}</span>
+                          return (
+                            <div
+                              key={s.id}
+                              title={s.pct_basis || `${s.count} حوادث من أصل ${data?.total_scope_incidents}`}
+                              onMouseEnter={() => setHoveredNode(s.id)}
+                              onMouseLeave={() => setHoveredNode(null)}
+                              onClick={() =>
+                                openDrilldown(`الحوادث المستهدفة لقطاع: ${s.name_ar}`, {
+                                  sector: s.id,
+                                  country: geoFilter === 'السعودية' ? 'SA' : undefined,
+                                })
+                              }
+                              className={`p-1.5 rounded-lg border transition-all duration-200 flex items-center justify-between cursor-pointer text-[11px] ${
+                                isHovered
+                                  ? 'ring-2 ring-blue-500 bg-blue-50/90 border-blue-400 font-bold scale-[1.02] shadow-sm z-20'
+                                  : isConnected
+                                  ? 'ring-1 ring-blue-300 bg-slate-50 border-blue-300 font-semibold z-10'
+                                  : isDimmed
+                                  ? 'opacity-40 bg-white/70 border-slate-200'
+                                  : 'bg-white hover:bg-slate-50 border-slate-200/80 shadow-xs'
+                              }`}
+                            >
+                              <div className="flex items-center gap-1.5 truncate">
+                                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
+                                <span className="font-medium text-[#10213D] truncate">{s.name_ar}</span>
+                              </div>
+                              <span className="font-bold text-[#64748B] text-[10px]">{s.percentage}%</span>
                             </div>
-                            <span className="font-bold text-[#64748B] text-[10px]">{s.percentage}%</span>
-                          </div>
-                        );
-                      })}
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              ) : (
+                /* Phase 6 Alternative View: Observed Fraud Mechanisms (Direct Incident Evidence) */
+                <div className="space-y-2 max-h-[300px] overflow-y-auto p-1">
+                  {flow.observed_mechanisms && flow.observed_mechanisms.length > 0 ? (
+                    flow.observed_mechanisms.map((m) => (
+                      <div
+                        key={m.incident_id}
+                        className="p-3 rounded-xl border border-slate-200/80 bg-slate-50/60 hover:bg-white hover:border-blue-300 transition space-y-2 text-xs"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="px-2 py-0.5 rounded-md bg-blue-100 text-blue-800 text-[10px] font-bold">
+                              القناة: {m.channel_ar}
+                            </span>
+                            <span className="px-2 py-0.5 rounded-md bg-red-100 text-red-800 text-[10px] font-bold">
+                              النمط: {m.fraud_type_ar}
+                            </span>
+                            <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 text-[10px] font-bold">
+                              القطاع: {m.sector_ar}
+                            </span>
+                          </div>
+                          <span className="text-[10px] font-semibold text-slate-500">
+                            {m.incident_ref}
+                          </span>
+                        </div>
+
+                        <div className="font-bold text-[#10213D]">
+                          {m.title}
+                        </div>
+
+                        {m.evidence_text && (
+                          <div className="text-[11px] text-slate-600 bg-white p-2 rounded-lg border-r-2 border-blue-400 italic">
+                            "{m.evidence_text}"
+                          </div>
+                        )}
+
+                        <div className="flex justify-end pt-1">
+                          <button
+                            onClick={() => viewSingleIncident(m.incident_id)}
+                            className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-[11px] font-semibold transition"
+                          >
+                            عرض الحادثة والأدلة المرجعية ←
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="p-6 text-center text-xs text-[#64748B]">
+                      لا توجد آليات احتيال مسجلة تطابق هذه المعايير.
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           );
         })()}

@@ -249,16 +249,65 @@ class TestFraudIntelligenceApi(unittest.TestCase):
         pattern_total = sum(p["incidents_count"] for p in data["top_patterns"])
         self.assertEqual(pattern_total, total)
 
-    def test_scenario_g_reset_to_default(self):
-        """Test G: Default endpoint returns default Saudi Arabia 30 days active filter metadata."""
-        resp = self.client.get("/api/fraud-intelligence/dashboard-view")
+    def test_scenario_h_adaptive_data_state_and_saudi_stats(self):
+        """Test H: Phase 3 & 4: saudi_stats (T = V + U) and data_state (insufficient_evidence vs data_limited)."""
+        # Test SA 30 days -> 6 incidents -> data_limited
+        resp = self.client.get("/api/fraud-intelligence/dashboard-view?geo=SA&window_days=30")
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
-        self.assertEqual(data["active_filters"]["geo"], "SA")
-        self.assertEqual(data["active_filters"]["fraud_type"], "all")
-        self.assertEqual(data["active_filters"]["window_days"], 30)
+        self.assertIn("data_state", data)
+        self.assertEqual(data["data_state"], "data_limited")
+        self.assertIn("saudi_stats", data)
+        stats = data["saudi_stats"]
+        self.assertEqual(stats["total_saudi_incidents"], stats["verified_location_incidents"] + stats["unknown_location_incidents"])
+        self.assertEqual(stats["total_saudi_incidents"], 6)
+        self.assertEqual(stats["verified_location_incidents"], 4)
+        self.assertEqual(stats["unknown_location_incidents"], 2)
+
+        # Test empty range -> insufficient_evidence
+        resp_empty = self.client.get("/api/fraud-intelligence/dashboard-view?geo=SA&date_from=2020-01-01&date_to=2020-01-05")
+        self.assertEqual(resp_empty.status_code, 200)
+        data_empty = resp_empty.json()
+        self.assertEqual(data_empty["data_state"], "insufficient_evidence")
+
+    def test_scenario_i_relationship_flow_observed_mechanisms(self):
+        """Test I: Phase 6: Observed Fraud Mechanisms return concrete attack channels, sectors, and quotes."""
+        resp = self.client.get("/api/fraud-intelligence/dashboard-view?geo=SA&window_days=30")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        flow = data.get("relationship_flow", {})
+        self.assertIn("observed_mechanisms", flow)
+        mechanisms = flow["observed_mechanisms"]
+        self.assertGreater(len(mechanisms), 0)
+        for m in mechanisms:
+            self.assertIn("channel_ar", m)
+            self.assertIn("fraud_type_ar", m)
+            self.assertIn("sector_ar", m)
+            self.assertIn("evidence_text", m)
+            self.assertIn("incident_id", m)
+
+    def test_scenario_j_incidents_drilldown_with_ids(self):
+        """Test J: Drilldown endpoint handles comma-separated incident_ids query parameter."""
+        # Query specific incident IDs
+        resp = self.client.get("/api/fraud-intelligence/incidents?incident_ids=1,2")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn("items", data)
+        for item in data["items"]:
+            self.assertIn(item["id"], [1, 2])
+
+    def test_scenario_k_zero_baseline_trend_labeling(self):
+        """Test K: Phase 7: Zero baseline in previous period does not hallucinate +100% or +300%."""
+        resp = self.client.get("/api/fraud-intelligence/dashboard-view?geo=SA&window_days=30")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        for p in data["top_patterns"]:
+            if p.get("change_pct") is None:
+                self.assertEqual(p.get("change_label"), "رصد جديد")
+                self.assertIn("0 حوادث في الفترة السابقة", p.get("calculation_tooltip", ""))
 
 
 if __name__ == "__main__":
     unittest.main()
+
 

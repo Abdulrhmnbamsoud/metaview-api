@@ -596,11 +596,17 @@ def get_incidents_drilldown(
     record_type: Optional[str] = None,
     is_emerging: Optional[bool] = None,
     q: Optional[str] = None,
+    incident_ids: Optional[str] = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ) -> Dict[str, Any]:
     """Drill-down query engine: returns exact incidents with evidence texts and original source links."""
     clauses, params = ["1=1"], []
+
+    if incident_ids:
+        raw_ids = [int(x.strip()) for x in str(incident_ids).split(",") if x.strip().isdigit()]
+        if raw_ids:
+            clauses.append(f"id IN ({','.join(str(i) for i in raw_ids)})")
 
     if fraud_type:
         ft = fraud_type.strip().lower()
@@ -628,7 +634,7 @@ def get_incidents_drilldown(
             params += [country, f"%{country}%"]
     if city:
         if city in ("Unknown", "موقع غير محدد"):
-            clauses.append("(incident_city IS NULL OR incident_city = 'Unknown')")
+            clauses.append("(incident_city IS NULL OR incident_city = 'Unknown' OR incident_city = '')")
         else:
             clauses.append("(incident_city = ? OR incident_city LIKE ? OR incident_region LIKE ? OR locations LIKE ? OR title LIKE ?)")
             params += [city, f"%{city}%", f"%{city}%", f"%{city}%", f"%{city}%"]
@@ -950,7 +956,19 @@ def _build_dynamic_map_points(
                 })
 
     mapped_count = total_scope - len(unknown_ids)
-    return points, len(unknown_ids), unknown_ids, total_scope, mapped_count
+    unknown_incidents = [
+        {
+            "id": inc["id"],
+            "title": inc["title"],
+            "fraud_type_ar": inc["fraud_type_ar"],
+            "channel_ar": inc["channel_ar"],
+            "occurred_at": inc["occurred_at"] or inc["first_reported_at"],
+            "evidence_text": inc["evidence_text"],
+        }
+        for inc in incidents
+        if inc["id"] in unknown_ids
+    ]
+    return points, len(unknown_ids), unknown_ids, total_scope, mapped_count, unknown_incidents
 
 
 def query_filtered_incidents(
@@ -994,7 +1012,7 @@ def query_filtered_incidents(
     base_params: List[Any] = []
 
     # Geographic filter
-    effective_geo = (country or geo or "SA").strip()
+    effective_geo = (country or geo or "SA").strip() if isinstance(country or geo, str) else "SA"
     if effective_geo in ("SA", "السعودية"):
         base_clauses.append(
             "(incident_country = 'SA' OR incident_region IN ('المملكة العربية السعودية', 'Saudi Arabia', 'منطقة الرياض') OR incident_city IN ('الرياض', 'جدة', 'الدمام', 'مكة المكرمة', 'المدينة المنورة', 'تبوك', 'الخبر', 'عسير'))"
@@ -1004,17 +1022,17 @@ def query_filtered_incidents(
         base_params.append(effective_geo)
 
     # City filter
-    if city and city.strip() not in ("all", "الكل", "جميع المدن"):
+    if isinstance(city, str) and city.strip() not in ("", "all", "الكل", "جميع المدن"):
         base_clauses.append("(incident_city = ? OR incident_city LIKE ?)")
         base_params += [city, f"%{city}%"]
 
     # Region filter
-    if region and region.strip() not in ("all", "الكل", "جميع المناطق"):
+    if isinstance(region, str) and region.strip() not in ("", "all", "الكل", "جميع المناطق"):
         base_clauses.append("(incident_region = ? OR incident_region LIKE ?)")
         base_params += [region, f"%{region}%"]
 
     # Fraud type filter
-    if fraud_type and fraud_type.strip().lower() not in ("all", "جميع الأنواع", "كل الأنواع"):
+    if isinstance(fraud_type, str) and fraud_type.strip().lower() not in ("", "all", "جميع الأنواع", "كل الأنواع"):
         ft = fraud_type.strip().lower()
         if ft in ("gov_impersonation", "انتحال جهات حكومية"):
             base_clauses.append("(fraud_type IN ('gov_impersonation') OR secondary_fraud_types LIKE '%gov_impersonation%')")
@@ -1059,7 +1077,7 @@ def query_filtered_incidents(
     filter_meta = {
         "geo": effective_geo,
         "country": effective_geo,
-        "fraud_type": fraud_type or "all",
+        "fraud_type": fraud_type if isinstance(fraud_type, str) else "all",
         "date_from": iso_from,
         "date_to": iso_to,
         "prev_date_from": prev_iso_from,
@@ -1086,21 +1104,34 @@ def _build_dynamic_hero_insight(
             "trend_badge": "لا توجد بيانات كافية",
             "growth_pct": "0%",
             "growth_direction": "neutral",
+            "growth_note": "لا توجد حوادث للمقارنة",
             "sources_count": 0,
             "incidents_count": 0,
             "confidence_label": "محايد",
             "incident_ids": [],
+            "is_neutral": True,
         }
 
-    # Find dominant fraud type in the filtered group
+    # Find dominant fraud type in the filtered group - prioritize specific over generic 'other'
     type_counts = Counter([inc["fraud_type"] for inc in current_incidents])
-    top_ft, top_ft_cnt = type_counts.most_common(1)[0]
+    specific_candidates = [(ft, cnt) for ft, cnt in type_counts.items() if ft not in ("other", "unknown", "other_fraud")]
 
-    # Find top channel in this group
-    ch_counts = Counter([inc["channel_ar"] for inc in current_incidents if inc["channel_ar"] != "Unknown"])
+    if specific_candidates:
+        specific_candidates.sort(key=lambda x: x[1], reverse=True)
+        top_ft, top_ft_cnt = specific_candidates[0]
+        is_neutral = False
+    else:
+        top_ft, top_ft_cnt = type_counts.most_common(1)[0]
+        is_neutral = True
+
+    top_incs = [i for i in current_incidents if i["fraud_type"] == top_ft]
+    if not top_incs:
+        top_incs = current_incidents[:5]
+
+    ch_counts = Counter([inc["channel_ar"] for inc in top_incs if inc["channel_ar"] and inc["channel_ar"] not in ("Unknown", "غير محدد")])
     top_ch_ar = ch_counts.most_common(1)[0][0] if ch_counts else "قنوات رقمية"
 
-    # Corresponding previous period count for fair trend calculation
+    # Previous count for fair trend calculation
     prev_type_counts = Counter([inc["fraud_type"] for inc in prev_incidents])
     prev_ft_cnt = prev_type_counts.get(top_ft, 0)
 
@@ -1108,31 +1139,42 @@ def _build_dynamic_hero_insight(
         pct_change = round(((top_ft_cnt - prev_ft_cnt) / prev_ft_cnt) * 100)
         growth_str = f"+{pct_change}%" if pct_change > 0 else f"{pct_change}%"
         direction = "up" if pct_change > 0 else ("down" if pct_change < 0 else "neutral")
+        calc_note = f"مقارنة بالفترة السابقة ({prev_ft_cnt} حوادث سابقة)"
     else:
-        growth_str = f"+{top_ft_cnt * 100}%"
+        # Zero incidents in previous period: Never show fake +300%
+        growth_str = "رصد جديد"
         direction = "up"
+        calc_note = f"0 حوادث في الفترة السابقة ← {top_ft_cnt} حالياً"
 
-    # Sample top incidents
-    top_incs = [i for i in current_incidents if i["fraud_type"] == top_ft]
-    if not top_incs:
-        top_incs = current_incidents[:5]
+    scope_geo = filter_meta.get("geo", "SA")
+    scope_name = "المملكة العربية السعودية" if scope_geo in ("SA", "السعودية") else ("النطاق العالمي" if scope_geo in ("ALL", "العالم") else scope_geo)
 
-    top_ft_ar = top_incs[0]["fraud_type_ar"] or "أنماط احتيال مالي"
-    headline = f"رصد نشاط موثق لـ {top_ft_ar} عبر {top_ch_ar}"
-    summary = f"سجلت المنصة {len(top_incs)} حوادث موثقة بالأدلة والضبط الأمني مرتبطة بـ {top_ft_ar}، مع استهداف مباشر للضحايا عبر {top_ch_ar}."
+    if is_neutral:
+        headline = f"ملخص الحوادث المرصودة في {scope_name}"
+        summary = f"رصدت المنصة {len(current_incidents)} حوادث موثقة بالأدلة الرسمية والإعلامية ضمن النطاق المحدد دون تسجيل نمط احتيالي مسيطر منفرد."
+        trend_badge = "ملخص الفترة المحددة"
+        incident_ids = [i["id"] for i in current_incidents]
+    else:
+        top_ft_ar = top_incs[0]["fraud_type_ar"] or "انتحال صفة جهات رسمية"
+        headline = f"ارتفاع ملحوظ في {top_ft_ar} عبر {top_ch_ar} لاستهداف الأفراد"
+        summary = f"رصدت المنصة زيادة في الحوادث التي تستغل {top_ft_ar} لإقناع الضحايا بسداد مبالغ أو مشاركة بيانات مالية وحسابات مصرفية عبر {top_ch_ar}."
+        trend_badge = "الاتجاه الأبرز هذا الشهر" if filter_meta.get("window_days") == 30 else "الاتجاه الأبرز في النطاق المحدد"
+        incident_ids = [i["id"] for i in top_incs]
 
-    total_sources = sum(inc["source_count"] or 1 for inc in top_incs)
+    total_sources = sum(inc["source_count"] or 1 for inc in (top_incs if not is_neutral else current_incidents))
 
     return {
         "headline": headline,
         "summary": summary,
-        "trend_badge": "الاتجاه الأبرز في النطاق المحدد",
+        "trend_badge": trend_badge,
         "growth_pct": growth_str,
         "growth_direction": direction,
+        "growth_note": calc_note,
         "sources_count": max(1, total_sources),
-        "incidents_count": len(top_incs),
+        "incidents_count": len(top_incs) if not is_neutral else len(current_incidents),
         "confidence_label": "عالي (High Evidence)",
-        "incident_ids": [i["id"] for i in top_incs],
+        "incident_ids": incident_ids,
+        "is_neutral": is_neutral,
     }
 
 
@@ -1171,10 +1213,14 @@ def _build_dynamic_top_patterns(
 
         if prev_cnt > 0:
             chg = round(((cnt - prev_cnt) / prev_cnt) * 100)
+            chg_label = f"+{chg}%" if chg > 0 else f"{chg}%"
             direction = "up" if chg > 0 else ("down" if chg < 0 else "neutral")
+            tooltip_calc = f"حساب النسبة: {cnt} حوادث حالياً مقابل {prev_cnt} في الفترة السابقة ({chg:+d}%)"
         else:
-            chg = cnt * 100
+            chg = None
+            chg_label = "رصد جديد"
             direction = "up"
+            tooltip_calc = f"حساب النسبة: 0 حوادث في الفترة السابقة ← {cnt} حالياً (نمط حديث الرصد)"
 
         spark = _compute_sparkline(
             matching_incs,
@@ -1190,7 +1236,9 @@ def _build_dynamic_top_patterns(
             "incidents_count": cnt,
             "sources_count": max(1, sources_cnt),
             "change_pct": chg,
+            "change_label": chg_label,
             "direction": direction,
+            "calculation_tooltip": tooltip_calc,
             "color": color,
             "sparkline": spark,
             "icon": icon,
@@ -1201,9 +1249,9 @@ def _build_dynamic_top_patterns(
 
 
 def _build_dynamic_flow_data(current_incidents: List[Any]) -> Dict[str, Any]:
-    """Dynamically generates 3-stage Relationship Flow (Channels -> Typologies -> Sectors)."""
+    """Dynamically generates 3-stage Relationship Flow and Observed Mechanisms."""
     if not current_incidents:
-        return {"channels": [], "typologies": [], "sectors": [], "flows": []}
+        return {"channels": [], "typologies": [], "sectors": [], "flows": [], "observed_mechanisms": []}
 
     total_inc = len(current_incidents)
 
@@ -1220,11 +1268,14 @@ def _build_dynamic_flow_data(current_incidents: List[Any]) -> Dict[str, Any]:
     channels: List[Dict[str, Any]] = []
     for ch_key, cnt in ch_counts.most_common():
         cdef = channel_defs.get(ch_key, channel_defs["other_channel"])
+        pct = max(1, round((cnt / total_inc) * 100))
         channels.append({
             "id": ch_key,
             "name_ar": cdef["name_ar"],
             "count": cnt,
-            "percentage": max(1, round((cnt / total_inc) * 100)),
+            "percentage": pct,
+            "total_incidents": total_inc,
+            "pct_basis": f"{cnt} من أصل {total_inc} حوادث ({pct}%)",
             "color": cdef["color"],
             "icon": cdef["icon"],
         })
@@ -1244,11 +1295,14 @@ def _build_dynamic_flow_data(current_incidents: List[Any]) -> Dict[str, Any]:
     typologies: List[Dict[str, Any]] = []
     for t_key, cnt in t_counts.most_common():
         tdef = typology_defs.get(t_key, typology_defs["other"])
+        pct = max(1, round((cnt / total_inc) * 100))
         typologies.append({
             "id": t_key,
             "name_ar": tdef["name_ar"],
             "count": cnt,
-            "percentage": max(1, round((cnt / total_inc) * 100)),
+            "percentage": pct,
+            "total_incidents": total_inc,
+            "pct_basis": f"{cnt} من أصل {total_inc} حوادث ({pct}%)",
             "color": tdef["color"],
         })
 
@@ -1265,11 +1319,14 @@ def _build_dynamic_flow_data(current_incidents: List[Any]) -> Dict[str, Any]:
     sectors: List[Dict[str, Any]] = []
     for s_key, cnt in s_counts.most_common():
         sdef = sector_defs.get(s_key, sector_defs["other_sector"])
+        pct = max(1, round((cnt / total_inc) * 100))
         sectors.append({
             "id": s_key,
             "name_ar": sdef["name_ar"],
             "count": cnt,
-            "percentage": max(1, round((cnt / total_inc) * 100)),
+            "percentage": pct,
+            "total_incidents": total_inc,
+            "pct_basis": f"{cnt} من أصل {total_inc} حوادث ({pct}%)",
             "color": sdef["color"],
             "icon": sdef["icon"],
         })
@@ -1280,22 +1337,55 @@ def _build_dynamic_flow_data(current_incidents: List[Any]) -> Dict[str, Any]:
     # Channel -> Typology transitions
     ch_to_type = Counter([(i["channel"] or "other_channel", i["fraud_type"] or "other") for i in current_incidents])
     for (src, dst), cnt in ch_to_type.most_common(12):
+        pct = max(1, round((cnt / total_inc) * 100))
         flows.append({
             "from": src,
             "to": dst,
-            "pct": max(1, round((cnt / total_inc) * 100)),
+            "pct": pct,
             "count": cnt,
+            "total_incidents": total_inc,
+            "pct_basis": f"{cnt} من أصل {total_inc} حوادث ({pct}%)",
         })
 
     # Typology -> Sector transitions
     type_to_sec = Counter([(i["fraud_type"] or "other", i["targeted_sector"] or "other_sector") for i in current_incidents])
     for (src, dst), cnt in type_to_sec.most_common(12):
+        pct = max(1, round((cnt / total_inc) * 100))
         flows.append({
             "from": src,
             "to": dst,
-            "pct": max(1, round((cnt / total_inc) * 100)),
+            "pct": pct,
             "count": cnt,
+            "total_incidents": total_inc,
+            "pct_basis": f"{cnt} من أصل {total_inc} حوادث ({pct}%)",
         })
+
+    # 5. Observed Fraud Mechanisms (Direct Incident Evidence Cards)
+    observed_mechanisms: List[Dict[str, Any]] = []
+    for inc in current_incidents:
+        observed_mechanisms.append({
+            "incident_id": inc["id"],
+            "incident_ref": f"INC-{inc['id']:04d}",
+            "title": inc["title"],
+            "channel_id": inc["channel"] or "other_channel",
+            "channel_ar": inc["channel_ar"] if inc["channel_ar"] and inc["channel_ar"] != "Unknown" else "قنوات رقمية",
+            "fraud_type_id": inc["fraud_type"] or "other",
+            "fraud_type_ar": inc["fraud_type_ar"] or "أنواع أخرى",
+            "sector_id": inc["targeted_sector"] or "other_sector",
+            "sector_ar": inc["targeted_sector_ar"] if inc["targeted_sector_ar"] and inc["targeted_sector_ar"] != "غير محدد" else "القطاع المالي والمصرفي",
+            "evidence_text": inc["evidence_text"] or inc["summary"],
+            "occurred_at": (inc["first_reported_at"] or inc["occurred_at"] or "")[:10],
+            "status": "مؤكدة" if inc["record_type"] == "confirmed_incident" else "مبلّغ عنها",
+            "status_color": "emerald" if inc["record_type"] == "confirmed_incident" else "amber",
+        })
+
+    return {
+        "channels": channels,
+        "typologies": typologies,
+        "sectors": sectors,
+        "flows": flows,
+        "observed_mechanisms": observed_mechanisms,
+    }
 
     return {
         "channels": channels,
@@ -1534,7 +1624,7 @@ def get_dashboard_view(
         is_empty = len(current_incidents) == 0
 
         # 1. Geographic Map Data (Zero invented coordinates, separated unknown counts)
-        map_points, unknown_geo_count, unknown_geo_ids, total_scope, mapped_count = _build_dynamic_map_points(
+        map_points, unknown_geo_count, unknown_geo_ids, total_scope, mapped_count, unknown_incidents = _build_dynamic_map_points(
             current_incidents, filter_meta["geo"], map_mode
         )
 
@@ -1561,15 +1651,36 @@ def get_dashboard_view(
             current_incidents, con, filter_meta["date_from"], filter_meta["date_to"]
         )
 
+        # 9. Adaptive Intelligence State & Saudi Statistics
+        data_state = "insufficient_evidence" if total_scope == 0 else ("data_limited" if total_scope < 10 else "data_rich")
+
+        saudi_matching = [
+            i for i in current_incidents
+            if i["incident_country"] == "SA" or (i["incident_region"] and "السعودية" in i["incident_region"])
+        ]
+        tot_saudi = len(saudi_matching)
+        verified_saudi = len([
+            i for i in saudi_matching
+            if i["incident_city"] and i["incident_city"] not in ("Unknown", "غير محدد", "")
+        ])
+        unknown_saudi = tot_saudi - verified_saudi
+
         return {
             "is_empty": is_empty,
             "empty_message": "لا توجد حوادث موثقة تطابق الفلاتر المحددة ضمن هذه الفترة الزمنية" if is_empty else None,
+            "data_state": data_state,
             "hero_insight": hero_insight,
             "map_points": map_points,
             "unknown_location_count": unknown_geo_count,
             "unknown_location_incident_ids": unknown_geo_ids,
+            "unknown_location_incidents": unknown_incidents,
             "total_scope_incidents": total_scope,
             "mapped_incidents_count": mapped_count,
+            "saudi_stats": {
+                "total_saudi_incidents": tot_saudi,
+                "verified_location_incidents": verified_saudi,
+                "unknown_location_incidents": unknown_saudi,
+            },
             "top_patterns": top_patterns,
             "relationship_flow": flow_data,
             "what_changed": what_changed,

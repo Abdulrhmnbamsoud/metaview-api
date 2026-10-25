@@ -199,11 +199,14 @@ export interface HeroInsight {
   summary: string;
   trend_badge: string;
   growth_pct: string;
-  growth_direction: 'up' | 'down';
+  growth_direction: 'up' | 'down' | 'neutral';
+  growth_note?: string;
   sources_count: number;
   incidents_count: number;
   confidence_label: string;
   incident_ids: number[];
+  is_neutral?: boolean;
+  fraud_type?: string;
 }
 
 export interface MapPoint {
@@ -232,17 +235,23 @@ export interface TopPatternItem {
   name_ar: string;
   incidents_count: number;
   sources_count: number;
-  change_pct: number;
-  direction: 'up' | 'down';
+  change_pct: number | null;
+  change_label?: string;
+  calculation_tooltip?: string;
+  direction: 'up' | 'down' | 'neutral';
   color: string;
   sparkline: number[];
   icon: string;
+  incident_ids?: number[];
 }
 
 export interface FlowNode {
   id: string;
   name_ar: string;
   percentage: number;
+  count?: number;
+  total_incidents?: number;
+  pct_basis?: string;
   color: string;
   icon?: string;
 }
@@ -251,6 +260,25 @@ export interface FlowRibbon {
   from: string;
   to: string;
   pct: number;
+  count?: number;
+  total_incidents?: number;
+  pct_basis?: string;
+}
+
+export interface ObservedMechanismItem {
+  incident_id: number;
+  incident_ref: string;
+  title: string;
+  channel_id: string;
+  channel_ar: string;
+  fraud_type_id: string;
+  fraud_type_ar: string;
+  sector_id: string;
+  sector_ar: string;
+  evidence_text: string;
+  occurred_at: string;
+  status: string;
+  status_color: 'emerald' | 'amber';
 }
 
 export interface RelationshipFlowData {
@@ -258,6 +286,7 @@ export interface RelationshipFlowData {
   typologies: FlowNode[];
   sectors: FlowNode[];
   flows: FlowRibbon[];
+  observed_mechanisms?: ObservedMechanismItem[];
 }
 
 export interface WhatChangedItem {
@@ -299,15 +328,31 @@ export interface DataQualityStats {
   missing_fields_note: string;
 }
 
+export interface SaudiLocationStats {
+  total_saudi_incidents: number;
+  verified_location_incidents: number;
+  unknown_location_incidents: number;
+}
+
 export interface DashboardViewResponse {
   is_empty?: boolean;
   empty_message?: string | null;
+  data_state?: 'data_rich' | 'data_limited' | 'insufficient_evidence';
   hero_insight: HeroInsight;
   map_points: MapPoint[];
   unknown_location_count?: number;
   unknown_location_incident_ids?: number[];
+  unknown_location_incidents?: Array<{
+    id: number;
+    title: string;
+    fraud_type_ar?: string;
+    channel_ar?: string;
+    occurred_at?: string;
+    evidence_text?: string;
+  }>;
   total_scope_incidents?: number;
   mapped_incidents_count?: number;
+  saudi_stats?: SaudiLocationStats;
   top_patterns: TopPatternItem[];
   relationship_flow: RelationshipFlowData;
   what_changed: WhatChangedItem[];
