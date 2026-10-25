@@ -73,7 +73,7 @@ export const AcceptInvite: React.FC = () => {
             قبول دعوة الانضمام لفريق MetaView
           </h1>
           <p className="text-xs text-stone-500 dark:text-slate-400">
-            أكمل إنشاء حسابك للانضمام إلى منصة استخبارات الاحتيال المالي
+            أكمل إنشاء حسابك للانضمام إلى منصة ميتا فيو لرصد الاحتيال المالي
           </p>
         </div>
 

@@ -116,7 +116,7 @@ export const Dashboard: React.FC = () => {
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-[#4cd7f6]/15 border border-[#4cd7f6]/30 text-[#acedff] text-xs font-mono font-semibold">
               <Sparkles className="w-3.5 h-3.5" />
-              <span>GLOBAL INTELLIGENCE & MONITORING OPERATIONS</span>
+              <span>GLOBAL METAVIEW & MONITORING OPERATIONS</span>
             </div>
             <h1 className="text-2xl md:text-3xl font-black text-white royal-gradient-text tracking-tight">
               مركز الرصد والتحليل الإخباري العالمي

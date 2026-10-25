@@ -142,7 +142,7 @@ export const SaudiFraud: React.FC = () => {
         <div>
           <h1 className="text-2xl font-black text-white royal-gradient-text flex items-center gap-3">
             <ShieldAlert className="w-7 h-7 text-[#4cd7f6]" />
-            رصد ميتا فيو للاحتيال في السعودية (Saudi Fraud Intelligence)
+            رصد ميتا فيو للاحتيال في السعودية (Saudi Fraud Platform)
           </h1>
           <p className="text-xs text-gray-400 mt-1">
             أخبار احتيال حقيقية من مصادر سعودية، مع روابط المصدر الأصلي وتحليل منفصل بين الحقائق المنقولة واستنتاجات النظام.

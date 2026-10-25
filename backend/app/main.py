@@ -162,7 +162,7 @@ def home():
         "version": APP_VERSION,
         "status": "ok",
         "docs": "/docs",
-        "system": "Global News Intelligence Platform"
+        "system": "MetaView Platform"
     }
 
 

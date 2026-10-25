@@ -93,7 +93,7 @@ export const WorldMap: React.FC = () => {
       <div className="p-4 rounded-2xl bg-[#0e111a] border border-[#4cd7f6]/20 flex items-start gap-3">
         <Info className="w-5 h-5 text-[#4cd7f6] shrink-0 mt-0.5" />
         <div className="text-xs text-gray-300 leading-relaxed space-y-1">
-          <div className="font-bold text-[#acedff]">منهجية الفصل الجغرافي الصارمة (Intelligence Rule):</div>
+          <div className="font-bold text-[#acedff]">منهجية الفصل الجغرافي الصارمة (MetaView Rule):</div>
           <div>
             الخريطة تعرض حالياً <span className="text-white font-semibold">بلد المصدر الناشر (Source Country)</span> مثل رويترز (بريطانيا) وسي إن إن (أمريكا). لا تفترض المنصة أن الدولة المرتبطة بالمصدر هي مكان وقوع الحدث، التزاماً بقواعد الدقة ومنع تضليل التحليلات الجيوسياسية.
           </div>

@@ -159,7 +159,7 @@ export const TeamManagement: React.FC = () => {
       case 'admin':
         return { label: 'مدير المنصة', color: 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800' };
       case 'analyst':
-        return { label: 'محلل استخبارات', color: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800' };
+        return { label: 'محلل ميتا فيو', color: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800' };
       case 'viewer':
         return { label: 'مستعرض مصرح', color: 'bg-stone-50 text-stone-700 border-stone-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700' };
     }

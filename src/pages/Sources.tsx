@@ -72,7 +72,7 @@ export const Sources: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-white/5">
         <div>
           <h1 className="text-2xl font-black text-white royal-gradient-text">
-            رصد ميتا فيو للمصادر الإخبارية (Source Intelligence)
+            رصد ميتا فيو للمصادر الإخبارية (Source MetaView)
           </h1>
           <p className="text-xs text-gray-400 mt-1">
             تحليل شبكات وكالات الأنباء والصحف العالمية، وتتبع وتيرة النشر وحصة التغطية
@@ -203,7 +203,7 @@ export const Sources: React.FC = () => {
               <div>
                 <h3 className="text-lg font-black text-white">{activeSourceInfo?.name}</h3>
                 <span className="text-[11px] font-mono text-[#4cd7f6]">
-                  {activeSourceInfo?.code.toUpperCase()} INTELLIGENCE STREAM
+                  {activeSourceInfo?.code.toUpperCase()} METAVIEW STREAM
                 </span>
               </div>
               <button

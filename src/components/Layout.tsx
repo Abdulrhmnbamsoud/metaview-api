@@ -136,7 +136,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                   MetaView
                 </span>
                 <span className="text-[10px] font-sans text-stone-400 dark:text-slate-400 mt-1">
-                  Fraud Intelligence
+                  ميتا فيو
                 </span>
               </div>
             </div>
@@ -274,7 +274,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                         {user.full_name}
                       </span>
                       <span className="text-[10px] text-blue-600 dark:text-blue-400 font-medium">
-                        {role === 'admin' ? 'مدير المنصة' : role === 'analyst' ? 'محلل استخبارات' : 'مستعرض'}
+                        {role === 'admin' ? 'مدير المنصة' : role === 'analyst' ? 'محلل ميتا فيو' : 'مستعرض'}
                       </span>
                     </div>
                     <ChevronDown className="w-3.5 h-3.5 text-stone-400" />
@@ -326,7 +326,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                             : 'hover:bg-stone-50 dark:hover:bg-slate-800 text-stone-700 dark:text-slate-300'
                         }`}
                       >
-                        <span>محلل استخبارات (ANALYST)</span>
+                        <span>محلل ميتا فيو (ANALYST)</span>
                         {role === 'analyst' && <Check className="w-3.5 h-3.5" />}
                       </button>
 

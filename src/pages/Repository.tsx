@@ -72,7 +72,7 @@ export const Repository: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-white/5">
         <div>
           <h1 className="text-2xl font-black text-white royal-gradient-text">
-            مستودع الأخبار الموحد (Unified Intelligence Repository)
+            مستودع الأخبار الموحد (Unified MetaView Repository)
           </h1>
           <p className="text-xs text-gray-400 mt-1">
             سجل بيانات منظّم يتيح الفرز، الفحص المعمق للسجلات، والتصدير المباشر بصيغة CSV

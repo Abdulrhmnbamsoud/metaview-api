@@ -57,7 +57,7 @@ export const Login: React.FC = () => {
             MetaView 3 — تسجيل الدخول
           </h1>
           <p className="text-xs text-stone-500 dark:text-slate-400">
-            منظومة استخبارات ومكافحة الاحتيال المالي الموحدة
+            منظومة ميتا فيو لمكافحة ورصد الاحتيال المالي
           </p>
         </div>
 

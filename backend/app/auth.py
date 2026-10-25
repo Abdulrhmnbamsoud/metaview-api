@@ -46,7 +46,7 @@ ROLES_DEF = {
         "description": "تحكم كامل في المنصة والفريق وإدارة المصادر واعتماد الحوادث والأنماط وقواعد الكشف.",
     },
     ROLE_ANALYST: {
-        "name_ar": "محلل استخبارات احتيال",
+        "name_ar": "محلل ميتا فيو",
         "description": "استكشاف وتحليل متقدم، إضافة الملاحظات، صياغة الأنماط وقواعد الكشف وإرسالها للاعتماد.",
     },
     ROLE_VIEWER: {
@@ -57,7 +57,7 @@ ROLES_DEF = {
 
 PERMISSIONS_DEF = {
     # Intelligence Exploration
-    "intelligence.read": {"name_ar": "قراءة الأخبار والاستخبارات", "description": "استعراض الأخبار ومواد الرصد"},
+    "intelligence.read": {"name_ar": "قراءة الأخبار وتقارير ميتا فيو", "description": "استعراض الأخبار ومواد الرصد"},
     "incident.read": {"name_ar": "قراءة تفاصيل الحوادث", "description": "الاطلاع على الحوادث المعتمدة ومصادرها"},
     # Analyst Actions
     "incident.annotate": {"name_ar": "إضافة ملاحظات تحليلية", "description": "تسجيل الملاحظات والشبهات وتعارض المعلومات"},
