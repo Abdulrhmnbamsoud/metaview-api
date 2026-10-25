@@ -15,8 +15,10 @@ Adheres strictly to the directives:
 """
 from __future__ import annotations
 
+import html
 import json
 import logging
+import re
 import sqlite3
 from collections import Counter
 from datetime import datetime, timezone
@@ -376,7 +378,7 @@ def rebuild_fraud_intelligence(con: Optional[sqlite3.Connection] = None, user_ta
             for idx, m in enumerate(cl):
                 con.execute(
                     """
-                    INSERT INTO incident_articles (
+                    INSERT OR REPLACE INTO incident_articles (
                         incident_id, article_id, role, content_type,
                         match_basis, published_at, linked_at
                     ) VALUES (?,?,?,?,?,?,?)
