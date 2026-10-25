@@ -29,6 +29,7 @@ import {
   SaudiFraudItem,
 } from '../types/saudi';
 import { LoadingBlock, ErrorBlock, fmtDay } from '../components/ui';
+import { getNewsImage } from '../utils/newsImages';
 
 type FeedTab = 'all' | 'confirmed' | 'warnings' | 'review';
 
@@ -473,6 +474,11 @@ WHERE t.channel IN ('IPM_SARIE', 'ATM_WITHDRAWAL')
               filteredFeedItems.map((item) => {
                 const isSelected = item.id === selectedItemId;
 
+                const photoUrl = getNewsImage({
+                  title: item.title,
+                  summary: item.summary,
+                });
+
                 return (
                   <div
                     key={item.id}
@@ -483,77 +489,92 @@ WHERE t.channel IN ('IPM_SARIE', 'ATM_WITHDRAWAL')
                         : 'border-stone-200/80 dark:border-slate-800 hover:border-stone-300 dark:hover:border-slate-700'
                     }`}
                   >
-                    <div className="space-y-1.5">
-                      {/* Status Badges & Bank Threat indicator */}
-                      <div className="flex items-center justify-between gap-1 text-[11px]">
-                        <div className="flex items-center gap-1.5">
-                          {item.badgeType === 'confirmed' && (
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200/60 dark:border-rose-900/40">
-                              {item.badgeText}
-                            </span>
-                          )}
-                          {item.badgeType === 'warning' && (
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200/60 dark:border-amber-900/40">
-                              {item.badgeText}
-                            </span>
-                          )}
-                          {item.badgeType === 'awareness' && (
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-50 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300 border border-sky-200/60 dark:border-sky-900/40">
-                              {item.badgeText}
-                            </span>
-                          )}
-                          {item.badgeType === 'reported' && (
-                            <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-stone-100 text-stone-700 dark:bg-slate-800 dark:text-slate-300">
-                              {item.badgeText}
-                            </span>
-                          )}
+                    <div className="flex items-start gap-3 min-w-0">
+                      {/* Photo Thumbnail */}
+                      <img
+                        src={photoUrl}
+                        alt=""
+                        className="w-16 h-16 sm:w-20 sm:h-20 rounded-lg object-cover shrink-0 border border-stone-200/80 dark:border-slate-800 shadow-xs"
+                        loading="lazy"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src =
+                            'https://images.unsplash.com/photo-1559526324-4b87b5e36e44?auto=format&fit=crop&w=200&q=80';
+                        }}
+                      />
 
-                          {/* Only show banking threat if genuinely verified */}
-                          {item.isBankingThreat && (
-                            <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100/70 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-300/60 dark:border-amber-800">
-                              صلة بنكية مباشرة
-                            </span>
-                          )}
+                      {/* Content details */}
+                      <div className="space-y-1.5 min-w-0 flex-1">
+                        {/* Status Badges & Bank Threat indicator */}
+                        <div className="flex items-center justify-between gap-1 text-[11px]">
+                          <div className="flex items-center gap-1.5">
+                            {item.badgeType === 'confirmed' && (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200/60 dark:border-rose-900/40">
+                                {item.badgeText}
+                              </span>
+                            )}
+                            {item.badgeType === 'warning' && (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200/60 dark:border-amber-900/40">
+                                {item.badgeText}
+                              </span>
+                            )}
+                            {item.badgeType === 'awareness' && (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-50 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300 border border-sky-200/60 dark:border-sky-900/40">
+                                {item.badgeText}
+                              </span>
+                            )}
+                            {item.badgeType === 'reported' && (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-stone-100 text-stone-700 dark:bg-slate-800 dark:text-slate-300">
+                                {item.badgeText}
+                              </span>
+                            )}
+
+                            {/* Only show banking threat if genuinely verified */}
+                            {item.isBankingThreat && (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100/70 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-300/60 dark:border-amber-800">
+                                صلة بنكية مباشرة
+                              </span>
+                            )}
+                          </div>
+
+                          <span className="text-[10px] text-stone-400 font-mono">
+                            {item.date}
+                          </span>
                         </div>
 
-                        <span className="text-[10px] text-stone-400 font-mono">
-                          {item.date}
-                        </span>
-                      </div>
-
-                      {/* Title */}
-                      <h3
-                        className={`text-xs sm:text-[13px] font-bold transition-colors leading-snug line-clamp-1 ${
-                          isSelected
-                            ? 'text-blue-600 dark:text-blue-400'
-                            : 'text-stone-900 dark:text-stone-100 group-hover:text-blue-600'
-                        }`}
-                      >
-                        {item.title}
-                      </h3>
-
-                      {/* Snippet */}
-                      <p className="text-[11px] text-stone-500 dark:text-slate-400 line-clamp-1 leading-normal">
-                        {item.summary}
-                      </p>
-
-                      {/* Footer: Sources count + Action CTA */}
-                      <div className="flex items-center justify-between pt-0.5 text-[10px] text-stone-400 font-mono">
-                        <span className="flex items-center gap-1">
-                          <FileText className="w-3 h-3" />
-                          <span>{item.sourcesCount} مصادر</span>
-                        </span>
-
-                        <span
-                          className={`flex items-center gap-0.5 font-sans font-medium transition-colors ${
+                        {/* Title */}
+                        <h3
+                          className={`text-xs sm:text-[13px] font-bold transition-colors leading-snug line-clamp-1 ${
                             isSelected
                               ? 'text-blue-600 dark:text-blue-400'
-                              : 'text-stone-400 group-hover:text-stone-600 dark:group-hover:text-stone-300'
+                              : 'text-stone-900 dark:text-stone-100 group-hover:text-blue-600'
                           }`}
                         >
-                          <span>عرض التفاصيل</span>
-                          <ChevronLeft className="w-3 h-3 group-hover:-translate-x-0.5 transition-transform" />
-                        </span>
+                          {item.title}
+                        </h3>
+
+                        {/* Snippet */}
+                        <p className="text-[11px] text-stone-500 dark:text-slate-400 line-clamp-1 leading-normal">
+                          {item.summary}
+                        </p>
+
+                        {/* Footer: Sources count + Action CTA */}
+                        <div className="flex items-center justify-between pt-0.5 text-[10px] text-stone-400 font-mono">
+                          <span className="flex items-center gap-1">
+                            <FileText className="w-3 h-3" />
+                            <span>{item.sourcesCount} مصادر</span>
+                          </span>
+
+                          <span
+                            className={`flex items-center gap-0.5 font-sans font-medium transition-colors ${
+                              isSelected
+                                ? 'text-blue-600 dark:text-blue-400'
+                                : 'text-stone-400 group-hover:text-stone-600 dark:group-hover:text-stone-300'
+                            }`}
+                          >
+                            <span>عرض التفاصيل</span>
+                            <ChevronLeft className="w-3 h-3 group-hover:-translate-x-0.5 transition-transform" />
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>

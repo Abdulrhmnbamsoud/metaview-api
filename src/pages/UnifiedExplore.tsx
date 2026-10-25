@@ -23,6 +23,7 @@ import {
 import { Chip, Unavailable, LoadingBlock, fmtDay } from '../components/ui';
 import { IncidentDetailModal } from '../components/IncidentDetailModal';
 import { FraudNewsDetailModal } from '../components/FraudNewsDetailModal';
+import { getNewsImage } from '../utils/newsImages';
 
 type Scope = 'saudi' | 'global' | 'all';
 type ItemType = 'all' | 'incident' | 'warning' | 'awareness' | 'pattern';
@@ -617,6 +618,12 @@ export const UnifiedExplore: React.FC = () => {
               flag: '🌐',
             };
 
+            const photoUrl = getNewsImage({
+              title: item.title,
+              summary: item.summary,
+              fraud_category: item.fraudCategory || '',
+            });
+
             return (
               <div
                 key={item.id}
@@ -627,100 +634,117 @@ export const UnifiedExplore: React.FC = () => {
                     handleOpenNews(item.rawNews);
                   }
                 }}
-                className="panel p-4 transition-all space-y-2 cursor-pointer hover:border-sky-300 dark:hover:border-sky-800"
+                className="panel p-4 transition-all cursor-pointer hover:border-sky-300 dark:hover:border-sky-800"
               >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Chip
-                      tone={
-                        item.type === 'incident'
-                          ? 'critical'
-                          : item.type === 'warning'
-                          ? 'high'
-                          : item.type === 'pattern'
-                          ? 'brand'
-                          : 'plain'
-                      }
-                    >
-                      {item.typeLabel}
-                    </Chip>
+                <div className="flex items-start gap-3.5 sm:gap-4">
+                  {/* Photo Thumbnail */}
+                  <img
+                    src={photoUrl}
+                    alt=""
+                    className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl object-cover shrink-0 border border-stone-200/80 dark:border-slate-800 shadow-xs"
+                    loading="lazy"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src =
+                        'https://images.unsplash.com/photo-1559526324-4b87b5e36e44?auto=format&fit=crop&w=300&q=80';
+                    }}
+                  />
 
-                    {/* Country Badge */}
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-mono bg-stone-100 dark:bg-slate-800 text-stone-700 dark:text-slate-300 border border-stone-200 dark:border-slate-700">
-                      <span>{countryInfo.flag}</span>
-                      <span>{countryInfo.name}</span>
-                    </span>
+                  {/* Card Content */}
+                  <div className="space-y-2 min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Chip
+                          tone={
+                            item.type === 'incident'
+                              ? 'critical'
+                              : item.type === 'warning'
+                              ? 'high'
+                              : item.type === 'pattern'
+                              ? 'brand'
+                              : 'plain'
+                          }
+                        >
+                          {item.typeLabel}
+                        </Chip>
 
-                    {/* Fraud Category */}
-                    {item.fraudCategoryAr && (
-                      <Chip tone="brand">{item.fraudCategoryAr}</Chip>
-                    )}
+                        {/* Country Badge */}
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-mono bg-stone-100 dark:bg-slate-800 text-stone-700 dark:text-slate-300 border border-stone-200 dark:border-slate-700">
+                          <span>{countryInfo.flag}</span>
+                          <span>{countryInfo.name}</span>
+                        </span>
 
-                    {/* Bank Relevance */}
-                    {item.bankRelevance && (
-                      <Chip tone={item.bankRelevance === 'high' ? 'critical' : 'medium'}>
-                        صلة بنكية {item.bankRelevance === 'high' ? 'عالية' : 'متوسطة'}
-                      </Chip>
-                    )}
+                        {/* Fraud Category */}
+                        {item.fraudCategoryAr && (
+                          <Chip tone="brand">{item.fraudCategoryAr}</Chip>
+                        )}
 
-                    {item.needsReview && (
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
-                        تنتظر مراجعة
+                        {/* Bank Relevance */}
+                        {item.bankRelevance && (
+                          <Chip tone={item.bankRelevance === 'high' ? 'critical' : 'medium'}>
+                            صلة بنكية {item.bankRelevance === 'high' ? 'عالية' : 'متوسطة'}
+                          </Chip>
+                        )}
+
+                        {item.needsReview && (
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
+                            تنتظر مراجعة
+                          </span>
+                        )}
+                      </div>
+
+                      <span className="text-xs font-mono text-stone-500 dark:text-slate-400">
+                        {fmtDay(item.date)}
                       </span>
+                    </div>
+
+                    <div className="flex items-start justify-between gap-3">
+                      <h3 className="text-sm font-semibold text-stone-900 dark:text-stone-100 leading-snug">
+                        {item.title}
+                      </h3>
+                      {item.url && (
+                        <a
+                          href={item.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-stone-400 hover:text-sky-600 dark:hover:text-sky-400 p-1 shrink-0"
+                          title="فتح الرابط الأصلي"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                      )}
+                    </div>
+
+                    {item.summary && (
+                      <p className="text-xs text-stone-600 dark:text-slate-400 leading-relaxed line-clamp-2">
+                        {item.summary}
+                      </p>
                     )}
-                  </div>
 
-                  <span className="text-xs font-mono text-stone-500 dark:text-slate-400">
-                    {fmtDay(item.date)}
-                  </span>
-                </div>
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-xs text-stone-500 dark:text-slate-400">
+                      <div className="flex items-center gap-3">
+                        {item.sourceName && (
+                          <span className="font-medium text-stone-700 dark:text-slate-300">
+                            {item.sourceName}
+                          </span>
+                        )}
+                        {item.location && (
+                          <span className="flex items-center gap-1">
+                            <MapPin className="w-3 h-3 text-sky-600 dark:text-sky-400" />
+                            {item.location}
+                          </span>
+                        )}
+                      </div>
 
-                <div className="flex items-start justify-between gap-3">
-                  <h3 className="text-sm font-semibold text-stone-900 dark:text-stone-100 leading-snug">
-                    {item.title}
-                  </h3>
-                  {item.url && (
-                    <a
-                      href={item.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="text-stone-400 hover:text-sky-600 dark:hover:text-sky-400 p-1 shrink-0"
-                      title="فتح الرابط الأصلي"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </a>
-                  )}
-                </div>
-
-                {item.summary && (
-                  <p className="text-xs text-stone-600 dark:text-slate-400 leading-relaxed line-clamp-2">
-                    {item.summary}
-                  </p>
-                )}
-
-                <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-xs text-stone-500 dark:text-slate-400">
-                  <div className="flex items-center gap-3">
-                    {item.sourceName && (
-                      <span className="font-medium text-stone-700 dark:text-slate-300">
-                        {item.sourceName}
-                      </span>
-                    )}
-                    {item.location && (
-                      <span className="flex items-center gap-1">
-                        <MapPin className="w-3 h-3 text-sky-600 dark:text-sky-400" />
-                        {item.location}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-[11px] bg-stone-100 dark:bg-slate-800 px-2 py-0.5 rounded text-stone-600 dark:text-slate-300">
-                      {item.sourceCount} {isInc ? 'مصادر إخبارية' : 'مصدر أصلي'}
-                    </span>
-                    <span className="text-sky-600 dark:text-sky-400 text-xs font-medium hover:underline">
-                      {isInc ? 'عرض تفاصيل الحادثة والمؤشرات ←' : 'عرض التفاصيل والتحليل ←'}
-                    </span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-[11px] bg-stone-100 dark:bg-slate-800 px-2 py-0.5 rounded text-stone-600 dark:text-slate-300">
+                          {item.sourceCount} {isInc ? 'مصادر إخبارية' : 'مصدر أصلي'}
+                        </span>
+                        <span className="text-sky-600 dark:text-sky-400 text-xs font-medium hover:underline">
+                          {isInc ? 'عرض تفاصيل الحادثة والمؤشرات ←' : 'عرض التفاصيل والتحليل ←'}
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>

@@ -15,6 +15,7 @@ import {
 import { SaudiFraudItem } from '../types/saudi';
 import { apiService } from '../services/api';
 import { Chip, EpistemicChip, fmtDay } from './ui';
+import { getNewsImage } from '../utils/newsImages';
 
 const COUNTRY_MAP: Record<string, { name: string; flag: string }> = {
   SA: { name: 'المملكة العربية السعودية', flag: '🇸🇦' },
@@ -107,6 +108,23 @@ export const FraudNewsDetailModal: React.FC<FraudNewsDetailModalProps> = ({
 
         {/* Content */}
         <div className="p-5 space-y-5 text-sm">
+          {/* Photo Banner */}
+          <div className="w-full h-44 sm:h-56 rounded-xl overflow-hidden border border-stone-200 dark:border-slate-800 bg-stone-100 dark:bg-slate-900 shadow-xs">
+            <img
+              src={getNewsImage({
+                title: item.title,
+                summary: item.summary,
+                fraud_category: item.fraud_category,
+              })}
+              alt=""
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src =
+                  'https://images.unsplash.com/photo-1559526324-4b87b5e36e44?auto=format&fit=crop&w=800&q=80';
+              }}
+            />
+          </div>
+
           {/* Metadata Bar */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3.5 rounded-lg bg-stone-50 dark:bg-slate-900 border border-stone-200 dark:border-slate-800 text-xs">
             <div>

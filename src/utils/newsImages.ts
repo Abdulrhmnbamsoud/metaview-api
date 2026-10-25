@@ -40,20 +40,74 @@ export const getNewsImage = (item: {
 
   const text = `${item.title || ''} ${item.headline || ''} ${item.summary || ''} ${item.fraud_category || ''}`.toLowerCase();
 
-  // Match by keyword
-  if (text.includes('شرطة') || text.includes('تطيح') || text.includes('قبض') || text.includes('مقيمين') || text.includes('شبكة') || text.includes('ضبط')) {
+  // Match by keyword (Arabic and English)
+  if (
+    text.includes('شرطة') ||
+    text.includes('تطيح') ||
+    text.includes('قبض') ||
+    text.includes('مقيمين') ||
+    text.includes('شبكة') ||
+    text.includes('ضبط') ||
+    text.includes('police') ||
+    text.includes('arrest') ||
+    text.includes('feds') ||
+    text.includes('charge') ||
+    text.includes('investigate') ||
+    text.includes('sanction')
+  ) {
     return TOPIC_IMAGES.handcuffs;
   }
-  if (text.includes('مدارس') || text.includes('رسوم') || text.includes('إلكتروني') || text.includes('رابط') || text.includes('روابط')) {
+  if (
+    text.includes('phish') ||
+    text.includes('cyber') ||
+    text.includes('malware') ||
+    text.includes('hacker') ||
+    text.includes('مدارس') ||
+    text.includes('رسوم') ||
+    text.includes('إلكتروني') ||
+    text.includes('رابط') ||
+    text.includes('روابط')
+  ) {
     return TOPIC_IMAGES.cyberHacker;
   }
-  if (text.includes('ساما') || text.includes('sama') || text.includes('استثمار') || text.includes('تداول') || text.includes('أسهم') || text.includes('بنك')) {
+  if (
+    text.includes('ساما') ||
+    text.includes('sama') ||
+    text.includes('استثمار') ||
+    text.includes('تداول') ||
+    text.includes('أسهم') ||
+    text.includes('بنك') ||
+    text.includes('bank') ||
+    text.includes('investment') ||
+    text.includes('crypto') ||
+    text.includes('funds') ||
+    text.includes('finance')
+  ) {
     return TOPIC_IMAGES.investment;
   }
-  if (text.includes('رسائل') || text.includes('sms') || text.includes('تصيد') || text.includes('بريد') || text.includes('فخ') || text.includes('واتساب')) {
+  if (
+    text.includes('رسائل') ||
+    text.includes('sms') ||
+    text.includes('تصيد') ||
+    text.includes('بريد') ||
+    text.includes('فخ') ||
+    text.includes('واتساب') ||
+    text.includes('email') ||
+    text.includes('spoof') ||
+    text.includes('message') ||
+    text.includes('phone')
+  ) {
     return TOPIC_IMAGES.emailLure;
   }
-  if (text.includes('توعية') || text.includes('حملة') || text.includes('أمن سيبراني') || text.includes('سيبراني')) {
+  if (
+    text.includes('توعية') ||
+    text.includes('حملة') ||
+    text.includes('أمن سيبراني') ||
+    text.includes('سيبراني') ||
+    text.includes('awareness') ||
+    text.includes('protection') ||
+    text.includes('safe')
+  ) {
     return TOPIC_IMAGES.securityAwareness;
   }
 
