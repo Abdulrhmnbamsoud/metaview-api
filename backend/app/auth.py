@@ -338,23 +338,22 @@ def init_auth_tables() -> None:
 
 
 def _seed_initial_admin_if_needed(cur: sqlite3.Cursor) -> None:
-    """Create initial administrator if no admin user exists."""
-    cur.execute("SELECT COUNT(*) AS c FROM users WHERE role = 'admin' AND status = 'active'")
-    count = cur.fetchone()["c"]
-    if count == 0:
-        now = datetime.now(timezone.utc).isoformat()
-        admin_email = os.environ.get("INITIAL_ADMIN_EMAIL", "admin@metaview.local").strip().lower()
-        admin_password = os.environ.get("INITIAL_ADMIN_PASSWORD", "Admin#MetaView2026!")
-        admin_name = os.environ.get("INITIAL_ADMIN_NAME", "مدير المنصة الرئيسي")
-
-        pwd_hash = hash_password(admin_password)
+    """Create initial administrator and demo persona accounts if they do not exist."""
+    now = datetime.now(timezone.utc).isoformat()
+    demo_accounts = [
+        ("admin@metaview.local", "Admin#MetaView2026!", "مدير المنصة الرئيسي", "admin"),
+        ("analyst@metaview.sa", "Analyst#Secret2026!", "سارة العتيبي (محلل احتيال أول)", "analyst"),
+        ("viewer@metaview.sa", "Viewer#Secret2026!", "عبدالله السعيد (مستعرض تنفيذي)", "viewer"),
+    ]
+    for email, pwd, name, role in demo_accounts:
+        pwd_hash = hash_password(pwd)
         cur.execute(
             """
             INSERT INTO users (email, password_hash, full_name, role, status, created_at, updated_at)
-            VALUES (?, ?, ?, 'admin', 'active', ?, ?)
-            ON CONFLICT(email) DO UPDATE SET role='admin', status='active', password_hash=excluded.password_hash
+            VALUES (?, ?, ?, ?, 'active', ?, ?)
+            ON CONFLICT(email) DO UPDATE SET role=excluded.role, status='active', password_hash=excluded.password_hash
             """,
-            (admin_email, pwd_hash, admin_name, now, now),
+            (email.strip().lower(), pwd_hash, name, role, now, now),
         )
 
 

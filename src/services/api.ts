@@ -102,16 +102,24 @@ let _sessionToken: string | null = null;
 
 export const setSessionToken = (token: string | null) => {
   _sessionToken = token;
-  if (token) {
-    sessionStorage.setItem('metaview_session_token', token);
-  } else {
-    sessionStorage.removeItem('metaview_session_token');
-  }
+  try {
+    if (token) {
+      sessionStorage.setItem('metaview_session_token', token);
+      localStorage.setItem('metaview_session_token', token);
+    } else {
+      sessionStorage.removeItem('metaview_session_token');
+      localStorage.removeItem('metaview_session_token');
+    }
+  } catch {}
 };
 
 export const getSessionToken = (): string | null => {
   if (!_sessionToken) {
-    _sessionToken = sessionStorage.getItem('metaview_session_token');
+    try {
+      _sessionToken = sessionStorage.getItem('metaview_session_token') || localStorage.getItem('metaview_session_token');
+    } catch {
+      _sessionToken = null;
+    }
   }
   return _sessionToken;
 };

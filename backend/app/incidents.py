@@ -647,6 +647,8 @@ _REVIEW_AR = {REVIEW_AUTO: "دُمجت تلقائياً بحقائق متطاب�
 
 def incident_to_dict(r: sqlite3.Row, detail: bool = False) -> Dict[str, Any]:
     articles = _loads(r["articles"], [])
+    b_rel = r["bank_relevance"]
+    normalized_b_rel = b_rel.lower() if b_rel and b_rel.lower() in ("high", "medium", "low") else None
     d: Dict[str, Any] = {
         "id": r["id"], "ref": incident_ref(r["id"], r["first_reported_at"], r["created_at"]),
         "title": r["title"], "summary": r["summary"], "fraud_category": r["fraud_category"],
@@ -656,7 +658,7 @@ def incident_to_dict(r: sqlite3.Row, detail: bool = False) -> Dict[str, Any]:
         "needs_review": bool(r["pending_review"]),
         "first_reported_at": r["first_reported_at"], "last_reported_at": r["last_reported_at"],
         "event_date": None,  # sources rarely state it; never guessed (publication dates are per coverage)
-        "article_count": r["article_count"], "source_count": r["source_count"], "bank_relevance": r["bank_relevance"],
+        "article_count": r["article_count"], "source_count": r["source_count"], "bank_relevance": normalized_b_rel,
         "confidence": r["confidence"], "evidence_confidence": r["evidence_confidence"],
         "locations": _loads(r["locations"], []), "agencies": _loads(r["agencies"], []),
         "channels": _loads(r["channels"], []), "articles": articles,
@@ -747,27 +749,52 @@ def build_patterns(con: sqlite3.Connection) -> List[Dict[str, Any]]:
 
     for r in con.execute("SELECT * FROM incidents ORDER BY last_reported_at DESC"):
         for m in _loads(r["methods"], []):
-            p = entry(m["tag"], m["label"])
+            if isinstance(m, str):
+                tag = r["fraud_category"] or "pattern"
+                label = m
+                quote = r["title"]
+                url = ""
+                source = "مصادر الرصد"
+            elif isinstance(m, dict):
+                tag = m.get("tag") or r["fraud_category"] or "pattern"
+                label = m.get("label") or tag
+                q = (m.get("quotes") or [{}])[0] if isinstance(m.get("quotes"), list) else {}
+                quote = q.get("quote") or m.get("quote") or r["title"]
+                url = q.get("url") or m.get("url") or ""
+                source = q.get("source") or m.get("source") or "مصادر الرصد"
+            else:
+                continue
+
+            p = entry(tag, label)
             p["incidents"].append({"id": r["id"], "title": r["title"], "first_reported_at": r["first_reported_at"],
                                    "article_count": r["article_count"]})
             p["categories"][r["fraud_category_ar"]] += 1
             p["channels"].update(_loads(r["channels"], []))
             seen(p, r["first_reported_at"])
             seen(p, r["last_reported_at"])
-            q = (m.get("quotes") or [{}])[0]
             p["evidence"].append({"type": "incident", "incident_id": r["id"], "title": r["title"],
-                                  "quote": q.get("quote"), "url": q.get("url"), "source": q.get("source")})
+                                  "quote": quote, "url": url, "source": source})
     for r in con.execute(
             "SELECT t.id, t.title, t.fraud_category_ar, t.verified_facts, a.url, a.source, a.published_at "
             "FROM threat_intel t JOIN articles a ON a.id = t.article_id "
             "WHERE t.is_saudi = 1 AND t.content_type = ? AND t.fraud_category IS NOT NULL", (fi.CT_WARNING,)):
         for m in (_loads(r["verified_facts"], {}) or {}).get("method_tags", []):
-            p = entry(m["tag"], m["label"])
+            if isinstance(m, str):
+                tag = m
+                label = m
+                quote = r["title"]
+            elif isinstance(m, dict):
+                tag = m.get("tag") or "warning_tag"
+                label = m.get("label") or tag
+                quote = m.get("quote") or r["title"]
+            else:
+                continue
+            p = entry(tag, label)
             p["warning_articles"].append({"threat_id": r["id"], "title": r["title"], "url": r["url"]})
             p["categories"][r["fraud_category_ar"]] += 0
             seen(p, r["published_at"])
             p["evidence"].append({"type": "warning", "threat_id": r["id"], "title": r["title"],
-                                  "quote": m.get("quote"), "url": r["url"], "source": r["source"]})
+                                  "quote": quote, "url": r["url"], "source": r["source"]})
     out = []
     for p in pats.values():
         n_inc, n_warn = len(p["incidents"]), len(p["warning_articles"])
@@ -812,8 +839,14 @@ def build_rules(con: sqlite3.Connection) -> List[Dict[str, Any]]:
         tag_labels: Dict[str, str] = {}
         for r in rows:
             for m in _loads(r["methods"], []):
-                tag_counts[m["tag"]] += 1
-                tag_labels[m["tag"]] = m["label"]
+                if isinstance(m, str):
+                    t_key = r["fraud_category"] or "pattern"
+                    tag_counts[t_key] += 1
+                    tag_labels[t_key] = m
+                elif isinstance(m, dict):
+                    t_key = m.get("tag") or r["fraud_category"] or "pattern"
+                    tag_counts[t_key] += 1
+                    tag_labels[t_key] = m.get("label") or t_key
         t = tests.get(rid, [])
         out.append({
             "rule_id": rid, "category": cat, "category_ar": fi.CATEGORY_AR[cat], "name": tmpl["name_ar"],
@@ -832,10 +865,10 @@ def build_rules(con: sqlite3.Connection) -> List[Dict[str, Any]]:
                 "incident_ids": [r["id"] for r in rows],
                 "incidents": [{"id": r["id"], "title": r["title"], "article_count": r["article_count"],
                                "first_reported_at": r["first_reported_at"],
-                               "article_urls": [a["url"] for a in _loads(r["articles"], [])]} for r in rows[:5]],
+                               "article_urls": [a.get("url") for a in _loads(r["articles"], []) if isinstance(a, dict) and a.get("url")]} for r in rows[:5]],
                 "warning_article_count": len(wrows),
                 "warning_articles": [{"threat_id": w["id"], "title": w["title"], "url": w["url"]} for w in wrows[:5]],
-                "patterns": [{"key": k, "label_ar": tag_labels[k], "incident_count": n} for k, n in tag_counts.most_common()],
+                "patterns": [{"key": k, "label_ar": tag_labels.get(k, k), "incident_count": n} for k, n in tag_counts.most_common()],
             },
         })
     out.sort(key=lambda x: (-x["evidence"]["incident_count"], -x["evidence"]["warning_article_count"]))
@@ -870,10 +903,13 @@ def build_report(con: sqlite3.Connection, examples: int = 5) -> Dict[str, Any]:
             "review_status": d["review_status"], "category": d["fraud_category_ar"], "locations": d["locations"],
             "article_count": d["article_count"], "source_count": d["source_count"],
             "first_reported_at": d["first_reported_at"], "last_reported_at": d["last_reported_at"],
-            "coverage": [{"source": a["source"], "title": a["title"], "url": a["url"], "published_at": a["published_at"],
-                          "why_linked": (a.get("match_basis") or {}).get("type"),
+            "coverage": [{"source": (a.get("source") or a.get("reporting_agency") or "مصدر رسمي") if isinstance(a, dict) else "مصدر رسمي",
+                          "title": (a.get("title") or a.get("headline") or d["title"]) if isinstance(a, dict) else str(a),
+                          "url": a.get("url") or "" if isinstance(a, dict) else "",
+                          "published_at": (a.get("published_at") or d["first_reported_at"]) if isinstance(a, dict) else d["first_reported_at"],
+                          "why_linked": (a.get("match_basis") or {}).get("type") if isinstance(a, dict) and isinstance(a.get("match_basis"), dict) else "seed",
                           "shared_facts": ((a.get("match_basis") or {}).get("strong", [])
-                                           + (a.get("match_basis") or {}).get("context", []))}
+                                           + (a.get("match_basis") or {}).get("context", [])) if isinstance(a, dict) and isinstance(a.get("match_basis"), dict) else []}
                          for a in d["articles"]],
         })
 

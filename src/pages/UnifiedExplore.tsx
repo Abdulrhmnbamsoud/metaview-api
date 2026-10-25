@@ -12,6 +12,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Filter,
+  RotateCcw,
 } from 'lucide-react';
 import { apiService } from '../services/api';
 import {
@@ -225,8 +226,12 @@ export const UnifiedExplore: React.FC = () => {
     if (scope === 'saudi' || scope === 'all') {
       if (itemType === 'all' || itemType === 'incident') {
         incidents.forEach((inc) => {
-          // If country filter is applied on 'all', check if SA is chosen
-          if (scope === 'all' && selectedCountry !== 'all' && selectedCountry !== 'SA') {
+          const incCountry = (inc as any).incident_country || 'SA';
+          // If country filter is applied on 'all', check if matching country is chosen
+          if (scope === 'all' && selectedCountry !== 'all' && selectedCountry !== incCountry) {
+            return;
+          }
+          if (scope === 'saudi' && incCountry !== 'SA' && incCountry !== 'Unknown') {
             return;
           }
 
@@ -235,6 +240,8 @@ export const UnifiedExplore: React.FC = () => {
             if (art.url) seenUrls.add(art.url);
           });
 
+          const normalizedBankRel = inc.bank_relevance ? (inc.bank_relevance.toLowerCase() as any) : null;
+
           list.push({
             id: `inc-${inc.id}`,
             type: 'incident',
@@ -242,13 +249,13 @@ export const UnifiedExplore: React.FC = () => {
             title: inc.title,
             summary: inc.summary || `حادثة احتيال مرصودة وموثقة عبر ${inc.article_count} مصادر إخبارية ورسمية.`,
             date: inc.first_reported_at,
-            location: inc.locations.length > 0 ? inc.locations.join('، ') : null,
-            country: 'SA',
+            location: inc.locations && inc.locations.length > 0 ? inc.locations.join('، ') : null,
+            country: incCountry,
             sourceCount: inc.article_count,
             sourceName: inc.agencies?.[0] || 'جهات رسمية وقضائية',
             fraudCategory: inc.fraud_category,
             fraudCategoryAr: inc.fraud_category_ar,
-            bankRelevance: inc.bank_relevance,
+            bankRelevance: normalizedBankRel,
             needsReview: inc.needs_review,
             rawIncident: inc,
           });
@@ -331,7 +338,7 @@ export const UnifiedExplore: React.FC = () => {
     // Apply Bank Relevance filter
     let filtered = list;
     if (bankRel !== 'all') {
-      filtered = filtered.filter((i) => i.bankRelevance === bankRel);
+      filtered = filtered.filter((i) => i.bankRelevance?.toLowerCase() === bankRel.toLowerCase());
     }
 
     // Apply Source filter
@@ -433,6 +440,26 @@ export const UnifiedExplore: React.FC = () => {
       updateFilter({ p: newPage });
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
+  };
+
+  const isFilterActive =
+    searchQuery.trim() !== '' ||
+    scope !== 'saudi' ||
+    selectedCountry !== 'all' ||
+    selectedSource !== 'all' ||
+    itemType !== 'all' ||
+    bankRel !== 'all';
+
+  const resetAllFilters = () => {
+    setSearchQuery('');
+    setScope('saudi');
+    setSelectedCountry('all');
+    setSelectedSource('all');
+    setItemType('all');
+    setBankRel('all');
+    setSortBy('newest');
+    setCurrentPage(1);
+    setParams(new URLSearchParams());
   };
 
   return (
@@ -633,6 +660,18 @@ export const UnifiedExplore: React.FC = () => {
                 <option value="review_priority">أولوية المراجعة</option>
               </select>
             </div>
+            {/* Reset Filters button */}
+            {isFilterActive && (
+              <button
+                type="button"
+                id="reset-filters-btn"
+                onClick={resetAllFilters}
+                className="px-2.5 py-1 rounded-lg text-xs font-semibold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 hover:bg-rose-100 transition-colors flex items-center gap-1 shadow-xs"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                إعادة ضبط الفلاتر
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -663,10 +702,23 @@ export const UnifiedExplore: React.FC = () => {
       {loading ? (
         <LoadingBlock label="جارٍ جلب وتحديث نتائج ميتا فيو…" />
       ) : paginatedItems.length === 0 ? (
-        <Unavailable
-          title="لم يتم العثور على نتائج"
-          note="جرب تغيير كلمات البحث أو اختيار دولة أخرى أو إعادة ضبط خيارات التصفية."
-        />
+        <div className="space-y-4 text-center">
+          <Unavailable
+            title="لم يتم العثور على نتائج"
+            note="جرب تغيير كلمات البحث أو اختيار دولة أخرى أو إعادة ضبط خيارات التصفية."
+          />
+          {isFilterActive && (
+            <button
+              type="button"
+              id="reset-filters-empty-btn"
+              onClick={resetAllFilters}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-950/50 border border-sky-200 dark:border-sky-800 hover:bg-sky-100 transition-all shadow-xs"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              إعادة ضبط الفلاتر والبحث
+            </button>
+          )}
+        </div>
       ) : (
         <div className="space-y-3">
           {paginatedItems.map((item) => {

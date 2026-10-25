@@ -303,7 +303,7 @@ def incidents_list(
         clauses.append("fraud_category = ?")
         params.append(category)
     if bank_relevance:
-        clauses.append("bank_relevance = ?")
+        clauses.append("LOWER(bank_relevance) = LOWER(?)")
         params.append(bank_relevance)
     if record_type:
         clauses.append("record_type = ?")

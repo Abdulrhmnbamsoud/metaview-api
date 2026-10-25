@@ -88,11 +88,11 @@ export const FraudPatterns: React.FC = () => {
               className="w-full bg-surface-lowest border border-edge-strong rounded-lg px-3 py-2 text-sm text-ink placeholder:text-ink-outline outline-none focus:border-brand"
             />
             <div className="space-y-2">
-              {filtered.map((p) => {
+              {filtered.map((p, idx) => {
                 const active = p.key === selected;
                 return (
                   <button
-                    key={p.key}
+                    key={`${p.key}-${idx}`}
                     onClick={() => setSelected(p.key)}
                     className={`w-full text-right p-3 rounded-lg transition-colors border ${
                       active ? 'bg-surface-high border-brand/50' : 'bg-surface-container border-transparent hover:bg-surface-high'
