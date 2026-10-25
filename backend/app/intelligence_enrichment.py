@@ -79,6 +79,18 @@ def matches_term(text_norm: str, term: str) -> bool:
 # 2. Standardized Typologies (10 Categories)
 # --------------------------------------------------------------------------- #
 FRAUD_TYPES = {
+    "bank_impersonation": {
+        "name_ar": "انتحال صفة بنوك ومصارف",
+        "name_en": "Bank Impersonation",
+        "terms": [
+            "انتحال بنك", "موظف بنك", "موظف مصرفي", "تحديث بيانات الحساب", "تجميد الحساب", "رمز التحقق البنكي",
+            "خدمة العملاء بالبنك", "bank scam", "bank impersonat", "fake bank call", "is your bank really calling",
+            "bank fraud department", "calling from your bank", "compromised bank account", "chase bank",
+            "huntington bank", "intesa", "banking scam", "bank fraud", "mule account", "mule accounts",
+            "bank card fraud", "bogus bank", "fake bank", "احتيال بنكي", "احتيال مصرفي", "حسابات بنكية وسيطة",
+            "elder financial scam", "central bank governor on suspicion", "kitchener bank card", "argenta",
+        ],
+    },
     "gov_impersonation": {
         "name_ar": "انتحال صفة جهات حكومية",
         "name_en": "Government Impersonation",
@@ -87,17 +99,10 @@ FRAUD_TYPES = {
             "الزكاة والضريبة", "الجمارك", "وزارة التجارة", "وزارة الداخلية", "رئاسة أمن الدولة",
             "هيئة السوق المالية", "مرور", "مخالفة مرورية", "government impersonat", "police impersonat",
             "irs scam", "tax scam", "postal scam", "customs scam", "court scam", "arrest warrant",
-            "city of london police", "postage fraud",
-        ],
-    },
-    "bank_impersonation": {
-        "name_ar": "انتحال صفة بنوك ومصارف",
-        "name_en": "Bank Impersonation",
-        "terms": [
-            "انتحال بنك", "موظف بنك", "موظف مصرفي", "تحديث بيانات الحساب", "تجميد الحساب", "رمز التحقق البنكي",
-            "خدمة العملاء بالبنك", "bank scam", "bank impersonat", "fake bank call", "is your bank really calling",
-            "bank fraud department", "calling from your bank", "compromised bank account", "chase bank",
-            "huntington bank", "intesa", "banking scam", "bank fraud",
+            "city of london police", "postage fraud", "digital arrest", "digital-arrest", "snap fraud",
+            "ppp fraud", "pandemic relief", "benefit fraud", "انتحال أمني", "أوامر قبض وهمية",
+            "انتحل صفة مدير نادي", "fbi offers", "scam center strike force", "bengaluru cyber police bust sim box",
+            "ssa to tighten", "social security",
         ],
     },
     "phishing": {
@@ -106,7 +111,8 @@ FRAUD_TYPES = {
         "terms": [
             "تصيد", "روابط مشبوهة", "رابط مشبوه", "رابط وهمي", "رسائل تصيد", "رسالة تصيد", "صفحة تصيد",
             "phishing", "spear-phishing", "smishing", "vishing", "credential harvest", "malicious link",
-            "fake login", "stolen credentials", "phishing detection",
+            "fake login", "stolen credentials", "phishing detection", "carousell", "fake link",
+            "phishing scam", "روابط احتيالية", "رابط إلكتروني مشبوه", "نصف السعوديين تعرضوا لمحاولة احتيال",
         ],
     },
     "investment_fraud": {
@@ -115,8 +121,10 @@ FRAUD_TYPES = {
         "terms": [
             "استثمار وهمي", "استثمارات وهمية", "تداول وهمي", "منصة تداول", "عملات رقمية وهمية", "مخطط هرمي",
             "بونزي", "توظيف الأموال", "أرباح مضمونة", "عائد خيالي", "investment fraud", "investment scam",
-            "ponzi", "pyramid scheme", "fake broker", "crypto scam", "forex scam", "guaranteed returns",
-            "diamond scam", "invest wisely",
+            "ponzi", "pyramid scheme", "fake broker", "crypto scam", "crypto fraud", "forex scam",
+            "guaranteed returns", "diamond scam", "invest wisely", "bitcoin scam", "bitcoin fraud",
+            "cryptomus", "fund fraud", "fund scam", "elon musk impersonat", "smart ring scam",
+            "smart ring fraud", "الترويج للزئبق", "كشف الآثار", "تداول العملات المشفرة", "bitcoin", "crypto",
         ],
     },
     "ecommerce_fraud": {
@@ -125,7 +133,9 @@ FRAUD_TYPES = {
         "terms": [
             "متجر وهمي", "متاجر وهمية", "تسوق وهمي", "صفحة بيع وهمية", "بضائع مقلدة", "دفع وهمي",
             "fake online store", "e-commerce scam", "marketplace scam", "fake goods", "non-delivery",
-            "seller scam", "buyer scam", "roofing scam",
+            "seller scam", "buyer scam", "roofing scam", "online shopping scam", "shopping scam",
+            "الخصم المفاجئ", "صفحة وهمية لبيع", "بيع أسلحة بيضاء", "بيع المواد المخدرة",
+            "النصب على شركة أجهزة", "dodgy cigarettes", "زيادة المتابعين والإعلانات الممولة",
         ],
     },
     "job_fraud": {
@@ -134,6 +144,7 @@ FRAUD_TYPES = {
         "terms": [
             "وظائف وهمية", "وظيفة وهمية", "توظيف وهمي", "عقد عمل وهمي", "رسوم توظيف", "فرصة عمل احتيالية",
             "job scam", "fake job", "employment scam", "work from home scam", "fake recruitment",
+            "parwaaz", "jobs in saudi", "for jobs in", "job placement", "تأشيرات عمل وهمية",
         ],
     },
     "account_takeover": {
@@ -142,6 +153,7 @@ FRAUD_TYPES = {
         "terms": [
             "الاستيلاء على الحساب", "الاستيلاء على حسابات", "سرقة الهوية", "اختراق حساب", "تبديل الشريحة",
             "account takeover", "identity theft", "sim swap", "sim-swap", "hijacked account", "stolen identity",
+            "card-swap", "card swap", "sim box", "email theft", "المتقاعدين", "قرصنة المكالمات",
         ],
     },
     "payment_fraud": {
@@ -149,8 +161,10 @@ FRAUD_TYPES = {
         "name_en": "Payment Fraud",
         "terms": [
             "فواتير وهمية", "احتيال سداد", "احتيال الشيكات", "تحويلات مضللة", "تغيير بيانات الحساب المصرفي للتحويل",
-            "عملات مزيفة", "invoice fraud", "payment fraud", "wire fraud", "check fraud", "changed bank details",
-            "supplier bank details", "compromised invoice", "business email compromise", "bec scam", "app fraud",
+            "عملات مزيفة", "العملات المزيفة", "غسل", "غسيل أموال", "invoice fraud", "payment fraud", "wire fraud",
+            "check fraud", "changed bank details", "supplier bank details", "compromised invoice",
+            "business email compromise", "bec scam", "app fraud", "financial fraud", "launder scam proceeds",
+            "money laundering", "wallingford police arrest 2 in separate financial fraud",
         ],
     },
     "romance_scam": {
@@ -158,7 +172,21 @@ FRAUD_TYPES = {
         "name_en": "Romance Scam",
         "terms": [
             "احتيال عاطفي", "ابتزاز إلكتروني", "علاقات وهمية", "صور فاضحة", "romance scam", "dating scam", "pig butchering",
-            "catfishing", "sweetheart scam", "extortion site",
+            "catfishing", "sweetheart scam", "extortion site", "extorted", "extortion", "الابتزاز",
+        ],
+    },
+    "cyber_fraud": {
+        "name_ar": "احتيال إلكتروني وشبكات منظمة",
+        "name_en": "Organized Cyber Fraud",
+        "terms": [
+            "احتيال إلكتروني", "النصب الإلكتروني", "نصب إلكتروني", "احتيال الكتروني", "مواجهة الشبح",
+            "شبكة للنصب الإلكتروني", "تشكيل عصابي دولي", "تشكيلا عصابيا دوليا", "تشكيلًا عصابيًا دوليًا",
+            "شبكة احتيال مالي", "شبكة احتيال إلكتروني", "عصابة دولية للنصب", "online fraud",
+            "cyber fraud", "cyber scam", "confrontation ghost", "online scam", "scam network",
+            "scam proceeds", "fraud ring", "مكافحة الفساد والأمن الاقتصادي والإلكتروني",
+            "سقوط عصابة", "تفكيك شبكة", "ضبط شخص بالمنيا لقيامه بالنصب", "ضبط عاطل بالمنيا",
+            "توقيف سوري في جونية بتهمة النصب والاحتيال", "marrakech fraud", "operation serengeti",
+            "شبكة للاحتيال الإلكتروني",
         ],
     },
 }
@@ -199,6 +227,7 @@ SAUDI_CITIES_REGIONS: Dict[str, Tuple[str, str]] = {
 
 GLOBAL_LOCATIONS: Dict[str, Tuple[str, str, str]] = {
     # Keyword norm -> (City, Region/State, Country Code)
+    # US
     "anne arundel": ("Anne Arundel County", "Maryland", "US"),
     "palatine": ("Palatine", "Illinois", "US"),
     "mobile": ("Mobile", "Alabama", "US"),
@@ -210,34 +239,89 @@ GLOBAL_LOCATIONS: Dict[str, Tuple[str, str, str]] = {
     "cincinnati": ("Cincinnati", "Ohio", "US"),
     "florida": ("Florida", "Florida", "US"),
     "district of columbia": ("Washington D.C.", "District of Columbia", "US"),
+    "wallingford": ("Wallingford", "Connecticut", "US"),
+    "east greenbush": ("East Greenbush", "New York", "US"),
+    "savannah": ("Savannah", "Georgia", "US"),
+    "california": ("California", "California", "US"),
+    # Canada
     "toronto": ("Toronto", "Ontario", "CA"),
     "ottawa": ("Ottawa", "Ontario", "CA"),
     "vancouver": ("Vancouver", "British Columbia", "CA"),
+    "kitchener": ("Kitchener", "Ontario", "CA"),
+    "prince edward": ("Charlottetown", "Prince Edward Island", "CA"),
+    "p.e.i.": ("Charlottetown", "Prince Edward Island", "CA"),
+    "canadian": ("Toronto", "Ontario", "CA"),
+    # UK
     "london": ("London", "Greater London", "GB"),
     "birmingham": ("Birmingham", "West Midlands", "GB"),
+    "teesside": ("Teesside", "North East England", "GB"),
+    "scotland": ("Edinburgh", "Scotland", "GB"),
+    # Europe
     "paris": ("Paris", "Île-de-France", "FR"),
     "berlin": ("Berlin", "Berlin", "DE"),
+    "budapest": ("Budapest", "Central Hungary", "HU"),
+    "hungarian": ("Budapest", "Central Hungary", "HU"),
+    "hungary": ("Budapest", "Central Hungary", "HU"),
+    "amsterdam": ("Amsterdam", "North Holland", "NL"),
+    "rome": ("Rome", "Lazio", "IT"),
+    "milan": ("Milan", "Lombardy", "IT"),
+    "italy": ("Rome", "Lazio", "IT"),
+    "spain": ("Madrid", "Madrid", "ES"),
+    "luxembourg": ("Luxembourg City", "Luxembourg", "LU"),
+    "belgium": ("Brussels", "Brussels", "BE"),
+    "belgian": ("Brussels", "Brussels", "BE"),
+    "ireland": ("Dublin", "Leinster", "IE"),
+    "oslo": ("Oslo", "Oslo", "NO"),
+    "belarus": ("Minsk", "Minsk", "BY"),
+    "بيلاروسيا": ("مينسك", "مينسك", "BY"),
+    # Arab / Middle East
     "dubai": ("دبي", "إمارة دبي", "AE"),
     "دبي": ("دبي", "إمارة دبي", "AE"),
     "abu dhabi": ("أبوظبي", "إمارة أبوظبي", "AE"),
     "ابوظبي": ("أبوظبي", "إمارة أبوظبي", "AE"),
+    "wam.ae": ("أبوظبي", "دولة الإمارات", "AE"),
+    "الامارات": ("أبوظبي", "دولة الإمارات", "AE"),
     "cairo": ("القاهرة", "محافظة القاهرة", "EG"),
     "القاهره": ("القاهرة", "محافظة القاهرة", "EG"),
     "المرج": ("المرج", "محافظة القاهرة", "EG"),
     "الدقهليه": ("المنصورة", "محافظة الدقهلية", "EG"),
     "daqahliya": ("Mansoura", "Dakahlia", "EG"),
+    "المنيا": ("المنيا", "محافظة المنيا", "EG"),
+    "اسوان": ("أسوان", "محافظة أسوان", "EG"),
+    "القليوبيه": ("بنها", "محافظة القليوبية", "EG"),
+    "قلوبيه": ("بنها", "محافظة القليوبية", "EG"),
+    "مصر": ("القاهرة", "جمهورية مصر العربية", "EG"),
+    "المصريه": ("القاهرة", "جمهورية مصر العربية", "EG"),
+    "اليوم السابع": ("القاهرة", "جمهورية مصر العربية", "EG"),
+    "بوابه الاهرام": ("القاهرة", "جمهورية مصر العربية", "EG"),
+    "بوابة الأهرام": ("القاهرة", "جمهورية مصر العربية", "EG"),
     "جونيه": ("جونية", "محافظة جبل لبنان", "LB"),
     "jounieh": ("Jounieh", "Mount Lebanon", "LB"),
     "beirut": ("Beirut", "Beirut", "LB"),
     "بيروت": ("بيروت", "محافظة بيروت", "LB"),
+    "لبنان": ("بيروت", "محافظة بيروت", "LB"),
+    "تبسه": ("تبسة", "ولاية تبسة", "DZ"),
+    "مراكش": ("مراكش", "مراكش آسفي", "MA"),
+    "marrakech": ("Marrakech", "Marrakesh-Safi", "MA"),
+    "المغرب": ("الرباط", "المملكة المغربية", "MA"),
+    "عمان": ("مسقط", "محافظة مسقط", "OM"),
+    "oman": ("Muscat", "Muscat", "OM"),
+    # Asia
+    "bengaluru": ("Bengaluru", "Karnataka", "IN"),
+    "bangalore": ("Bengaluru", "Karnataka", "IN"),
+    "goa": ("Goa", "Goa", "IN"),
+    "mumbai": ("Mumbai", "Maharashtra", "IN"),
+    "delhi": ("New Delhi", "Delhi", "IN"),
+    "times of india": ("New Delhi", "Delhi", "IN"),
+    "carousell": ("Singapore", "Central Region", "SG"),
+    "straits times": ("Singapore", "Central Region", "SG"),
+    "singapore": ("Singapore", "Central Region", "SG"),
     "karachi": ("Karachi", "Sindh", "PK"),
     "islamabad": ("Islamabad", "ICT", "PK"),
     "lahore": ("Lahore", "Punjab", "PK"),
-    "oslo": ("Oslo", "Oslo", "NO"),
-    "budapest": ("Budapest", "Central Hungary", "HU"),
-    "amsterdam": ("Amsterdam", "North Holland", "NL"),
-    "rome": ("Rome", "Lazio", "IT"),
-    "milan": ("Milan", "Lombardy", "IT"),
+    # Africa
+    "nigeria": ("Lagos", "Lagos State", "NG"),
+    "npf-nccc": ("Abuja", "FCT", "NG"),
 }
 
 COUNTRY_NAMES_EN_AR: Dict[str, Tuple[str, str]] = {
@@ -263,6 +347,15 @@ COUNTRY_NAMES_EN_AR: Dict[str, Tuple[str, str]] = {
     "IN": ("India", "الهند"),
     "RU": ("Russia", "روسيا"),
     "AU": ("Australia", "أستراليا"),
+    "DZ": ("Algeria", "الجزائر"),
+    "MA": ("Morocco", "المغرب"),
+    "NG": ("Nigeria", "نيجيريا"),
+    "SG": ("Singapore", "سنغافورة"),
+    "BY": ("Belarus", "بيلاروسيا"),
+    "ES": ("Spain", "إسبانيا"),
+    "BE": ("Belgium", "بلجيكا"),
+    "IE": ("Ireland", "أيرلندا"),
+    "LU": ("Luxembourg", "لوكسمبورغ"),
 }
 
 
@@ -270,60 +363,139 @@ COUNTRY_NAMES_EN_AR: Dict[str, Tuple[str, str]] = {
 # 4. Channels, Sectors, and Entities Knowledge Base
 # --------------------------------------------------------------------------- #
 CHANNELS_DEF = {
-    "sms": {
-        "name_ar": "رسائل نصية (SMS)",
-        "terms": ["رسائل نصية", "رسالة نصية", "رسائل sms", "sms", "text message", "smishing", "رسائل مشبوهة", "رسائل قصيرة", "رمز التحقق", "رسائل", "رسالة"],
-    },
     "phone_call": {
         "name_ar": "مكالمات هاتفية",
-        "terms": ["اتصال هاتفي", "مكالمة هاتفية", "مكالمات هاتفية", "اتصال من مجهول", "phone call", "phone scam", "calling victims", "voice call", "vishing", "spoofed phone", "هواتف", "هاتف متنقل", "رقم هاتف", "اتصالات مشبوهة", "مكالمات", "اتصال", "scam calls"],
+        "terms": [
+            "اتصال هاتفي", "مكالمة هاتفية", "مكالمات هاتفية", "اتصال من مجهول", "phone call", "phone scam",
+            "calling victims", "voice call", "vishing", "spoofed phone", "هواتف", "هاتف متنقل", "رقم هاتف",
+            "اتصالات مشبوهة", "مكالمات", "اتصال", "scam calls", "calling", "calls", "call", "digital arrest",
+            "digital-arrest", "sim box", "قرصنة المكالمات", "ai-powered bank fraud", "scam center",
+            "call center", "دراسة: نصف السعوديين", "محاولة احتيال",
+        ],
     },
     "whatsapp": {
-        "name_ar": "تطبيق واتساب (WhatsApp)",
-        "terms": ["واتساب", "واتس اب", "whatsapp", "رسائل واتساب", "تطبيقات المراسلة", "مراسلة فورية", "تطبيق مراسلة", "تطبيق واتس"],
+        "name_ar": "تطبيقات مراسلة فورية",
+        "terms": [
+            "واتساب", "واتس اب", "whatsapp", "رسائل واتساب", "تطبيقات المراسلة", "مراسلة فورية", "تطبيق مراسلة",
+            "تطبيق واتس", "messaging", "chat", "مراسلة", "تليجرام", "telegram", "ai messaging",
+        ],
+    },
+    "fake_website": {
+        "name_ar": "مواقع ومنصات إلكترونية",
+        "terms": [
+            "موقع وهمي", "مواقع وهمية", "رابط مشبوه", "صفحة مزيفة", "fake website", "phishing site",
+            "spoofed domain", "fake portal", "cloned website", "متاجر إلكترونية", "متجر إلكتروني",
+            "روابط إلكترونية", "رابط إلكتروني", "مواقع إلكترونية", "موقع إلكتروني", "روابط", "رابط",
+            "online shopping", "online store", "online", "portal", "website", "platform", "web",
+            "صفحة إلكترونية", "صفحة وهمية", "منصة", "منصات", "متجر", "متاجر", "shopping scam",
+            "e-commerce", "ecommerce", "صفحة", "phishing", "spear-phishing", "carousell",
+            "احتيال إلكتروني", "نصب إلكتروني", "online fraud", "الخصم المفاجئ",
+            "postage fraud", "operation serengeti", "identity theft", "تفكيك شبكة للاحتيال الإلكتروني",
+            "النصب الإلكتروني", "شبكة للنصب الإلكتروني", "محتالون في الفخ", "بيلاروسيا",
+        ],
+    },
+    "bank_transfer": {
+        "name_ar": "حوالات وقنوات مصرفية",
+        "terms": [
+            "حوالات", "تحويل مصرفي", "تحويلات", "حساب بنكي", "حسابات بنكية", "سداد", "مبالغ مالية", "سحب مبالغ",
+            "غسيل أموال", "شيكات", "دفوعات", "wire", "wire transfer", "bank transfer", "transfer funds",
+            "mule account", "mule accounts", "money transfer", "fund fraud", "fund transfer",
+            "financial fraud", "reimburse her money", "refund scam", "restore access", "card-swap",
+            "غسل", "حصيلة", "سنتيم", "درهم", "جنيه", "دولار", "استولى على أموال", "استولوا",
+            "bank fraud", "bank scam", "snap fraud", "ppp fraud", "pandemic relief", "ponzi",
+            "احتيال مالي", "احتيال بنكي", "استيلاء على أموال", "أرصدة", "bank card", "loans", "loan",
+            "corporate bank", "charged rs", "financial scam", "central bank", "launder", "bank",
+        ],
+    },
+    "sms": {
+        "name_ar": "رسائل نصية (SMS)",
+        "terms": [
+            "رسائل نصية", "رسالة نصية", "رسائل sms", "sms", "text message", "smishing", "رسائل مشبوهة",
+            "رسائل قصيرة", "رمز التحقق",
+        ],
     },
     "email": {
         "name_ar": "بريد إلكتروني (Email)",
-        "terms": ["بريد إلكتروني", "رسالة بريد", "إيميل", "email", "spear-phishing email", "phishing email"],
+        "terms": [
+            "بريد إلكتروني", "رسالة بريد", "إيميل", "email", "spear-phishing email", "phishing email",
+            "email theft", "mail", "inbox", "changed bank detail", "shinyhunters",
+        ],
     },
     "social_media": {
         "name_ar": "منصات التواصل الاجتماعي",
-        "terms": ["مواقع التواصل", "شبكات التواصل", "تويتر", "منصة إكس", "تلغرام", "انستغرام", "فيسبوك", "social media", "telegram", "twitter", "facebook", "instagram", "tiktok", "finfluencer", "ميتا", "منصات اجتماعية", "منصات التواصل", "حسابات موثقة"],
-    },
-    "fake_website": {
-        "name_ar": "مواقع وروابط وهمية",
-        "terms": ["موقع وهمي", "مواقع وهمية", "رابط مشبوه", "صفحة مزيفة", "fake website", "phishing site", "spoofed domain", "fake portal", "cloned website", "متاجر إلكترونية", "متجر إلكتروني", "روابط إلكترونية", "رابط إلكتروني", "مواقع إلكترونية", "موقع إلكتروني", "روابط", "رابط"],
+        "terms": [
+            "مواقع التواصل", "شبكات التواصل", "تويتر", "منصة إكس", "تلغرام", "انستغرام", "فيسبوك",
+            "social media", "telegram", "twitter", "facebook", "instagram", "tiktok", "finfluencer",
+            "ميتا", "منصات اجتماعية", "منصات التواصل", "حسابات موثقة", "influencer", "متابعين",
+            "إعلانات ممولة", "post", "social network", "elon musk", "bitcoin", "crypto",
+            "ابتزاز", "صور فاضحة", "مساعدات مالية",
+        ],
     },
     "mobile_app": {
-        "name_ar": "تطبيقات جوال خبيثة",
-        "terms": ["تطبيق خبيث", "تطبيق وهمي", "تثبيت تطبيق", "ملف apk", "malicious app", "fake app", "trojan app", "apk file", "app fraud"],
+        "name_ar": "تطبيقات جوال رقمية",
+        "terms": [
+            "تطبيق خبيث", "تطبيق وهمي", "تثبيت تطبيق", "ملف apk", "malicious app", "fake app",
+            "trojan app", "apk file", "app fraud", "mobile app", "تطبيق", "تطبيقات",
+        ],
     },
 }
 
 SECTORS_DEF = {
-    "banking": {
-        "name_ar": "القطاع المصرفي والمالي",
-        "terms": ["بنك", "بنوك", "مصرف", "مصارف", "حساب بنكي", "بطاقة ائتمانية", "بطاقات", "تحويلات", "bank", "banking", "financial institution", "credit union", "atm", "بيانات بنكية", "سداد"],
-    },
-    "government": {
-        "name_ar": "القطاع الحكومي والخدمي",
-        "terms": ["حكومي", "وزارة", "شرطة", "الأمن العام", "النيابة", "أبشر", "نفاذ", "الزكاة والضريبة", "government", "police", "tax authority", "postal service", "municipality", "city of mobile", "جهات رسمية"],
-    },
     "ecommerce": {
         "name_ar": "التجارة والتجزئة الإلكترونية",
-        "terms": ["متجر", "تسوق", "مشتريات", "شحن", "بضائع", "ecommerce", "e-commerce", "retail", "marketplace", "online shopping", "roofing", "متاجر إلكترونية"],
+        "terms": [
+            "متجر", "تسوق", "مشتريات", "شحن", "بضائع", "ecommerce", "e-commerce", "retail",
+            "marketplace", "online shopping", "roofing", "متاجر إلكترونية", "متجر إلكتروني",
+            "صفحة بيع", "أسلحة بيضاء", "أجهزة إلكترونية", "خصم", "الخصم المفاجئ", "cigarettes",
+            "carousell", "shopping scam",
+        ],
     },
     "investment": {
         "name_ar": "الاستثمار وأسواق المال",
-        "terms": ["استثمار", "أسهم", "تداول", "عملات مشفرة", "محفظة استثمارية", "ذهب", "سبائك", "سبائك ذهبية", "سبائك ذهب", "investment", "trading", "stock market", "crypto", "forex", "diamond"],
+        "terms": [
+            "استثمار", "أسهم", "تداول", "عملات مشفرة", "محفظة استثمارية", "ذهب", "سبائك",
+            "سبائك ذهبية", "سبائك ذهب", "investment", "trading", "stock market", "crypto", "forex",
+            "diamond", "bitcoin", "cryptomus", "fund", "funds", "smart ring", "زئبق", "آثار",
+            "بورصة", "ponzi",
+        ],
     },
     "telecom": {
         "name_ar": "الاتصالات والتقنية",
-        "terms": ["اتصالات", "شريحة", "شريحة اتصال", "أرقام هواتف", "telecom", "sim card", "mobile operator", "isp"],
+        "terms": [
+            "اتصالات", "شريحة", "شريحة اتصال", "أرقام هواتف", "telecom", "sim card", "mobile operator",
+            "isp", "sim box", "شبكة اتصالات",
+        ],
+    },
+    "government": {
+        "name_ar": "القطاع الحكومي والخدمي",
+        "terms": [
+            "حكومي", "وزارة", "شرطة", "الأمن العام", "النيابة", "أبشر", "نفاذ", "الزكاة والضريبة",
+            "government", "police", "tax authority", "postal service", "municipality", "city of mobile",
+            "جهات رسمية", "الداخلية", "أمن الدولة", "الاستخبارات", "السلطات", "الهيئة", "digital arrest",
+            "snap", "ppp", "fbi", "interpol", "department of justice", "court", "city employee",
+            "city of", "postage", "ssa", "social security",
+        ],
+    },
+    "banking": {
+        "name_ar": "القطاع المصرفي والمالي",
+        "terms": [
+            "بنك", "بنوك", "مصرف", "مصارف", "حساب بنكي", "بطاقة ائتمانية", "بطاقات", "تحويلات",
+            "bank", "banking", "financial institution", "credit union", "atm", "بيانات بنكية",
+            "سداد", "درهم", "جنيه", "دولار", "سنتيم", "ريال", "ملايين", "مليار", "أموال",
+            "أموالهم", "أرصدة", "مبالغ", "حسابات", "card-swap", "mule account", "wire",
+            "financial fraud", "financial", "loans", "loan", "wire transfer", "chase", "intesa",
+            "huntington", "argenta",
+        ],
     },
     "individuals": {
         "name_ar": "الأفراد والمستهلكين",
-        "terms": ["مواطن", "مواطنين", "مقيم", "مقيمين", "أفراد", "ضحايا", "مستهلكين", "كبار السن", "individuals", "consumers", "homeowners", "elderly", "citizens", "بيانات ضحاياهم", "بيانات الضحايا"],
+        "terms": [
+            "مواطن", "مواطنين", "مقيم", "مقيمين", "أفراد", "ضحايا", "مستهلكين", "كبار السن",
+            "individuals", "consumers", "homeowners", "elderly", "citizens", "بيانات ضحاياهم",
+            "بيانات الضحايا", "فتاة", "امرأة", "المتقاعدين", "عاطل", "شباب", "youth", "teens",
+            "resident", "victims", "people", "customer", "woman", "parwaaz", "job", "jobs",
+            "ابتزاز", "صور فاضحة",
+        ],
     },
 }
 
@@ -616,18 +788,27 @@ def enrich_intelligence(
 
     # 4. Attack Channels
     detected_channels = []
-    for ckey, cinfo in CHANNELS_DEF.items():
-        if any(matches_term(full_norm, term) for term in cinfo["terms"]):
-            detected_channels.append(ckey)
+    channel_priority = [
+        "phone_call", "whatsapp", "sms", "email", "social_media",
+        "fake_website", "mobile_app", "bank_transfer"
+    ]
+    for ckey in channel_priority:
+        if ckey in CHANNELS_DEF:
+            cinfo = CHANNELS_DEF[ckey]
+            if any(matches_term(full_norm, term) for term in cinfo["terms"]):
+                detected_channels.append(ckey)
 
     primary_channel = detected_channels[0] if detected_channels else "Unknown"
     channel_ar = CHANNELS_DEF.get(primary_channel, {}).get("name_ar", "غير محدد")
 
     # 5. Targeted Sector
     detected_sectors = []
-    for skey, sinfo in SECTORS_DEF.items():
-        if any(matches_term(full_norm, term) for term in sinfo["terms"]):
-            detected_sectors.append(skey)
+    sector_priority = ["ecommerce", "investment", "telecom", "government", "banking", "individuals"]
+    for skey in sector_priority:
+        if skey in SECTORS_DEF:
+            sinfo = SECTORS_DEF[skey]
+            if any(matches_term(full_norm, term) for term in sinfo["terms"]):
+                detected_sectors.append(skey)
 
     primary_sector = detected_sectors[0] if detected_sectors else "Unknown"
     sector_ar = SECTORS_DEF.get(primary_sector, {}).get("name_ar", "غير محدد")

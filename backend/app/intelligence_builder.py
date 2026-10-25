@@ -25,7 +25,14 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from .db import backup_database, get_db
-from .intelligence_enrichment import COUNTRY_NAMES_EN_AR, FRAUD_TYPES, enrich_intelligence, norm
+from .intelligence_enrichment import (
+    CHANNELS_DEF,
+    COUNTRY_NAMES_EN_AR,
+    FRAUD_TYPES,
+    SECTORS_DEF,
+    enrich_intelligence,
+    norm,
+)
 
 log = logging.getLogger("metaview.intelligence_builder")
 
@@ -241,12 +248,12 @@ def rebuild_fraud_intelligence(con: Optional[sqlite3.Connection] = None, user_ta
             # Channel & Sector
             channels = [m["channel"] for m in cl if m["channel"] != "Unknown"]
             p_channel = channels[0] if channels else "Unknown"
-            p_channel_ar = cl[0]["channel_ar"]
+            p_channel_ar = CHANNELS_DEF.get(p_channel, {}).get("name_ar", "غير محدد")
             all_channels = list({c for m in cl for c in m.get("channels_list", [])})
 
             sectors = [m["targeted_sector"] for m in cl if m["targeted_sector"] != "Unknown"]
             p_sector = sectors[0] if sectors else "Unknown"
-            p_sector_ar = cl[0]["targeted_sector_ar"]
+            p_sector_ar = SECTORS_DEF.get(p_sector, {}).get("name_ar", "غير محدد")
             all_sectors = list({s for m in cl for s in m.get("targeted_sectors", [])})
 
             # Impersonated entity & reporting agency

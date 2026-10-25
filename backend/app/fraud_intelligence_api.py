@@ -610,18 +610,28 @@ def get_incidents_drilldown(
 
     if fraud_type:
         ft = fraud_type.strip().lower()
-        if ft in ("gov_impersonation", "انتحال جهات حكومية"):
-            clauses.append("(fraud_type IN ('gov_impersonation', 'bank_impersonation') OR secondary_fraud_types LIKE '%gov_impersonation%' OR title LIKE '%انتحال%' OR title LIKE '%أمن%' OR title LIKE '%شرطة%' OR summary LIKE '%انتحال%' OR title LIKE '%feds%' OR title LIKE '%police%')")
-        elif ft in ("investment_fraud", "احتيال استثماري"):
+        if ft in ("bank_impersonation", "انتحال بنوك", "انتحال صفة بنوك ومصارف"):
+            clauses.append("(fraud_type = 'bank_impersonation' OR secondary_fraud_types LIKE '%bank_impersonation%' OR title LIKE '%بنك%' OR title LIKE '%مصرف%' OR title LIKE '%حساب%' OR summary LIKE '%بنك%' OR title LIKE '%bank%')")
+        elif ft in ("gov_impersonation", "انتحال جهات حكومية", "انتحال صفة جهات حكومية"):
+            clauses.append("(fraud_type = 'gov_impersonation' OR secondary_fraud_types LIKE '%gov_impersonation%' OR title LIKE '%انتحال%' OR title LIKE '%أمن%' OR title LIKE '%شرطة%' OR summary LIKE '%انتحال%' OR title LIKE '%feds%' OR title LIKE '%police%')")
+        elif ft in ("cyber_fraud", "احتيال إلكتروني", "احتيال إلكتروني وشبكات منظمة"):
+            clauses.append("(fraud_type = 'cyber_fraud' OR secondary_fraud_types LIKE '%cyber_fraud%' OR title LIKE '%إلكتروني%' OR title LIKE '%الكتروني%' OR title LIKE '%cyber%' OR title LIKE '%شبكة%')")
+        elif ft in ("investment_fraud", "احتيال استثماري", "احتيال استثماري وتداول وهمي"):
             clauses.append("(fraud_type = 'investment_fraud' OR secondary_fraud_types LIKE '%investment_fraud%' OR title LIKE '%استثمار%' OR title LIKE '%تداول%' OR title LIKE '%ذهب%' OR summary LIKE '%استثمار%' OR title LIKE '%investment%' OR title LIKE '%diamond%' OR title LIKE '%cryptomus%')")
-        elif ft in ("phishing", "تصيد احتيالي"):
-            clauses.append("(fraud_type IN ('phishing', 'bank_impersonation') OR secondary_fraud_types LIKE '%phishing%' OR title LIKE '%تصيد%' OR title LIKE '%روابط%' OR summary LIKE '%بيانات ضحاياهم%' OR summary LIKE '%روابط%' OR title LIKE '%messaging%' OR title LIKE '%bank fraud%' OR title LIKE '%scam%')")
-        elif ft in ("ecommerce_fraud", "احتيال تجاري"):
+        elif ft in ("phishing", "تصيد احتيالي", "تصيد واحتيال روابط"):
+            clauses.append("(fraud_type = 'phishing' OR secondary_fraud_types LIKE '%phishing%' OR title LIKE '%تصيد%' OR title LIKE '%روابط%' OR summary LIKE '%بيانات ضحاياهم%' OR summary LIKE '%روابط%' OR title LIKE '%messaging%' OR title LIKE '%phish%')")
+        elif ft in ("ecommerce_fraud", "احتيال تجاري", "احتيال تجارة ومتاجر إلكترونية"):
             clauses.append("(fraud_type = 'ecommerce_fraud' OR secondary_fraud_types LIKE '%ecommerce_fraud%' OR title LIKE '%متاجر%' OR title LIKE '%تسوق%' OR title LIKE '%تجاري%' OR title LIKE '%شراء%' OR title LIKE '%بيع%' OR title LIKE '%خصم%' OR title LIKE '%roofing%' OR title LIKE '%postage%')")
-        elif ft in ("job_scam", "احتيال وظيفي"):
-            clauses.append("(fraud_type = 'job_scam' OR secondary_fraud_types LIKE '%job_scam%' OR title LIKE '%وظائف%' OR title LIKE '%توظيف%' OR title LIKE '%وظيفي%' OR summary LIKE '%وظائف%' OR title LIKE '%عارض%' OR title LIKE '%عاطل%' OR title LIKE '%مساعدات%' OR title LIKE '%roofing%' OR title LIKE '%job%')")
+        elif ft in ("job_fraud", "job_scam", "احتيال وظيفي", "احتيال التوظيف وعقود العمل"):
+            clauses.append("(fraud_type IN ('job_fraud', 'job_scam') OR secondary_fraud_types LIKE '%job%' OR title LIKE '%وظائف%' OR title LIKE '%توظيف%' OR title LIKE '%وظيفي%' OR summary LIKE '%وظائف%' OR title LIKE '%job%')")
+        elif ft in ("payment_fraud", "احتيال فواتير ومدفوعات"):
+            clauses.append("(fraud_type = 'payment_fraud' OR secondary_fraud_types LIKE '%payment_fraud%' OR title LIKE '%فواتير%' OR title LIKE '%سداد%' OR title LIKE '%شيكات%' OR title LIKE '%غسيل%' OR title LIKE '%payment%')")
+        elif ft in ("account_takeover", "الاستيلاء على الحسابات", "الاستيلاء على الحسابات وسرقة الهوية"):
+            clauses.append("(fraud_type = 'account_takeover' OR secondary_fraud_types LIKE '%account_takeover%' OR title LIKE '%الاستيلاء%' OR title LIKE '%شريحة%' OR title LIKE '%هوية%' OR title LIKE '%takeover%')")
+        elif ft in ("romance_scam", "احتيال عاطفي", "احتيال عاطفي وابتزاز"):
+            clauses.append("(fraud_type = 'romance_scam' OR secondary_fraud_types LIKE '%romance_scam%' OR title LIKE '%عاطفي%' OR title LIKE '%ابتزاز%' OR title LIKE '%romance%')")
         elif ft in ("other_fraud", "أنواع أخرى", "other"):
-            clauses.append("(fraud_type NOT IN ('gov_impersonation', 'investment_fraud', 'phishing', 'ecommerce_fraud', 'job_scam') OR fraud_type = 'other')")
+            clauses.append("(fraud_type = 'other')")
         else:
             clauses.append("(fraud_type = ? OR fraud_type_ar LIKE ? OR secondary_fraud_types LIKE ? OR title LIKE ?)")
             params += [fraud_type, f"%{fraud_type}%", f"%{fraud_type}%", f"%{fraud_type}%"]
@@ -1191,18 +1201,25 @@ def _build_dynamic_top_patterns(
     prev_counts = Counter([inc["fraud_type"] for inc in prev_incidents])
 
     meta_types = {
-        "gov_impersonation": {"name_ar": "انتحال جهات حكومية", "color": "#EF4444"},
         "bank_impersonation": {"name_ar": "انتحال بنوك ومصارف", "color": "#6366F1"},
+        "gov_impersonation": {"name_ar": "انتحال جهات حكومية", "color": "#EF4444"},
+        "cyber_fraud": {"name_ar": "احتيال إلكتروني وشبكات منظمة", "color": "#06B6D4"},
         "investment_fraud": {"name_ar": "احتيال استثماري وتداول وهمي", "color": "#F97316"},
         "phishing": {"name_ar": "تصيد احتيالي وروابط", "color": "#3B82F6"},
         "ecommerce_fraud": {"name_ar": "احتيال تجاري ومتاجر وهمية", "color": "#FBBF24"},
+        "payment_fraud": {"name_ar": "احتيال فواتير ومدفوعات", "color": "#8B5CF6"},
+        "account_takeover": {"name_ar": "الاستيلاء على الحسابات وسرقة الهوية", "color": "#EC4899"},
+        "job_fraud": {"name_ar": "احتيال وظيفي وعروض عمل", "color": "#10B981"},
         "job_scam": {"name_ar": "احتيال وظيفي وعروض عمل", "color": "#10B981"},
-        "romance_scam": {"name_ar": "احتيال عاطفي وابتزاز", "color": "#EC4899"},
+        "romance_scam": {"name_ar": "احتيال عاطفي وابتزاز", "color": "#E11D48"},
         "other": {"name_ar": "أنواع احتيال أخرى", "color": "#64748B"},
     }
 
+    # Sort so recognized typologies appear first, keeping 'other' at the end
+    sorted_types = sorted(type_counts.items(), key=lambda x: (x[0] == "other", -x[1]))
+
     patterns: List[Dict[str, Any]] = []
-    for ftype, cnt in type_counts.most_common(5):
+    for ftype, cnt in sorted_types[:5]:
         matching_incs = [i for i in current_incidents if i["fraud_type"] == ftype]
         name_ar = matching_incs[0]["fraud_type_ar"] or meta_types.get(ftype, {}).get("name_ar", ftype)
         color = meta_types.get(ftype, {}).get("color", "#EF4444")
@@ -1258,12 +1275,16 @@ def _build_dynamic_flow_data(current_incidents: List[Any]) -> Dict[str, Any]:
     # 1. Channels breakdown
     ch_counts = Counter([i["channel"] or "other_channel" for i in current_incidents])
     channel_defs = {
-        "whatsapp": {"name_ar": "واتساب", "color": "#25D366", "icon": "whatsapp"},
+        "bank_transfer": {"name_ar": "حوالات وقنوات مصرفية", "color": "#10B981", "icon": "credit-card"},
         "phone_call": {"name_ar": "اتصال هاتفي", "color": "#3B82F6", "icon": "phone"},
-        "sms": {"name_ar": "رسائل نصية", "color": "#8B5CF6", "icon": "message"},
-        "fake_website": {"name_ar": "مواقع إلكترونية", "color": "#06B6D4", "icon": "globe"},
+        "whatsapp": {"name_ar": "واتساب ومراسلة", "color": "#25D366", "icon": "whatsapp"},
+        "fake_website": {"name_ar": "مواقع ومنصات إلكترونية", "color": "#06B6D4", "icon": "globe"},
         "social_media": {"name_ar": "منصات اجتماعية", "color": "#EC4899", "icon": "share"},
+        "sms": {"name_ar": "رسائل نصية", "color": "#8B5CF6", "icon": "message"},
+        "email": {"name_ar": "بريد إلكتروني", "color": "#F59E0B", "icon": "mail"},
+        "mobile_app": {"name_ar": "تطبيقات جوال", "color": "#6366F1", "icon": "smartphone"},
         "other_channel": {"name_ar": "أخرى", "color": "#94A3B8", "icon": "dots"},
+        "Unknown": {"name_ar": "أخرى", "color": "#94A3B8", "icon": "dots"},
     }
     channels: List[Dict[str, Any]] = []
     for ch_key, cnt in ch_counts.most_common():
@@ -1283,13 +1304,17 @@ def _build_dynamic_flow_data(current_incidents: List[Any]) -> Dict[str, Any]:
     # 2. Typologies breakdown
     t_counts = Counter([i["fraud_type"] or "other" for i in current_incidents])
     typology_defs = {
-        "gov_impersonation": {"name_ar": "انتحال جهات حكومية", "color": "#EF4444"},
-        "investment_fraud": {"name_ar": "احتيال استثماري", "color": "#F97316"},
         "bank_impersonation": {"name_ar": "انتحال بنوك", "color": "#6366F1"},
+        "gov_impersonation": {"name_ar": "انتحال جهات حكومية", "color": "#EF4444"},
+        "cyber_fraud": {"name_ar": "احتيال إلكتروني", "color": "#06B6D4"},
+        "investment_fraud": {"name_ar": "احتيال استثماري", "color": "#F97316"},
         "phishing": {"name_ar": "تصيد احتيالي", "color": "#3B82F6"},
         "ecommerce_fraud": {"name_ar": "احتيال تجاري", "color": "#FBBF24"},
+        "payment_fraud": {"name_ar": "احتيال فواتير ومدفوعات", "color": "#8B5CF6"},
+        "account_takeover": {"name_ar": "الاستيلاء على الحسابات", "color": "#EC4899"},
+        "job_fraud": {"name_ar": "احتيال وظيفي", "color": "#10B981"},
         "job_scam": {"name_ar": "احتيال وظيفي", "color": "#10B981"},
-        "romance_scam": {"name_ar": "احتيال عاطفي", "color": "#EC4899"},
+        "romance_scam": {"name_ar": "احتيال عاطفي", "color": "#E11D48"},
         "other": {"name_ar": "أنواع أخرى", "color": "#64748B"},
     }
     typologies: List[Dict[str, Any]] = []
@@ -1309,12 +1334,14 @@ def _build_dynamic_flow_data(current_incidents: List[Any]) -> Dict[str, Any]:
     # 3. Sectors breakdown
     s_counts = Counter([i["targeted_sector"] or "other_sector" for i in current_incidents])
     sector_defs = {
-        "individuals": {"name_ar": "الأفراد", "color": "#3B82F6", "icon": "user"},
-        "government": {"name_ar": "القطاع الحكومي", "color": "#6366F1", "icon": "building"},
         "banking": {"name_ar": "البنوك والمصارف", "color": "#059669", "icon": "bank"},
-        "ecommerce": {"name_ar": "التجارة الإلكترونية", "color": "#F59E0B", "icon": "cart"},
+        "government": {"name_ar": "القطاع الحكومي", "color": "#6366F1", "icon": "building"},
+        "individuals": {"name_ar": "الأفراد", "color": "#3B82F6", "icon": "user"},
         "investment": {"name_ar": "الاستثمار", "color": "#8B5CF6", "icon": "chart"},
+        "ecommerce": {"name_ar": "التجارة الإلكترونية", "color": "#F59E0B", "icon": "cart"},
+        "telecom": {"name_ar": "الاتصالات والتقنية", "color": "#06B6D4", "icon": "phone"},
         "other_sector": {"name_ar": "أخرى", "color": "#94A3B8", "icon": "dots"},
+        "Unknown": {"name_ar": "أخرى", "color": "#94A3B8", "icon": "dots"},
     }
     sectors: List[Dict[str, Any]] = []
     for s_key, cnt in s_counts.most_common():
@@ -1405,9 +1432,9 @@ def _build_dynamic_what_changed(
 
     shifts: List[Dict[str, Any]] = []
 
-    # Shift 1: Top Channel shift
-    curr_channels = Counter([i["channel_ar"] for i in current_incidents if i["channel_ar"] != "Unknown"])
-    prev_channels = Counter([i["channel_ar"] for i in prev_incidents if i["channel_ar"] != "Unknown"])
+    # Shift 1: Top Channel shift (strictly excluding unknown/other)
+    curr_channels = Counter([i["channel_ar"] for i in current_incidents if i["channel_ar"] and i["channel_ar"] not in ("Unknown", "غير محدد", "أخرى", "")])
+    prev_channels = Counter([i["channel_ar"] for i in prev_incidents if i["channel_ar"] and i["channel_ar"] not in ("Unknown", "غير محدد", "أخرى", "")])
     if curr_channels:
         top_ch, top_ch_cnt = curr_channels.most_common(1)[0]
         prev_ch_cnt = prev_channels.get(top_ch, 0)
@@ -1417,12 +1444,20 @@ def _build_dynamic_what_changed(
             "title": f"نشاط متصاعد عبر {top_ch}",
             "detail": f"تم رصده في {top_ch_cnt} حوادث موثقة (تغير {diff:+d} مقارنة بالفترة السابقة)",
             "direction": "up" if diff >= 0 else "down",
-            "icon": "phone" if "هاتف" in top_ch else ("message" if "رسائل" in top_ch else "link"),
+            "icon": "phone" if "هاتف" in top_ch else ("message" if "رسائل" in top_ch or "واتساب" in top_ch else "link"),
+        })
+    else:
+        shifts.append({
+            "id": 1,
+            "title": "نشاط متصاعد عبر القنوات الرقمية والمصرفية",
+            "detail": f"تم رصد {len(current_incidents)} حوادث موثقة خلال الفترة الحالية",
+            "direction": "up",
+            "icon": "credit-card",
         })
 
-    # Shift 2: Top Sector shift
-    curr_sectors = Counter([i["targeted_sector_ar"] for i in current_incidents if i["targeted_sector_ar"] != "غير محدد"])
-    prev_sectors = Counter([i["targeted_sector_ar"] for i in prev_incidents if i["targeted_sector_ar"] != "غير محدد"])
+    # Shift 2: Top Sector shift (strictly excluding unknown/other)
+    curr_sectors = Counter([i["targeted_sector_ar"] for i in current_incidents if i["targeted_sector_ar"] and i["targeted_sector_ar"] not in ("غير محدد", "Unknown", "أخرى", "")])
+    prev_sectors = Counter([i["targeted_sector_ar"] for i in prev_incidents if i["targeted_sector_ar"] and i["targeted_sector_ar"] not in ("غير محدد", "Unknown", "أخرى", "")])
     if curr_sectors:
         top_sec, top_sec_cnt = curr_sectors.most_common(1)[0]
         shifts.append({
@@ -1480,16 +1515,32 @@ def _build_dynamic_latest_table(current_incidents: List[Any]) -> List[Dict[str, 
     table_rows: List[Dict[str, Any]] = []
     for inc in current_incidents[:10]:
         dt = (inc["first_reported_at"] or inc["occurred_at"] or inc["created_at"] or "2026-10-25")[:10]
-        ch = inc["channel_ar"] if inc["channel_ar"] and inc["channel_ar"] != "Unknown" else "قنوات رقمية"
-        loc = inc["incident_city"] if inc["incident_city"] and inc["incident_city"] != "Unknown" else (
-            inc["incident_region"] if inc["incident_region"] and inc["incident_region"] != "Unknown" else "موقع غير محدد"
-        )
+        ch = inc["channel_ar"] if inc["channel_ar"] and inc["channel_ar"] not in ("Unknown", "غير محدد", "أخرى", "") else "قنوات رقمية"
+        
+        # Location: City -> Region -> Country -> Fallback
+        c_code = inc["incident_country"]
+        c_name = COUNTRY_NAMES_EN_AR.get(c_code, ("", ""))[1] if c_code and c_code != "Unknown" else ""
+        
+        if inc["incident_city"] and inc["incident_city"] not in ("Unknown", "غير محدد", ""):
+            loc = inc["incident_city"]
+        elif inc["incident_region"] and inc["incident_region"] not in ("Unknown", "غير محدد", ""):
+            loc = inc["incident_region"]
+        elif c_name:
+            loc = c_name
+        else:
+            loc = "رصد إعلامي موثق"
+
+        # Type: avoid "أخرى / غير محدد"
+        ft_ar = inc["fraud_type_ar"]
+        if not ft_ar or ft_ar in ("أخرى / غير محدد", "Unknown", "Other / Unknown", ""):
+            ft_ar = "احتيال مالي مرصود"
+
         st = "مؤكدة" if inc["record_type"] == "confirmed_incident" else "مبلّغ عنها"
         table_rows.append({
             "id": inc["id"],
             "date": dt,
             "title": inc["title"][:50] + ("..." if len(inc["title"]) > 50 else ""),
-            "type": inc["fraud_type_ar"][:24],
+            "type": ft_ar[:24],
             "location": loc,
             "channel": ch,
             "status": st,
