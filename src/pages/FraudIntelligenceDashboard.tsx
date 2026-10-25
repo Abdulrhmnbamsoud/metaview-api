@@ -242,7 +242,7 @@ export const FraudIntelligenceDashboard: React.FC = () => {
             MetaView 3
           </h1>
           <p className="text-xs md:text-sm text-[#64748B]">
-            رصد وتحليل اتجاهات الاحتيال المالي وبناء صورة استخباراتية من مصادر موثوقة
+            رصد وتحليل اتجاهات الاحتيال المالي وبناء صورة تحليلية شاملة من مصادر موثوقة
           </p>
         </div>
 
