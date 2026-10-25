@@ -661,6 +661,29 @@ def incident_to_dict(r: sqlite3.Row, detail: bool = False) -> Dict[str, Any]:
         "locations": _loads(r["locations"], []), "agencies": _loads(r["agencies"], []),
         "channels": _loads(r["channels"], []), "articles": articles,
     }
+    keys = set(r.keys()) if hasattr(r, "keys") else set()
+    if "fraud_type" in keys:
+        d.update({
+            "fraud_type": r["fraud_type"],
+            "fraud_type_ar": r["fraud_type_ar"],
+            "incident_country": r["incident_country"],
+            "incident_city": r["incident_city"],
+            "incident_region": r["incident_region"],
+            "victim_location": r["victim_location"],
+            "suspect_location": r["suspect_location"],
+            "channel": r["channel"],
+            "channel_ar": r["channel_ar"],
+            "targeted_sector": r["targeted_sector"],
+            "targeted_sector_ar": r["targeted_sector_ar"],
+            "impersonated_entity": r["impersonated_entity"],
+            "reporting_agency": r["reporting_agency"],
+            "financial_loss_amount": r["financial_loss_amount"],
+            "financial_loss_currency": r["financial_loss_currency"],
+            "occurred_at": r["occurred_at"],
+            "evidence_text": r["evidence_text"],
+            "is_emerging_threat": bool(r["is_emerging_threat"]),
+            "emerging_rationale": r["emerging_rationale"],
+        })
     if detail:
         d.update({
             "facts": _loads(r["facts"], {}), "methods": _loads(r["methods"], []),

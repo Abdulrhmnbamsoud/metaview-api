@@ -286,6 +286,51 @@ def init_db() -> None:
     _ensure_column(con, "incidents", "record_type", "TEXT")
     _ensure_column(con, "incidents", "review_status", "TEXT")
     _ensure_column(con, "incidents", "pending_review", "INTEGER DEFAULT 0")
+
+    # Intelligence Enrichment columns for Fraud Intelligence Dashboard
+    _ensure_column(con, "incidents", "fraud_type", "TEXT")
+    _ensure_column(con, "incidents", "fraud_type_ar", "TEXT")
+    _ensure_column(con, "incidents", "fraud_type_en", "TEXT")
+    _ensure_column(con, "incidents", "secondary_fraud_types", "TEXT")
+    _ensure_column(con, "incidents", "incident_country", "TEXT")
+    _ensure_column(con, "incidents", "incident_city", "TEXT")
+    _ensure_column(con, "incidents", "incident_region", "TEXT")
+    _ensure_column(con, "incidents", "victim_location", "TEXT")
+    _ensure_column(con, "incidents", "suspect_location", "TEXT")
+    _ensure_column(con, "incidents", "channel", "TEXT")
+    _ensure_column(con, "incidents", "channel_ar", "TEXT")
+    _ensure_column(con, "incidents", "channels_list", "TEXT")
+    _ensure_column(con, "incidents", "targeted_sector", "TEXT")
+    _ensure_column(con, "incidents", "targeted_sector_ar", "TEXT")
+    _ensure_column(con, "incidents", "targeted_sectors", "TEXT")
+    _ensure_column(con, "incidents", "impersonated_entity", "TEXT")
+    _ensure_column(con, "incidents", "reporting_agency", "TEXT")
+    _ensure_column(con, "incidents", "modus_operandi_detailed", "TEXT")
+    _ensure_column(con, "incidents", "financial_loss_amount", "REAL")
+    _ensure_column(con, "incidents", "financial_loss_currency", "TEXT")
+    _ensure_column(con, "incidents", "financial_loss_raw", "TEXT")
+    _ensure_column(con, "incidents", "occurred_at", "TEXT")
+    _ensure_column(con, "incidents", "evidence_text", "TEXT")
+    _ensure_column(con, "incidents", "evidence_sources", "TEXT")
+    _ensure_column(con, "incidents", "enrichment_confidence", "REAL")
+    _ensure_column(con, "incidents", "is_emerging_threat", "INTEGER DEFAULT 0")
+    _ensure_column(con, "incidents", "emerging_rationale", "TEXT")
+
+    # Safe migration: audit log table for all intelligence enrichment & rebuilding operations
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS enrichment_audit_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            action TEXT NOT NULL,
+            articles_evaluated INTEGER DEFAULT 0,
+            incidents_created INTEGER DEFAULT 0,
+            incidents_updated INTEGER DEFAULT 0,
+            details TEXT,
+            executed_by TEXT DEFAULT 'system',
+            created_at TEXT NOT NULL
+        )
+        """
+    )
     # Coverage link: which articles back which incident, and WHY they were linked (articles are never merged).
     cur.execute(
         """
