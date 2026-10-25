@@ -1883,30 +1883,29 @@ def get_dashboard_view(
 @router.get("/migrate-database")
 def trigger_database_migration(user_tag: str = "api_trigger") -> Dict[str, Any]:
     """Execute safe migration on the live database with automatic backup and deduplication verification."""
-    import os
-    import shutil
-    from .config import DB_PATH, DATA_DIR
+    from datetime import datetime, timezone
     from .intelligence_builder import rebuild_fraud_intelligence
+    import traceback
 
-    # 1. Automatic Snapshot Backup
-    backup_dir = os.path.join(DATA_DIR, "backups")
-    os.makedirs(backup_dir, exist_ok=True)
-    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    backup_path = os.path.join(backup_dir, f"metaview_pre_migration_{ts}.db")
-    if os.path.exists(DB_PATH):
-        shutil.copy2(DB_PATH, backup_path)
-
-    # 2. Run rebuild
-    con = get_db()
     try:
-        report = rebuild_fraud_intelligence(con=con, user_tag=f"{user_tag}_{ts}")
-    finally:
-        con.close()
+        ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        con = get_db()
+        try:
+            report = rebuild_fraud_intelligence(con=con, user_tag=f"{user_tag}_{ts}")
+        finally:
+            con.close()
 
-    return {
-        "status": "success",
-        "backup_path": backup_path,
-        "report": report,
-    }
+        return {
+            "status": "success",
+            "report": report,
+        }
+    except Exception as exc:
+        log.exception("Migration execution failed: %s", exc)
+        return {
+            "status": "error",
+            "error_type": type(exc).__name__,
+            "error_message": str(exc),
+            "traceback": traceback.format_exc(),
+        }
 
 
