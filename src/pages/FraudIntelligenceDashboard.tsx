@@ -74,7 +74,7 @@ export const FraudIntelligenceDashboard: React.FC = () => {
         if (isMounted) setData(res);
       } catch (err: any) {
         console.error('Failed to load dashboard view:', err);
-        if (isMounted) setError(err?.message || 'تعذر تحميل بيانات استخبارات الاحتيال');
+        if (isMounted) setError(err?.message || 'تعذر تحميل بيانات ميتا فيو الاحتيال');
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -155,7 +155,7 @@ export const FraudIntelligenceDashboard: React.FC = () => {
     return (
       <div className="p-8 flex flex-col items-center justify-center min-h-[400px] text-center" dir="rtl">
         <AlertTriangle className="w-12 h-12 text-red-500 mb-3" />
-        <h3 className="text-lg font-bold text-[#10213D] mb-1">تعذر تحميل بيانات الاستخبارات</h3>
+        <h3 className="text-lg font-bold text-[#10213D] mb-1">تعذر تحميل بيانات ميتا فيو</h3>
         <p className="text-sm text-[#64748B] max-w-md mb-4">{error}</p>
         <button
           onClick={() => window.location.reload()}
@@ -189,10 +189,10 @@ export const FraudIntelligenceDashboard: React.FC = () => {
         {/* Title and Subtitle on the LEFT */}
         <div dir="rtl" className="text-right space-y-1">
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-[#10213D]">
-            استخبارات الإحتيال
+            ميتا فيو الإحتيال
           </h1>
           <p className="text-xs md:text-sm text-[#64748B]">
-            رصد وتحليل اتجاهات الاحتيال المالي وبناء صورة استخباراتية من مصادر موثوقة
+            رصد وتحليل اتجاهات الاحتيال المالي وبناء صورة ميتا فيو من مصادر موثوقة
           </p>
         </div>
 
@@ -841,7 +841,7 @@ export const FraudIntelligenceDashboard: React.FC = () => {
             {changed.map((c) => (
               <div
                 key={c.id}
-                onClick={() => openDrilldown(`التحول الاستخباري: ${c.title}`)}
+                onClick={() => openDrilldown(`تحول ميتا فيو: ${c.title}`)}
                 className="group cursor-pointer p-2.5 rounded-xl bg-white hover:bg-[#F8FAFC] border border-[#E7ECF3] flex items-center justify-between transition text-xs"
               >
                 {/* Right: Icon box + Texts */}

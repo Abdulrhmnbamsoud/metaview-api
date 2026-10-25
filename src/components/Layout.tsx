@@ -98,7 +98,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   // Dynamic Navigation based on RBAC Least Privilege
   const primaryNav = [
     { to: '/', label: 'الرئيسية', icon: Home, exact: true },
-    { to: '/fraud-intelligence', label: 'استخبارات الاحتيال', icon: Activity },
+    { to: '/fraud-intelligence', label: 'ميتا فيو الاحتيال', icon: Activity },
     { to: '/explore', label: 'الاستكشاف', icon: Compass },
     { to: '/rules', label: 'قواعد الكشف', icon: ListChecks },
     ...(can('rule.create') || can('incident.annotate') || role === 'analyst' || role === 'admin'
@@ -125,7 +125,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   if (isFraudIntelPage) {
     const fraudIntelNav = [
       { to: '/', label: 'الرئيسية', icon: Home },
-      { to: '/fraud-intelligence', label: 'استخبارات الاحتيال', icon: Activity, active: true },
+      { to: '/fraud-intelligence', label: 'ميتا فيو الاحتيال', icon: Activity, active: true },
       { to: '/explore?type=incident', label: 'الحوادث', icon: ShieldAlert },
       { to: '/explore?type=pattern', label: 'الأنماط', icon: Network },
       { to: '/system', label: 'المصادر الإعلامية', icon: Globe },
