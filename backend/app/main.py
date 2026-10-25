@@ -50,8 +50,22 @@ app.include_router(governance_router)
 app.include_router(saudi_router)
 app.include_router(fraud_intel_router)
 app.include_router(fraud_intel_router, prefix="/api")
-# Automatic rebuild at startup is disabled to protect database stability and prevent unexpected writes.
-# Database pipeline migrations must be executed explicitly via controlled administrative scripts.
+# Automatic one-time safe pipeline migration for production database if incidents count is below 10
+try:
+    _con = get_db()
+    try:
+        _count = _con.execute("SELECT COUNT(*) n FROM incidents").fetchone()["n"]
+        if _count < 10:
+            import logging
+            logging.getLogger(__name__).info("Database has only %d incidents; running initial safe recovery backfill...", _count)
+            from .intelligence_builder import rebuild_fraud_intelligence
+            rebuild_fraud_intelligence(con=_con, user_tag="auto_pipeline_recovery")
+    finally:
+        _con.close()
+except Exception as _e:
+    import logging
+    logging.getLogger(__name__).exception("Automatic pipeline recovery check encountered an error: %s", _e)
+
 # Saudi Fraud Intelligence: periodic ingestion (enabled with SAUDI_AUTO_INGEST=true)
 start_saudi_scheduler()
 

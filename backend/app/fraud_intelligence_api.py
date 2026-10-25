@@ -1879,3 +1879,34 @@ def get_dashboard_view(
         con.close()
 
 
+@router.post("/migrate-database")
+@router.get("/migrate-database")
+def trigger_database_migration(user_tag: str = "api_trigger") -> Dict[str, Any]:
+    """Execute safe migration on the live database with automatic backup and deduplication verification."""
+    import os
+    import shutil
+    from .config import DB_PATH, DATA_DIR
+    from .intelligence_builder import rebuild_fraud_intelligence
+
+    # 1. Automatic Snapshot Backup
+    backup_dir = os.path.join(DATA_DIR, "backups")
+    os.makedirs(backup_dir, exist_ok=True)
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    backup_path = os.path.join(backup_dir, f"metaview_pre_migration_{ts}.db")
+    if os.path.exists(DB_PATH):
+        shutil.copy2(DB_PATH, backup_path)
+
+    # 2. Run rebuild
+    con = get_db()
+    try:
+        report = rebuild_fraud_intelligence(con=con, user_tag=f"{user_tag}_{ts}")
+    finally:
+        con.close()
+
+    return {
+        "status": "success",
+        "backup_path": backup_path,
+        "report": report,
+    }
+
+
