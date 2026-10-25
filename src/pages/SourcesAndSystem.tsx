@@ -18,10 +18,13 @@ import { SaudiSourceInfo, SaudiRuntime } from '../types/saudi';
 import { HealthStatus, IngestRunResult } from '../types';
 import { Chip, LoadingBlock, ErrorBlock, Unavailable, fmtDateTime } from '../components/ui';
 import { timeAgo } from '../utils/formatDate';
+import { useAuth } from '../context/AuthContext';
 
 type Tab = 'sources' | 'system' | 'ingest';
 
 export const SourcesAndSystem: React.FC = () => {
+  const { can, role } = useAuth();
+  const canTriggerIngest = can('ingestion.trigger') || role === 'admin';
   const [tab, setTab] = useState<Tab>('sources');
   const [sources, setSources] = useState<SaudiSourceInfo[]>([]);
   const [runtime, setRuntime] = useState<SaudiRuntime | null>(null);
@@ -33,6 +36,9 @@ export const SourcesAndSystem: React.FC = () => {
   const [isIngesting, setIsIngesting] = useState(false);
   const [lastRunResult, setLastRunResult] = useState<IngestRunResult | null>(null);
   const [ingestMsg, setIngestMsg] = useState<string | null>(null);
+
+  // Filter state (must be declared with all hooks before any early returns)
+  const [sourceKindFilter, setSourceKindFilter] = useState<'all' | 'x_social' | 'official' | 'news'>('all');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -75,8 +81,6 @@ export const SourcesAndSystem: React.FC = () => {
 
   if (loading && !runtime) return <LoadingBlock label="جارٍ تحميل معلومات المصادر والنظام…" />;
   if (error && !runtime) return <ErrorBlock message={error} onRetry={load} />;
-
-  const [sourceKindFilter, setSourceKindFilter] = useState<'all' | 'x_social' | 'official' | 'news'>('all');
 
   const filteredSources = sources.filter((s) => {
     if (sourceKindFilter === 'x_social') return s.kind === 'x_social';
@@ -275,7 +279,7 @@ export const SourcesAndSystem: React.FC = () => {
               <span className="text-[11px] font-mono text-stone-500 dark:text-slate-400">جدولة التحديث</span>
               <div className="text-lg font-bold text-stone-900 dark:text-stone-100 flex items-center gap-1.5">
                 <Timer className="w-4 h-4 text-sky-600" />
-                <span>{runtime.scheduler.thread_alive ? 'نشطة تلقائياً' : 'متوقفة'}</span>
+                <span>{runtime.scheduler?.thread_alive ? 'نشطة تلقائياً' : 'متوقفة'}</span>
               </div>
             </div>
 
@@ -303,7 +307,7 @@ export const SourcesAndSystem: React.FC = () => {
               <div className="p-3 rounded-lg bg-stone-50 dark:bg-slate-900/50 border border-stone-200 dark:border-slate-800 space-y-1">
                 <span className="text-stone-500 dark:text-slate-400 block">مسار الملف:</span>
                 <span className="font-mono text-stone-800 dark:text-stone-200 block truncate" dir="ltr">
-                  {runtime.disk.db_path}
+                  {runtime.disk?.db_path || '—'}
                 </span>
               </div>
 
@@ -332,18 +336,32 @@ export const SourcesAndSystem: React.FC = () => {
                 </p>
               </div>
 
-              <button
-                onClick={handleRunIngest}
-                disabled={isIngesting}
-                className={`px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 transition-all ${
-                  isIngesting
-                    ? 'bg-stone-300 dark:bg-slate-800 text-stone-500 cursor-not-allowed'
-                    : 'bg-sky-600 hover:bg-sky-700 text-white shadow-sm'
-                }`}
-              >
-                <Play className={`w-3.5 h-3.5 fill-current ${isIngesting ? 'animate-pulse' : ''}`} />
-                <span>{isIngesting ? 'جارٍ السحب والفحص…' : 'بدء السحب الآن'}</span>
-              </button>
+              <div className="flex flex-col sm:items-end gap-1">
+                <button
+                  onClick={handleRunIngest}
+                  disabled={isIngesting || !canTriggerIngest}
+                  title={!canTriggerIngest ? 'يتطلب تشغيل السحب صلاحيات مدير المنصة (Admin)' : 'بدء الاستيعاب الآن'}
+                  className={`px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 transition-all ${
+                    isIngesting || !canTriggerIngest
+                      ? 'bg-stone-200 dark:bg-slate-800 text-stone-400 dark:text-slate-500 cursor-not-allowed border border-stone-300 dark:border-slate-700'
+                      : 'bg-sky-600 hover:bg-sky-700 text-white shadow-sm'
+                  }`}
+                >
+                  <Play className={`w-3.5 h-3.5 fill-current ${isIngesting ? 'animate-pulse' : ''}`} />
+                  <span>
+                    {isIngesting
+                      ? 'جارٍ السحب والفحص…'
+                      : !canTriggerIngest
+                      ? 'سحب فوري (مدير المنصة فقط)'
+                      : 'بدء السحب الآن'}
+                  </span>
+                </button>
+                {!canTriggerIngest && (
+                  <span className="text-[10px] text-stone-400 dark:text-slate-500">
+                    * مقتصر على حسابات الأدمن
+                  </span>
+                )}
+              </div>
             </div>
 
             {ingestMsg && (

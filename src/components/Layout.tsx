@@ -98,9 +98,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     ...(can('rule.create') || can('incident.annotate') || role === 'analyst' || role === 'admin'
       ? [{ to: '/workspace', label: 'مساحة العمل', icon: Briefcase }]
       : []),
-    ...(can('source.manage') || role === 'admin'
-      ? [{ to: '/system', label: 'المصادر والنظام', icon: Server }]
-      : []),
+    { to: '/system', label: 'المصادر والنظام', icon: Server },
     ...(can('team.manage') || role === 'admin'
       ? [{ to: '/team', label: 'إدارة الفريق', icon: Users }]
       : []),
