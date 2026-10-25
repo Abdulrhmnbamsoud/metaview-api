@@ -23,7 +23,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from .db import backup_database, get_db
-from .intelligence_enrichment import COUNTRY_NAMES_EN_AR, FRAUD_TYPES, enrich_intelligence
+from .intelligence_enrichment import COUNTRY_NAMES_EN_AR, FRAUD_TYPES, enrich_intelligence, norm
 
 log = logging.getLogger("metaview.intelligence_builder")
 
@@ -138,7 +138,7 @@ def rebuild_fraud_intelligence(con: Optional[sqlite3.Connection] = None, user_ta
 
         for art in fraud_articles:
             placed = False
-            head_a = (art["headline"] or "").lower()
+            head_a = norm(art["headline"] or "")
             amt_a = art["financial_loss_amount"]
             curr_a = art["financial_loss_currency"]
             country_a = art["incident_country"]
@@ -147,7 +147,7 @@ def rebuild_fraud_intelligence(con: Optional[sqlite3.Connection] = None, user_ta
 
             for cl in clusters:
                 seed = cl[0]
-                head_b = (seed["headline"] or "").lower()
+                head_b = norm(seed["headline"] or "")
                 amt_b = seed["financial_loss_amount"]
                 curr_b = seed["financial_loss_currency"]
                 country_b = seed["incident_country"]
@@ -156,13 +156,27 @@ def rebuild_fraud_intelligence(con: Optional[sqlite3.Connection] = None, user_ta
 
                 # Case 1: Specific operation or case phrase
                 is_op_match = False
-                if ("مواجهة الشبح" in head_a or "confrontation ghost" in head_a) and ("مواجهة الشبح" in head_b or "confrontation ghost" in head_b):
+                if ("مواجهه الشبح" in head_a or "مواجهة الشبح" in head_a or "confrontation ghost" in head_a) and ("مواجهه الشبح" in head_b or "مواجهة الشبح" in head_b or "confrontation ghost" in head_b):
                     is_op_match = True
                 elif ("gold in forest" in head_a) and ("gold in forest" in head_b):
                     is_op_match = True
                 elif ("palatine" in head_a or "breider" in head_a) and ("palatine" in head_b or "breider" in head_b):
                     is_op_match = True
                 elif ("vashi diamond" in head_a) and ("vashi diamond" in head_b):
+                    is_op_match = True
+                elif ("9" in head_a and ("يمن" in head_a or "سودان" in head_a or "مقيم" in head_a)) and ("9" in head_b and ("يمن" in head_b or "سودان" in head_b or "مقيم" in head_b)):
+                    is_op_match = True
+                elif ("شرطة الرياض تطيح" in head_a or "الاطاحة بشبكة احتيال" in head_a) and ("شرطة الرياض تطيح" in head_b or "الاطاحة بشبكة احتيال" in head_b) and ("خارج المملكة" in head_a or "عصابي" in head_a) and ("خارج المملكة" in head_b or "عصابي" in head_b):
+                    is_op_match = True
+                elif ("جونية" in head_a or "jounieh" in head_a) and ("جونية" in head_b or "jounieh" in head_b):
+                    is_op_match = True
+                elif ("huntington" in head_a) and ("huntington" in head_b):
+                    is_op_match = True
+                elif ("intesa" in head_a) and ("intesa" in head_b):
+                    is_op_match = True
+                elif ("cryptomus" in head_a) and ("cryptomus" in head_b):
+                    is_op_match = True
+                elif ("anne arundel" in head_a) and ("anne arundel" in head_b):
                     is_op_match = True
 
                 # Case 2: Matching loss amount + currency + country (non-trivial, amount >= $10k)

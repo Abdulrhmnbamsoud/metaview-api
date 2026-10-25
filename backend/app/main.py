@@ -50,14 +50,8 @@ app.include_router(governance_router)
 app.include_router(saudi_router)
 app.include_router(fraud_intel_router)
 app.include_router(fraud_intel_router, prefix="/api")
-# Upgrade an existing DB in place: classify rows lacking content_type and derive incidents.
-# Additive + idempotent (never deletes articles); independent of SAUDI_AUTO_INGEST.
-run_startup_backfill()
-from .intelligence_builder import rebuild_fraud_intelligence
-try:
-    rebuild_fraud_intelligence(user_tag="startup_init")
-except Exception:
-    pass
+# Automatic rebuild at startup is disabled to protect database stability and prevent unexpected writes.
+# Database pipeline migrations must be executed explicitly via controlled administrative scripts.
 # Saudi Fraud Intelligence: periodic ingestion (enabled with SAUDI_AUTO_INGEST=true)
 start_saudi_scheduler()
 

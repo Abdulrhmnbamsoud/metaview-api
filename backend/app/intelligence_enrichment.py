@@ -470,42 +470,49 @@ def enrich_intelligence(
     elif cyber_core and not fraud_core:
         content_type = "general_cybersecurity"
     else:
-        # Distinguish the 4 fraud categories with strict evidence checks
-        # 1. Awareness, education, thought leadership, legal discussion, industry events
+        # Check A: Awareness, educational guidance, legal analyses, general media tips
         is_awareness = bool(re.search(
-            rf"{_AR_PREFIX}(حمله|مبادره|توعيه|تثقيف|نصائح|ارشادات|دليل|مراجعه|اليوم العالمي|فعاليه|مؤتمر|ندوه|بث مباشر|كيف واجه القانون|بعد تحرك النواب|مجلس النواب|عقوبات رادعه|توصيات عربيه|يوسع ملاحقه){_AR_SUFFIX}|"
-            r"\b(campaign|awareness|tips|how to spot|how to avoid|how to protect|how to verify|guide|interactive: how to|review|protection review|event|events|livestream|five ways|why banks pay|cross-sector|anti-fraud exchange|launches real-time|national strategy|fuel surge|hits record|captures \d+%|want ottawa to make|must refund first|same scam. 2 countries|spot imper|report claims)\b",
-            full_norm
+            rf"{_AR_PREFIX}(حمله|مبادره|توعيه|تثقيف|نصائح|ارشادات|دليل|مراجعه|اليوم العالمي|فعاليه|مؤتمر|ندوه|بث مباشر|كيف واجه القانون|بعد تحرك النواب|مجلس النواب|عقوبات رادعه|توصيات عربيه|شيك قبل تتفاعل|نصائح لحمايه|ارشادات لتجنب){_AR_SUFFIX}|"
+            r"\b(campaign|awareness|tips|how to spot|how to avoid|how to protect|how to verify|guide|interactive: how to|review|events|livestream|cross-sector|anti-fraud exchange|national strategy|why banks pay)\b",
+            head_norm
         ))
-        # 2. Warnings / Alerts
+        # Check B: Warnings / Official alerts from regulators or banks
         is_warning = bool(re.search(
-            rf"{_AR_PREFIX}(تحذر|تحذير|تنبيه|احذر|مخاطر تتزايد){_AR_SUFFIX}|"
+            rf"{_AR_PREFIX}(تحذر|تحذير|تنبيه|احذر|مخاطر تتزايد|المركزي يحذر|ساما تحذر|البنك المركزي ينبه|الانتربول يحذر){_AR_SUFFIX}|"
             r"\b(beware|warn|warning|warns|advisory|alert|fraud alert)\b",
-            full_norm
+            head_norm
         ))
-        # 3. Confirmed enforcement / arrest / court / judicial sanction
+        # Check C: Confirmed enforcement, police bust, court sanction, official arrest
         is_confirmed = bool(re.search(
-            rf"{_AR_PREFIX}(?:ال|[يوت]|وال)?(قبض|اطاح|ضبط|توقيف|محكمه|سجن|ادان|موقوف|مشتبه|سقوط عصابه|في قبضه|تفكيك|مواجهه الشبح|في الفخ){_AR_SUFFIX}|"
-            r"\b(arrest|arrested|arrests|charged|charges|sentenc|indicted|busted|detained|strike force|convicted|sanctions|feds suspect|judge releases suspect|operation confrontation ghost)\b",
-            full_norm
+            rf"{_AR_PREFIX}(?:ال|[يوت]|وال)?(قبض|اطاح|اطاحت|ضبط|توقيف|محكمه|سجن|ادان|ادانت|موقوف|مشتبه|سقوط عصابه|في قبضه|تفكيك|مواجهه الشبح){_AR_SUFFIX}|"
+            r"\b(arrest|arrested|arrests|charged|charges|sentenc|sentenced|indicted|busted|detained|strike force|convicted|sanctions|operation confrontation ghost)\b",
+            head_norm
         ))
-        # 4. Specific reported incident with victims, losses, or police investigation
+        # Check D: Documented reported incidents with actual victims, reported losses, or ongoing investigations (no arrest required)
         is_reported = bool(re.search(
-            rf"{_AR_PREFIX}(وقع ضحيه|تعرض لعمليه|استولي علي|سرقوا|ضحايا|خسائر|تفاصيل جريمه|احتيال وابتزاز|فخ احتيال|محتالون في الفخ|محاولات احتياليه|انتحال هويه|حاول شخص|رسائل مشبوهه){_AR_SUFFIX}|"
-            r"\b(defrauded|victim of|victims|lost|losses|stolen|drains|drained|hit by|hit millions|cost victims|scam costs|investigate.*fraud complaints|scam in anne arundel|scam has victims|roofing scam|leave gold in forest|diamond scam|feds charge)\b",
-            full_norm
+            rf"{_AR_PREFIX}(وقع ضحيه|وقعت في فخ|تعرض لعمليه|استولي علي|استولوا|سرقوا|ضحايا|خسائر|تفاصيل جريمه|احتيال وابتزاز|فخ احتيال|محتالون في الفخ|سحب مبالغ|سرقه ارصده|شكوي|بلاغات|تعرضوا لمحاوله احتيال){_AR_SUFFIX}|"
+            r"\b(defrauded|victim of|victims|lost|losses|stolen|drains|drained|hit by|cost victims|scam costs|investigate.*complaints|scammed|withdraw funds.*pick)\b",
+            full_text
+        ))
+        # Check E: Scams detected or thwarted before financial loss
+        is_attempt = bool(re.search(
+            rf"{_AR_PREFIX}(محاوله احتيال|محاولات احتيال|رسائل مشبوهه|رابط مشبوه|مكالمه احتياليه){_AR_SUFFIX}|"
+            r"\b(attempted scam|phishing attempt|scam attempt)\b",
+            head_norm
         ))
 
-        if is_confirmed:
+        # Resolution hierarchy: Awareness/Legal analysis first to avoid tagging general penal law discussions as arrests
+        if is_awareness:
+            content_type = "awareness_campaign"
+        elif is_warning:
+            content_type = "fraud_warning"
+        elif is_confirmed:
             content_type = "confirmed_incident"
         elif is_reported:
             content_type = "reported_incident"
-        elif is_warning:
-            content_type = "fraud_warning"
-        elif is_awareness:
-            content_type = "awareness_campaign"
+        elif is_attempt:
+            content_type = "fraud_attempt"
         else:
-            # Fallback: if it has fraud terminology but no specific incident proof, classify as awareness
             content_type = "awareness_campaign"
 
     # 2. Fraud Typology (match against 10 standardized types)
@@ -519,86 +526,93 @@ def enrich_intelligence(
     fraud_type_ar = FRAUD_TYPES.get(primary_fraud_type, {}).get("name_ar", "أخرى / غير محدد")
     fraud_type_en = FRAUD_TYPES.get(primary_fraud_type, {}).get("name_en", "Other / Unknown")
 
-    # 3. Geographic Extraction (Incident Location vs Publisher Location)
+    # 3. Geographic Extraction (Distinguish Incident Location vs Victim vs Suspect vs Lure)
     incident_country = "Unknown"
     incident_city = "Unknown"
     incident_region = "Unknown"
     victim_location = "Unknown"
     suspect_location = "Unknown"
 
-    # Check Saudi cities first
-    for stem, (c_city, c_reg) in SAUDI_CITIES_REGIONS.items():
-        if re.search(rf"(?:\bفي|\bبـ|\bبمدينة|\bمنطقة|\bمحافظة|\bشرطة)\s*{re.escape(stem)}", full_norm) or (stem in head_norm and ("السعودية" in full_norm or source_country == "SA")):
-            incident_country = "SA"
-            incident_city = c_city
-            incident_region = c_reg
-            break
-
-    # Check global locations
-    if incident_country == "Unknown":
-        for loc_key, (g_city, g_reg, g_country) in GLOBAL_LOCATIONS.items():
-            if matches_term(full_norm, loc_key):
-                incident_country = g_country
-                incident_city = g_city
-                incident_region = g_reg
+    # Case A: Foreign scam targeting victims abroad with fake Saudi employment/visas
+    # Example: Pakistan Parwaaz Card Scam targeting youth in Punjab with fake Saudi job promises
+    if ("punjab" in full_norm or "pakistan" in full_norm) and ("saudi arabia" in full_norm or "saudi jobs" in full_norm or "job placements in saudi" in full_norm):
+        incident_country = "PK"
+        incident_city = "Punjab"
+        incident_region = "Punjab Province"
+        victim_location = "باكستان (Pakistan)"
+        suspect_location = "باكستان (Pakistan)"
+    else:
+        # Case B: Specific Saudi cities
+        for stem, (c_city, c_reg) in SAUDI_CITIES_REGIONS.items():
+            if re.search(rf"(?:\bفي|\bبـ|\bبمدينة|\bمنطقة|\bمحافظة|\bشرطة)\s*{re.escape(stem)}", full_norm) or (stem in head_norm and ("السعودية" in full_norm or source_country == "SA" or "المملكة" in full_norm)):
+                incident_country = "SA"
+                incident_city = c_city
+                incident_region = c_reg
+                victim_location = "المملكة العربية السعودية"
                 break
 
-    # Explicit country check if city was not found
-    if incident_country == "Unknown":
-        if (
-            "السعوديه" in full_norm
-            or "السعودية" in full_norm
-            or "saudi arabia" in full_norm
-            or "ksa" in full_norm
-            or "الامن السعودي" in full_norm
-            or "الداخليه السعوديه" in full_norm
-            or ("المملكه" in full_norm and ("عصابي" in full_norm or "احتيال" in full_norm))
-        ):
-            incident_country = "SA"
-            incident_region = "المملكة العربية السعودية"
-        elif "الامارات" in full_norm or "uae" in full_norm or "دبي" in full_norm:
-            incident_country = "AE"
-            incident_region = "United Arab Emirates"
-        elif "مصر" in full_norm or "egypt" in full_norm:
-            incident_country = "EG"
-            incident_region = "Egypt"
-        elif "لبنان" in full_norm or "lebanon" in full_norm:
-            incident_country = "LB"
-            incident_region = "Lebanon"
-        elif "كندا" in full_norm or "canada" in full_norm or "canadian" in full_norm:
-            incident_country = "CA"
-            incident_region = "Canada"
-        elif "الولايات المتحده" in full_norm or "united states" in full_norm or " u.s." in full_norm or "feds" in full_norm:
-            incident_country = "US"
-            incident_region = "United States"
-        elif "المملكه المتحده" in full_norm or "بريطانيا" in full_norm or "britain" in full_norm or "uk " in full_norm:
-            incident_country = "GB"
-            incident_region = "United Kingdom"
-        elif "باكستان" in full_norm or "pakistan" in full_norm:
-            incident_country = "PK"
-            incident_region = "Pakistan"
-        elif "النرويج" in full_norm or "norway" in full_norm or "norwegian" in full_norm:
-            incident_country = "NO"
-            incident_region = "Norway"
-        elif "المجر" in full_norm or "hungary" in full_norm or "hungarian" in full_norm:
-            incident_country = "HU"
-            incident_region = "Hungary"
-        elif "هولندا" in full_norm or "netherlands" in full_norm:
-            incident_country = "NL"
-            incident_region = "Netherlands"
-        elif "ايطاليا" in full_norm or "italy" in full_norm or "intesa" in full_norm:
-            incident_country = "IT"
-            incident_region = "Italy"
+        # Case C: International cities
+        if incident_country == "Unknown":
+            for loc_key, (g_city, g_reg, g_country) in GLOBAL_LOCATIONS.items():
+                if matches_term(full_norm, loc_key):
+                    incident_country = g_country
+                    incident_city = g_city
+                    incident_region = g_reg
+                    victim_location = COUNTRY_NAMES_EN_AR.get(g_country, (g_country, g_country))[1]
+                    break
 
-    # Cross-border extraction: victim vs suspect location
+        # Case D: Explicit country level check (when specific city is not mentioned)
+        if incident_country == "Unknown":
+            if (
+                "الامن العام السعودي" in full_norm
+                or "شرطة منطقة" in full_norm
+                or "النيابة العامة السعودية" in full_norm
+                or ("السعودية" in full_norm and ("اطاحت" in full_norm or "ضبطت" in full_norm or "مقيمين" in full_norm))
+                or (source_country == "SA" and "احتيال" in full_norm and not any(other in full_norm for other in ("مصر", "لبنان", "دبي", "الامارات", "الاردن")))
+            ):
+                incident_country = "SA"
+                incident_region = "المملكة العربية السعودية"
+                victim_location = "المملكة العربية السعودية"
+            elif "الامارات" in full_norm or "uae" in full_norm or "دبي" in full_norm:
+                incident_country = "AE"
+                incident_region = "United Arab Emirates"
+                victim_location = "الإمارات العربية المتحدة"
+            elif "مصر" in full_norm or "egypt" in full_norm:
+                incident_country = "EG"
+                incident_region = "Egypt"
+                victim_location = "جمهورية مصر العربية"
+            elif "لبنان" in full_norm or "lebanon" in full_norm or "جونية" in full_norm:
+                incident_country = "LB"
+                incident_region = "Lebanon"
+                victim_location = "لبنان"
+            elif "كندا" in full_norm or "canada" in full_norm or "ottawa" in full_norm:
+                incident_country = "CA"
+                incident_region = "Canada"
+                victim_location = "كندا (Canada)"
+            elif "الولايات المتحده" in full_norm or "united states" in full_norm or " u.s." in full_norm or "feds" in full_norm:
+                incident_country = "US"
+                incident_region = "United States"
+                victim_location = "الولايات المتحدة (US)"
+            elif "المملكه المتحده" in full_norm or "بريطانيا" in full_norm or "britain" in full_norm or "uk " in full_norm:
+                incident_country = "GB"
+                incident_region = "United Kingdom"
+                victim_location = "المملكة المتحدة (UK)"
+            elif "ايطاليا" in full_norm or "italy" in full_norm or "intesa" in full_norm:
+                incident_country = "IT"
+                incident_region = "Italy"
+                victim_location = "إيطاليا (Italy)"
+
+    # Suspect location & cross-border linkages
     if "wanted by us" in full_norm and "pakistan" in full_norm:
         suspect_location = "باكستان (Pakistan)"
         victim_location = "الولايات المتحدة (US)"
         incident_country = "US"
-    elif "خارج المملكة" in full_norm:
-        suspect_location = "خارج المملكة"
+    elif "خارج المملكة" in full_norm or "عصابي خارج" in full_norm:
+        suspect_location = "تشكيل عصابي خارج المملكة"
         if incident_country == "SA":
-            victim_location = "السعودية"
+            victim_location = "المملكة العربية السعودية"
+    elif suspect_location == "Unknown" and incident_country != "Unknown":
+        suspect_location = incident_city if incident_city != "Unknown" else incident_country
 
     # 4. Attack Channels
     detected_channels = []
@@ -647,13 +661,15 @@ def enrich_intelligence(
     # 8. Financial Loss
     loss_amount, loss_currency, loss_raw = extract_financial_loss(full_text)
 
-    # 9. Dates
+    # 9. Dates (Never use created_at as occurred_at; maintain clear separation)
     pub_date = published_at or datetime.now(timezone.utc).isoformat()
     occurred_at = None
-    if re.search(r"\b(خلال (?:الـ)?\d+ أشهر|في شهر|العام الماضي|past \d+ months|last year|in 202\d)\b", full_norm):
-        occurred_match = re.search(r"((?:خلال|في)\s+[\w\s]{4,20}|(?:past|last)\s+[\w\s]{4,15})", full_text)
-        if occurred_match:
-            occurred_at = occurred_match.group(0).strip()
+    date_match = re.search(r"\b(202[4-6]-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01]))\b", full_text)
+    if date_match:
+        try:
+            occurred_at = date_match.group(1) + "T00:00:00+00:00"
+        except Exception:
+            occurred_at = None
 
     # 10. Modus Operandi concise summary
     mo_parts = []
