@@ -47,7 +47,7 @@ class TestPatternIntelligence(unittest.TestCase):
                 VALUES (
                     9001, 9001,
                     '«ميتا» لـ«الشرق الأوسط»: الاحتيال الرقمي يعبر المنصات ويتطلب تعاوناً أوسع لمواجهته',
-                    'تفاصيل التحذير الاستخباراتي عن إعلانات احتيالية', 'financial_fraud',
+                    'تفاصيل تحذير ميتا فيو عن إعلانات احتيالية', 'financial_fraud',
                     'awareness_campaign', 1, 'financial_fraud', 'احتيال مالي ومصرفي',
                     ?, '2026-10-22T00:00:00Z'
                 )

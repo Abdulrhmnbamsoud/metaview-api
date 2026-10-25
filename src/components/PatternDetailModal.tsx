@@ -240,7 +240,7 @@ export const PatternDetailModal: React.FC<PatternDetailModalProps> = ({
             <p className="text-xs text-sky-900/80 dark:text-sky-200/80 leading-relaxed">
               {p?.classification_rationale ||
                 (p?.incident_count === 0
-                  ? 'تم تصنيف هذا المحتوى كتحذير استخباراتي لوروده في بيانات وتحذيرات رسمية دون تسجيل حوادث جنائية مؤكدة مرتبطة به حتى تاريخه. تكرار المقالات عن التحذير نفسه لا يُعد دليلاً على تكرار الاحتيال.'
+                  ? 'تم تصنيف هذا المحتوى كتحذير ميتا فيو لوروده في بيانات وتحذيرات رسمية دون تسجيل حوادث جنائية مؤكدة مرتبطة به حتى تاريخه. تكرار المقالات عن التحذير نفسه لا يُعد دليلاً على تكرار الاحتيال.'
                   : 'تم تقييم النمط وتصنيفه استناداً إلى وقائع مؤكدة مسجلة لدى الجهات المختصة.')}
             </p>
             {p?.bank_relevance_rationale && (
@@ -468,7 +468,7 @@ export const PatternDetailModal: React.FC<PatternDetailModalProps> = ({
                   </div>
                 ) : (
                   <p className="text-xs text-stone-500 dark:text-slate-400 p-3 bg-stone-50 dark:bg-[#121829] rounded-xl border border-stone-200 dark:border-slate-800">
-                    لم تُسجل حوادث جنائية مرتبطة بهذا النمط حتى تاريخه؛ النمط مستند إلى تحذيرات وتوعية استخباراتية فقط.
+                    لم تُسجل حوادث جنائية مرتبطة بهذا النمط حتى تاريخه؛ النمط مستند إلى تحذيرات وتوعية ميتا فيو فقط.
                   </p>
                 )}
               </div>
@@ -478,7 +478,7 @@ export const PatternDetailModal: React.FC<PatternDetailModalProps> = ({
                 <div className="space-y-2 pt-2 border-t border-stone-200 dark:border-slate-800">
                   <h4 className="text-xs font-semibold text-stone-900 dark:text-stone-100 uppercase tracking-wider flex items-center gap-1.5">
                     <ShieldAlert className="w-3.5 h-3.5 text-sky-600" />
-                    المواد والتحذيرات الاستخباراتية الأصلية ({p.warning_articles.length})
+                    المواد والتحذيرات الأصلية في ميتا فيو ({p.warning_articles.length})
                   </h4>
                   <div className="space-y-2">
                     {p.warning_articles.map((w, idx) => (

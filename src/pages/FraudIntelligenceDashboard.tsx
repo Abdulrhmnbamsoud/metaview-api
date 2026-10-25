@@ -118,7 +118,7 @@ export const FraudIntelligenceDashboard: React.FC = () => {
       } catch (err: any) {
         if (reqId === reqSequenceRef.current && isMounted) {
           console.error('Failed to load dashboard view:', err);
-          setError(err?.message || 'تعذر تحميل بيانات استخبارات الاحتيال');
+          setError(err?.message || 'تعذر تحميل بيانات ميتا فيو');
         }
       } finally {
         if (reqId === reqSequenceRef.current && isMounted) {
@@ -239,10 +239,10 @@ export const FraudIntelligenceDashboard: React.FC = () => {
         {/* Title and Subtitle on the LEFT */}
         <div dir="rtl" className="text-right space-y-1">
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-[#10213D]">
-            استخبارات الاحتيال
+            ميتا فيو
           </h1>
           <p className="text-xs md:text-sm text-[#64748B]">
-            رصد وتحليل اتجاهات الاحتيال المالي وبناء صورة استخباراتية من مصادر موثوقة
+            رصد وتحليل اتجاهات الاحتيال المالي وبناء صورة ميتا فيو من مصادر موثوقة
           </p>
         </div>
 
@@ -1739,7 +1739,7 @@ export const FraudIntelligenceDashboard: React.FC = () => {
                 <div>
                   <div className="flex items-center gap-2">
                     <h3 className="font-extrabold text-base text-[#10213D]">
-                      استخبارات الموقع: {selectedCityPoint.name}
+                      ميتا فيو الموقع: {selectedCityPoint.name}
                     </h3>
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#ECFDF5] text-[#10B981]">
                       موثقة بالأدلة
