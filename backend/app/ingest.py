@@ -1,4 +1,5 @@
-# backend/app/ingest.py
+import html
+import re
 import time
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
@@ -11,6 +12,15 @@ from .sources import SOURCE_COUNTRY_MAP
 from .utils import normalize_source_name, safe_dt_to_iso, extract_domain
 from .db import upsert_article, row_count
 from .image_scraper import resolve_article_image
+
+
+def strip_html_tags(s: str) -> str:
+    if not s:
+        return ""
+    text = html.unescape(s)
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = re.sub(r"https?://\S+", "", text)
+    return re.sub(r"\s+", " ", text).strip()
 
 
 async def fetch_feed(client: httpx.AsyncClient, url: str) -> Dict[str, Any]:
@@ -69,7 +79,7 @@ async def ingest_once(
                 for e in entries[:limit_per_feed]:
                     headline = (getattr(e, "title", "") or "").strip()
                     link = (getattr(e, "link", "") or "").strip()
-                    summary = (getattr(e, "summary", "") or getattr(e, "description", "") or "").strip()
+                    summary = strip_html_tags(getattr(e, "summary", "") or getattr(e, "description", "") or "")
                     published_at = safe_dt_to_iso(e)
 
                     if not link:

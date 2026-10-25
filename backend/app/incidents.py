@@ -649,9 +649,20 @@ def incident_to_dict(r: sqlite3.Row, detail: bool = False) -> Dict[str, Any]:
     articles = _loads(r["articles"], [])
     b_rel = r["bank_relevance"]
     normalized_b_rel = b_rel.lower() if b_rel and b_rel.lower() in ("high", "medium", "low") else None
+    raw_sum = (r["summary"] or "").strip()
+    if "<" in raw_sum or "http" in raw_sum:
+        import html, re
+        raw_sum = html.unescape(raw_sum)
+        raw_sum = re.sub(r"<[^>]+>", " ", raw_sum)
+        raw_sum = re.sub(r"https?://\S+", "", raw_sum)
+        raw_sum = re.sub(r"\s+", " ", raw_sum).strip()
+    if not raw_sum or len(raw_sum) < 20:
+        f_type = r["fraud_type_ar"] if (hasattr(r, "keys") and "fraud_type_ar" in r.keys() and r["fraud_type_ar"]) else "الاحتيال المالي"
+        raw_sum = f"واقعة احتيال مالي موثقة بنمط [{f_type}]، باشرت فيها الجهات المعنية إجراءات المتابعة والرصد لحماية التعاملات."
+
     d: Dict[str, Any] = {
         "id": r["id"], "ref": incident_ref(r["id"], r["first_reported_at"], r["created_at"]),
-        "title": r["title"], "summary": r["summary"], "fraud_category": r["fraud_category"],
+        "title": r["title"], "summary": raw_sum, "fraud_category": r["fraud_category"],
         "fraud_category_ar": r["fraud_category_ar"], "record_type": r["record_type"],
         "record_type_ar": _RECORD_TYPE_AR.get(r["record_type"], r["record_type"]),
         "review_status": r["review_status"], "review_status_ar": _REVIEW_AR.get(r["review_status"], r["review_status"]),

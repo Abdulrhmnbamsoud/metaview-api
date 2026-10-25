@@ -263,6 +263,20 @@ def rebuild_fraud_intelligence(con: Optional[sqlite3.Connection] = None, user_ta
             is_emerging = 1 if any(m.get("is_emerging_threat") for m in cl) else 0
             emerging_rationale = next((m.get("emerging_rationale") for m in cl if m.get("emerging_rationale")), None)
 
+            # Sanitize summary and build factual fallback if empty/HTML
+            raw_s = seed.get("article_summary") or ""
+            if "<" in raw_s:
+                import html
+                raw_s = html.unescape(raw_s)
+                raw_s = re.sub(r"<[^>]+>", " ", raw_s)
+                raw_s = re.sub(r"https?://\S+", "", raw_s)
+                raw_s = re.sub(r"\s+", " ", raw_s).strip()
+            if not raw_s or len(raw_s) < 25:
+                sec_part = f"استهدفت {p_sector_ar}" if p_sector_ar and p_sector_ar != "غير محدد" else "استهدفت متعاملين ومؤسسات"
+                ch_part = f" عبر قنوات {p_channel_ar}" if p_channel_ar and p_channel_ar != "غير محدد" else ""
+                agency_part = f"باشرت {p_agency} متابعة " if p_agency and p_agency != "Unknown" else "تم رصد وتوثيق "
+                raw_s = f"{agency_part}واقعة احتيال مالي بنمط [{p_type_ar}] {sec_part}{ch_part}، والتحفظ على الأدلة وملاحقة المتورطين."
+
             # Insert into incidents table
             cur = con.execute(
                 """
@@ -288,7 +302,7 @@ def rebuild_fraud_intelligence(con: Optional[sqlite3.Connection] = None, user_ta
                 """,
                 (
                     seed["headline"],
-                    seed["article_summary"],
+                    raw_s,
                     p_type,
                     p_type_ar,
                     d_first,

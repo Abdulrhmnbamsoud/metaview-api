@@ -219,6 +219,13 @@ export interface SaudiIncident {
   agencies: string[];
   channels: string[];
   articles: IncidentArticleRef[];
+  incident_country?: string;
+  incident_city?: string;
+  incident_region?: string;
+  fraud_type?: string;
+  fraud_type_ar?: string;
+  targeted_sector_ar?: string;
+  reporting_agency?: string;
   // detail only
   facts?: {
     origin: string;

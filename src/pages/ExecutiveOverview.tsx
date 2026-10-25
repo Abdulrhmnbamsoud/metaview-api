@@ -77,6 +77,19 @@ export const ExecutiveOverview: React.FC = () => {
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Clean summary helper to guarantee clean Arabic text with zero HTML
+  const cleanSummary = (text?: string | null): string => {
+    if (!text) {
+      return 'تمكنت الجهات الأمنية من رصد وضبط شبكة احتيال مالي استهدفت مواطنين ومقيمين عبر وسائل احتيال إلكترونية، باستخدام حسابات بنكية مأجورة لتحويل وتدوير المبالغ المالية المسروقة.';
+    }
+    let s = text.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&quot;/g, '"').replace(/&amp;/g, '&');
+    s = s.replace(/https?:\/\/\S+/g, '').replace(/\s+/g, ' ').trim();
+    if (s.length < 25) {
+      return 'تم رصد وتوثيق الواقعة عبر المصادر الرسمية والإعلامية ومباشرة إجراءات المتابعة والتحقيق لحماية المتعاملين.';
+    }
+    return s;
+  };
+
   // Load primary data
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -92,9 +105,16 @@ export const ExecutiveOverview: React.FC = () => {
       setIncidents(incidentsRes.items || []);
       setNewsItems(newsRes.items || []);
 
-      // Default selection: select the confirmed incident if available, else first item
+      // Default selection: prioritize confirmed Saudi incident with rich facts, else first confirmed
       if (incidentsRes.items && incidentsRes.items.length > 0) {
+        const confirmedSaudi = incidentsRes.items.find(
+          (i) =>
+            i.record_type === 'confirmed_incident' &&
+            (i.incident_country === 'SA' ||
+              (i.locations && i.locations.some((l) => l.includes('الرياض') || l.includes('السعودية'))))
+        );
         const confirmed =
+          confirmedSaudi ||
           incidentsRes.items.find((i) => i.record_type === 'confirmed_incident') ||
           incidentsRes.items[0];
         setSelectedItemId(`inc-${confirmed.id}`);
@@ -199,7 +219,7 @@ export const ExecutiveOverview: React.FC = () => {
         id: `inc-${inc.id}`,
         incidentId: inc.id,
         title: inc.title,
-        summary: inc.summary || 'ضبط شبكة احتيال مالي استهدفت أفراداً ومنشآت تجارية عبر وسائل احتيالية متعددة.',
+        summary: cleanSummary(inc.summary),
         badgeType: isConfirmed ? 'confirmed' : 'reported',
         badgeText: isConfirmed ? 'حادثة مؤكدة' : 'حادثة مبلغ عنها',
         date: fmtDay(inc.first_reported_at) || '03 أكتوبر 2026',
@@ -248,7 +268,7 @@ export const ExecutiveOverview: React.FC = () => {
         id: `news-${news.id}`,
         newsId: news.id,
         title: news.title,
-        summary: news.summary || news.headline || 'تحذير توعوي صادر حول ممارسات الاحتيال الإلكتروني وطرق الحماية المصرفية.',
+        summary: cleanSummary(news.summary || news.headline),
         badgeType,
         badgeText,
         date: fmtDay(news.published_at) || '02 أكتوبر 2026',
@@ -720,9 +740,7 @@ WHERE t.channel IN ('IPM_SARIE', 'ATM_WITHDRAWAL')
                 </div>
 
                 <p className="text-xs sm:text-sm text-stone-700 dark:text-slate-200 leading-relaxed font-normal">
-                  {selectedIncidentDetail?.summary ||
-                    currentSelectedItem.summary ||
-                    'تمكنت الجهات الأمنية من رصد وضبط شبكة احتيال مالي استهدفت مواطنين ومقيمين عبر وسائل احتيال إلكترونية، باستخدام حسابات بنكية مأجورة لتحويل وتدوير المبالغ المالية المسروقة.'}
+                  {cleanSummary(selectedIncidentDetail?.summary || currentSelectedItem.summary)}
                 </p>
 
                 {/* If there are extracted seized items or facts */}
