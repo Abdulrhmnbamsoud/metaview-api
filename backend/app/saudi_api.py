@@ -294,6 +294,8 @@ def incidents_list(
     bank_relevance: Optional[str] = Query(None, pattern="^(high|medium|low)$"),
     record_type: Optional[str] = Query(None, pattern="^(confirmed_incident|reported_incident)$"),
     review_status: Optional[str] = Query(None, pattern="^(auto_merged|single_source|needs_review|human_confirmed)$"),
+    scope: str = Query("saudi", pattern="^(saudi|global|all)$"),
+    country: Optional[str] = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ) -> Dict[str, Any]:
@@ -311,6 +313,17 @@ def incidents_list(
     if review_status:
         clauses.append("review_status = ?")
         params.append(review_status)
+    if country:
+        clauses.append("incident_country = ?")
+        params.append(country)
+    elif scope == "saudi":
+        clauses.append(
+            "(incident_country = 'SA' OR incident_region IN ('المملكة العربية السعودية', 'Saudi Arabia', 'منطقة الرياض') OR incident_city IN ('الرياض', 'جدة', 'الدمام', 'مكة المكرمة', 'المدينة المنورة', 'تبوك', 'الخبر', 'عسير'))"
+        )
+    elif scope == "global":
+        clauses.append(
+            "(incident_country != 'SA' AND (incident_region NOT IN ('المملكة العربية السعودية', 'Saudi Arabia') OR incident_region IS NULL))"
+        )
     if q:
         clauses.append("(title LIKE ? OR summary LIKE ? OR locations LIKE ? OR agencies LIKE ?)")
         params += [f"%{q}%"] * 4

@@ -98,7 +98,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   // Dynamic Navigation based on RBAC Least Privilege
   const primaryNav = [
     { to: '/', label: 'الرئيسية', icon: Home, exact: true },
-    { to: '/fraud-intelligence', label: 'ميتا فيو', icon: Activity },
+    { to: '/fraud-intelligence', label: 'ميتا فيو 3', icon: Activity },
     { to: '/explore', label: 'الاستكشاف', icon: Compass },
     { to: '/rules', label: 'قواعد الكشف', icon: ListChecks },
     ...(can('rule.create') || can('incident.annotate') || role === 'analyst' || role === 'admin'
@@ -125,15 +125,18 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   if (isFraudIntelPage) {
     const fraudIntelNav = [
       { to: '/', label: 'الرئيسية', icon: Home },
-      { to: '/fraud-intelligence', label: 'ميتا فيو', icon: Activity, active: true },
+      { to: '/fraud-intelligence', label: 'ميتا فيو 3', icon: Activity, active: true },
       { to: '/explore?type=incident', label: 'الحوادث', icon: ShieldAlert },
       { to: '/explore?type=pattern', label: 'الأنماط', icon: Network },
-      { to: '/system', label: 'المصادر الإعلامية', icon: Globe },
-      { to: '/rules', label: 'تحليل التهديدات', icon: Radio },
-      { to: '/workspace', label: 'الجهات والقطاعات', icon: LayoutGrid },
-      { to: '/explore', label: 'التقارير', icon: FileText },
-      { to: '/team', label: 'الفريق', icon: Users },
-      { to: '/system', label: 'إعدادات النظام', icon: Settings },
+      { to: '/system', label: 'المصادر والنظام', icon: Globe },
+      { to: '/rules', label: 'قواعد الكشف', icon: Radio },
+      ...(can('rule.create') || can('incident.annotate') || role === 'analyst' || role === 'admin'
+        ? [{ to: '/workspace', label: 'مساحة العمل', icon: LayoutGrid }]
+        : []),
+      { to: '/explore', label: 'التقارير والاستكشاف', icon: FileText },
+      ...(can('team.manage') || role === 'admin'
+        ? [{ to: '/team', label: 'إدارة الفريق', icon: Users }]
+        : []),
     ];
 
     return (

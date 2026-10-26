@@ -1,7 +1,7 @@
 // src/pages/FraudIntelligenceDashboard.tsx
 // MetaView 3 — Fraud Intelligence Dashboard
 // Pixel-Accurate Implementation Matching Approved Reference Design
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Download,
   Calendar,
@@ -30,6 +30,7 @@ import {
   Plus,
   Minus,
   RotateCcw,
+  RefreshCw,
 } from 'lucide-react';
 import { apiService } from '../services/api';
 import {
@@ -38,6 +39,7 @@ import {
   DrilldownResponse,
   MapPoint,
 } from '../types/fraudIntelligence';
+import { timeAgo } from '../utils/formatDate';
 
 export const FraudIntelligenceDashboard: React.FC = () => {
   // Centralized Global Filter States (Single Source of Truth)
@@ -87,51 +89,66 @@ export const FraudIntelligenceDashboard: React.FC = () => {
   };
 
   const isFiltered = datePreset !== 30 || geoFilter !== 'السعودية' || fraudTypeFilter !== 'all' || Boolean(dateFrom);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(new Date());
 
-  // Fetch Dashboard Data Centrally
-  useEffect(() => {
-    let isMounted = true;
+  // Fetch Dashboard Data Centrally (supports silent background updates)
+  const loadDashboardData = useCallback(async (isSilent = false) => {
     const reqId = ++reqSequenceRef.current;
+    try {
+      if (!isSilent) setLoading(true);
+      setError(null);
 
-    const load = async () => {
-      try {
-        setLoading(true);
-        setError(null);
+      const geoParam = geoFilter === 'السعودية' ? 'SA' : (geoFilter === 'العالم' ? 'ALL' : geoFilter);
 
-        const geoParam = geoFilter === 'السعودية' ? 'SA' : (geoFilter === 'العالم' ? 'ALL' : geoFilter);
+      const res = await apiService.getFraudIntelligenceDashboardView({
+        windowDays: typeof datePreset === 'number' ? datePreset : 30,
+        geo: geoParam,
+        country: geoParam,
+        mapMode: mapMode,
+        fraudType: fraudTypeFilter !== 'all' ? fraudTypeFilter : undefined,
+        dateFrom: datePreset === 'custom' && dateFrom ? dateFrom : undefined,
+        dateTo: datePreset === 'custom' && dateTo ? dateTo : undefined,
+        dateBasis: dateBasis,
+      });
 
-        const res = await apiService.getFraudIntelligenceDashboardView({
-          windowDays: typeof datePreset === 'number' ? datePreset : 30,
-          geo: geoParam,
-          country: geoParam,
-          mapMode: mapMode,
-          fraudType: fraudTypeFilter !== 'all' ? fraudTypeFilter : undefined,
-          dateFrom: datePreset === 'custom' && dateFrom ? dateFrom : undefined,
-          dateTo: datePreset === 'custom' && dateTo ? dateTo : undefined,
-          dateBasis: dateBasis,
-        });
-
-        // Drop stale responses if a newer request was dispatched
-        if (reqId === reqSequenceRef.current && isMounted) {
-          setData(res);
-        }
-      } catch (err: any) {
-        if (reqId === reqSequenceRef.current && isMounted) {
-          console.error('Failed to load dashboard view:', err);
-          setError(err?.message || 'تعذر تحميل بيانات ميتا فيو');
-        }
-      } finally {
-        if (reqId === reqSequenceRef.current && isMounted) {
-          setLoading(false);
-        }
+      // Drop stale responses if a newer request was dispatched
+      if (reqId === reqSequenceRef.current) {
+        setData(res);
+        setLastUpdated(new Date());
       }
-    };
-
-    load();
-    return () => {
-      isMounted = false;
-    };
+    } catch (err: any) {
+      if (reqId === reqSequenceRef.current) {
+        console.error('Failed to load dashboard view:', err);
+        if (!isSilent) setError(err?.message || 'تعذر تحميل بيانات ميتا فيو');
+      }
+    } finally {
+      if (reqId === reqSequenceRef.current && !isSilent) {
+        setLoading(false);
+      }
+    }
   }, [datePreset, dateFrom, dateTo, dateBasis, geoFilter, mapMode, fraudTypeFilter]);
+
+  // Initial and reactive load
+  useEffect(() => {
+    loadDashboardData();
+  }, [loadDashboardData]);
+
+  // Auto-refresh every 60 seconds when document is visible so newest updates appear automatically
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        loadDashboardData(true);
+      }
+    }, 60000);
+
+    const handleRefresh = () => loadDashboardData();
+    window.addEventListener('metaview:refresh', handleRefresh);
+
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('metaview:refresh', handleRefresh);
+    };
+  }, [loadDashboardData]);
 
   // Open Drilldown Modal
   const openDrilldown = async (title: string, params: Record<string, any> = {}) => {
@@ -140,13 +157,18 @@ export const FraudIntelligenceDashboard: React.FC = () => {
     setDrilldownLoading(true);
     setSelectedIncident(null);
     try {
+      const activeCountry = geoFilter === 'السعودية' ? 'SA' : (geoFilter !== 'العالم' ? geoFilter : undefined);
+      const activeFraudType = fraudTypeFilter !== 'all' ? fraudTypeFilter : undefined;
       const res = await apiService.getFraudIntelligenceIncidents({
-        fraud_type: params.fraud_type,
+        fraud_type: params.fraud_type !== undefined ? params.fraud_type : activeFraudType,
         channel: params.channel,
         sector: params.sector,
         city: params.city,
-        country: params.country,
+        country: params.country !== undefined ? params.country : activeCountry,
         incident_ids: params.incident_ids,
+        window_days: !params.incident_ids && datePreset !== 'custom' ? Number(datePreset) : undefined,
+        date_from: !params.incident_ids && datePreset === 'custom' && dateFrom ? dateFrom : undefined,
+        date_to: !params.incident_ids && datePreset === 'custom' && dateTo ? dateTo : undefined,
       });
       setDrilldownData(res);
     } catch (err) {
@@ -247,12 +269,12 @@ export const FraudIntelligenceDashboard: React.FC = () => {
         </div>
 
         {/* Filters & Export controls on the RIGHT (Left-to-Right order matching image) */}
-        <div dir="ltr" className="flex flex-wrap items-center gap-2.5">
+        <div dir="ltr" className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 sm:gap-2.5 w-full md:w-auto">
           {/* 1. Date Range Dropdown with Popover */}
-          <div className="relative">
+          <div className="col-span-2 sm:col-span-1 relative">
             <button
               onClick={() => setDateMenuOpen(!dateMenuOpen)}
-              className="flex items-center gap-2 px-3.5 py-2 bg-white border border-[#E7ECF3] rounded-xl text-xs font-semibold text-[#10213D] hover:bg-slate-50 transition shadow-xs"
+              className="w-full sm:w-auto flex items-center justify-between sm:justify-start gap-2 px-3.5 py-2 bg-white border border-[#E7ECF3] rounded-xl text-xs font-semibold text-[#10213D] hover:bg-slate-50 transition shadow-xs"
             >
               <Calendar className="w-3.5 h-3.5 text-[#64748B]" />
               <span dir="rtl">
@@ -266,7 +288,7 @@ export const FraudIntelligenceDashboard: React.FC = () => {
             {dateMenuOpen && (
               <div
                 dir="rtl"
-                className="absolute right-0 top-full mt-1.5 w-64 bg-white border border-[#E7ECF3] rounded-2xl shadow-xl p-3 z-50 space-y-2 text-xs"
+                className="absolute right-0 top-full mt-1.5 w-64 max-w-[calc(100vw-2rem)] bg-white border border-[#E7ECF3] rounded-2xl shadow-xl p-3 z-50 space-y-2 text-xs"
               >
                 <div className="text-[11px] font-bold text-[#64748B] pb-1 border-b border-slate-100">
                   نطاق التحليل الزمني
@@ -339,7 +361,7 @@ export const FraudIntelligenceDashboard: React.FC = () => {
             <select
               value={geoFilter}
               onChange={(e) => setGeoFilter(e.target.value)}
-              className="appearance-none flex items-center gap-2 px-3.5 py-2 pr-8 pl-4 bg-white border border-[#E7ECF3] rounded-xl text-xs font-semibold text-[#10213D] hover:bg-slate-50 transition shadow-xs cursor-pointer outline-none"
+              className="w-full sm:w-auto appearance-none flex items-center gap-2 px-3.5 py-2 pr-8 pl-4 bg-white border border-[#E7ECF3] rounded-xl text-xs font-semibold text-[#10213D] hover:bg-slate-50 transition shadow-xs cursor-pointer outline-none"
             >
               <option value="السعودية">السعودية</option>
               <option value="العالم">جميع الدول</option>
@@ -356,7 +378,7 @@ export const FraudIntelligenceDashboard: React.FC = () => {
             <select
               value={fraudTypeFilter}
               onChange={(e) => setFraudTypeFilter(e.target.value)}
-              className="appearance-none flex items-center gap-2 px-3.5 py-2 pr-8 pl-4 bg-white border border-[#E7ECF3] rounded-xl text-xs font-semibold text-[#10213D] hover:bg-slate-50 transition shadow-xs cursor-pointer outline-none"
+              className="w-full sm:w-auto appearance-none flex items-center gap-2 px-3.5 py-2 pr-8 pl-4 bg-white border border-[#E7ECF3] rounded-xl text-xs font-semibold text-[#10213D] hover:bg-slate-50 transition shadow-xs cursor-pointer outline-none"
             >
               <option value="all">جميع الأنواع</option>
               <option value="gov_impersonation">انتحال جهات حكومية</option>
@@ -371,26 +393,45 @@ export const FraudIntelligenceDashboard: React.FC = () => {
             <ChevronDown className="w-3.5 h-3.5 text-[#64748B] absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           </div>
 
-          {/* Reset Filters button if modified */}
-          {isFiltered && (
-            <button
-              onClick={handleResetFilters}
-              title="إعادة ضبط الفلاتر إلى النطاق الافتراضي"
-              className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-[#64748B] hover:text-[#10213D] rounded-xl text-xs font-semibold transition"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>إعادة ضبط</span>
-            </button>
-          )}
+          {/* 4. Actions: Freshness, Refresh, Reset & Export */}
+          <div className="col-span-2 sm:col-span-1 flex items-center gap-2">
+            {/* Live freshness badge */}
+            <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-2 bg-white border border-[#E7ECF3] rounded-xl text-[11px] font-medium text-[#64748B] shadow-xs">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>آخر تحديث: {lastUpdated ? timeAgo(lastUpdated.toISOString()) : 'الآن'}</span>
+            </div>
 
-          {/* 4. Export Button on the FAR RIGHT */}
-          <button
-            onClick={handleExport}
-            className="flex items-center gap-2 px-4 py-2 bg-[#102544] hover:bg-[#1a3860] text-white rounded-xl text-xs font-semibold transition shadow-xs"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>تصدير</span>
-          </button>
+            {/* Refresh Button */}
+            <button
+              onClick={() => loadDashboardData()}
+              disabled={loading}
+              title="تحديث البيانات لحظياً من الـ API"
+              className="flex items-center justify-center p-2 bg-white hover:bg-slate-50 border border-[#E7ECF3] text-[#10213D] rounded-xl text-xs font-semibold transition shadow-xs cursor-pointer"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-blue-600' : ''}`} />
+            </button>
+
+            {/* Reset Filters button if modified */}
+            {isFiltered && (
+              <button
+                onClick={handleResetFilters}
+                title="إعادة ضبط الفلاتر إلى النطاق الافتراضي"
+                className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-[#64748B] hover:text-[#10213D] rounded-xl text-xs font-semibold transition cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>إعادة ضبط</span>
+              </button>
+            )}
+
+            {/* Export Button */}
+            <button
+              onClick={handleExport}
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2 bg-[#102544] hover:bg-[#1a3860] text-white rounded-xl text-xs font-semibold transition shadow-xs cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>تصدير</span>
+            </button>
+          </div>
         </div>
       </div>
 

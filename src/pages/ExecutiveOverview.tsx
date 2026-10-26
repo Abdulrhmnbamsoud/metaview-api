@@ -21,6 +21,7 @@ import {
   ArrowUpRight,
   Info,
   CheckCircle2,
+  RefreshCw,
 } from 'lucide-react';
 import { apiService } from '../services/api';
 import {
@@ -30,6 +31,7 @@ import {
 } from '../types/saudi';
 import { LoadingBlock, ErrorBlock, fmtDay } from '../components/ui';
 import { getNewsImage } from '../utils/newsImages';
+import { timeAgo } from '../utils/formatDate';
 
 type FeedTab = 'all' | 'confirmed' | 'warnings' | 'review';
 
@@ -76,6 +78,7 @@ export const ExecutiveOverview: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(new Date());
 
   // Clean summary helper to guarantee clean Arabic text with zero HTML
   const cleanSummary = (text?: string | null): string => {
@@ -90,9 +93,9 @@ export const ExecutiveOverview: React.FC = () => {
     return s;
   };
 
-  // Load primary data
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  // Load primary data (supports silent background updates)
+  const loadData = useCallback(async (isSilent = false) => {
+    if (!isSilent) setLoading(true);
     setError(null);
     try {
       const [overviewRes, incidentsRes, newsRes] = await Promise.all([
@@ -104,33 +107,26 @@ export const ExecutiveOverview: React.FC = () => {
       setOv(overviewRes);
       setIncidents(incidentsRes.items || []);
       setNewsItems(newsRes.items || []);
+      setLastUpdated(new Date());
 
-      // Default selection: prioritize confirmed Saudi incident with rich facts, else first confirmed
+      // Default selection: select the absolute newest incoming incident from the API
       if (incidentsRes.items && incidentsRes.items.length > 0) {
-        const confirmedSaudi = incidentsRes.items.find(
-          (i) =>
-            i.record_type === 'confirmed_incident' &&
-            (i.incident_country === 'SA' ||
-              (i.locations && i.locations.some((l) => l.includes('الرياض') || l.includes('السعودية'))))
-        );
-        const confirmed =
-          confirmedSaudi ||
-          incidentsRes.items.find((i) => i.record_type === 'confirmed_incident') ||
-          incidentsRes.items[0];
-        setSelectedItemId(`inc-${confirmed.id}`);
+        // Items are sorted by first_reported_at DESC, so items[0] is the latest update
+        const newest = incidentsRes.items[0];
+        setSelectedItemId((prev) => (prev ? prev : `inc-${newest.id}`));
         try {
-          const detail = await apiService.getSaudiIncident(confirmed.id);
-          setSelectedIncidentDetail(detail);
+          const detail = await apiService.getSaudiIncident(newest.id);
+          setSelectedIncidentDetail((prev) => (prev ? prev : detail));
         } catch {
-          setSelectedIncidentDetail(confirmed);
+          setSelectedIncidentDetail((prev) => (prev ? prev : newest));
         }
       } else if (newsRes.items && newsRes.items.length > 0) {
-        setSelectedItemId(`news-${newsRes.items[0].id}`);
+        setSelectedItemId((prev) => (prev ? prev : `news-${newsRes.items[0].id}`));
       }
     } catch (e: any) {
-      setError(e?.message || 'خطأ في جلب البيانات');
+      if (!isSilent) setError(e?.message || 'خطأ في جلب البيانات');
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
   }, []);
 
@@ -138,7 +134,18 @@ export const ExecutiveOverview: React.FC = () => {
     loadData();
     const h = () => loadData();
     window.addEventListener('metaview:refresh', h);
-    return () => window.removeEventListener('metaview:refresh', h);
+
+    // Auto-refresh every 60 seconds so newest updates from API appear automatically
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        loadData(true);
+      }
+    }, 60000);
+
+    return () => {
+      window.removeEventListener('metaview:refresh', h);
+      clearInterval(timer);
+    };
   }, [loadData]);
 
   // Handle selecting an item
@@ -280,6 +287,19 @@ export const ExecutiveOverview: React.FC = () => {
         channels,
         itemData: news,
       });
+    });
+
+    // Sort all feed items strictly by date descending so the newest report from API is always at the top
+    list.sort((a, b) => {
+      const getIso = (item: UnifiedFeedItem) => {
+        const d = item.itemData;
+        if ('first_reported_at' in d && d.first_reported_at) return String(d.first_reported_at);
+        if ('published_at' in d && d.published_at) return String(d.published_at);
+        if ('occurred_at' in d && d.occurred_at) return String(d.occurred_at);
+        if ('created_at' in d && d.created_at) return String(d.created_at);
+        return '';
+      };
+      return getIso(b).localeCompare(getIso(a));
     });
 
     return list;
@@ -433,6 +453,23 @@ WHERE t.channel IN ('IPM_SARIE', 'ATM_WITHDRAWAL')
                 {chip.label}
               </button>
             ))}
+          </div>
+
+          {/* Live Data Freshness & Manual Refresh */}
+          <div className="flex items-center gap-2 text-xs text-[#64748B] shrink-0 border-t md:border-t-0 md:border-r border-stone-200 dark:border-slate-800 pt-2 md:pt-0 md:pr-3 md:mr-1">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-[11px] font-medium text-stone-500 dark:text-slate-400">
+              آخر تحديث: {lastUpdated ? timeAgo(lastUpdated.toISOString()) : 'الآن'}
+            </span>
+            <button
+              type="button"
+              onClick={() => loadData()}
+              disabled={loading}
+              title="تحديث البيانات لحظياً من الـ API"
+              className="p-1.5 rounded-lg hover:bg-stone-100 dark:hover:bg-slate-800 text-stone-600 dark:text-slate-300 transition cursor-pointer"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-blue-600' : ''}`} />
+            </button>
           </div>
         </div>
       </div>
@@ -727,15 +764,15 @@ WHERE t.channel IN ('IPM_SARIE', 'ATM_WITHDRAWAL')
               {/* THE 3 CORE ANSWERS DIRECTLY VISIBLE - ZERO TABS REQUIRED          */}
               {/* ================================================================= */}
 
-              {/* ANSWER 1: وش صار؟ */}
+              {/* ANSWER 1: ملخص الواقعة */}
               <section className="rounded-xl border border-blue-100 dark:border-blue-900/30 bg-blue-50/20 dark:bg-blue-950/10 p-4 sm:p-5 space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 font-black text-stone-900 dark:text-white text-sm sm:text-base">
                     <FileText className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
-                    <h2>وش صار؟</h2>
+                    <h2>ملخص الواقعة</h2>
                   </div>
                   <span className="text-[11px] text-stone-400 font-sans">
-                    ملخص مختصر للواقعة مبني على المصادر
+                    ملخص تحليلي للواقعة مستند إلى المصادر الرسمية والإعلامية
                   </span>
                 </div>
 
@@ -761,12 +798,12 @@ WHERE t.channel IN ('IPM_SARIE', 'ATM_WITHDRAWAL')
                 )}
               </section>
 
-              {/* ANSWER 2: كيف تمت العملية؟ */}
+              {/* ANSWER 2: مسار تنفيذ الاحتيال */}
               <section className="rounded-xl border border-stone-200/80 dark:border-slate-800 bg-stone-50/50 dark:bg-slate-900/30 p-4 sm:p-5 space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 font-black text-stone-900 dark:text-white text-sm sm:text-base">
                     <Settings className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
-                    <h2>كيف تمت العملية؟</h2>
+                    <h2>مسار تنفيذ الاحتيال</h2>
                   </div>
                   <span className="text-[11px] text-stone-400 font-sans">
                     خطوات موثقة أو تسلسل الأسلوب الاحتيالي المتبع
@@ -796,12 +833,12 @@ WHERE t.channel IN ('IPM_SARIE', 'ATM_WITHDRAWAL')
                 </div>
               </section>
 
-              {/* ANSWER 3: وش يهم البنك؟ */}
+              {/* ANSWER 3: المخاطر والآثار المصرفية */}
               <section className="rounded-xl border border-amber-200/80 dark:border-amber-900/40 bg-amber-50/20 dark:bg-amber-950/10 p-4 sm:p-5 space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 font-black text-stone-900 dark:text-white text-sm sm:text-base">
                     <Landmark className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
-                    <h2>وش يهم البنك؟</h2>
+                    <h2>المخاطر والآثار المصرفية</h2>
                   </div>
                   <span className="text-[11px] text-stone-400 font-sans">
                     المخاطر المحتملة والمؤشرات القابلة للاختبار والرصد

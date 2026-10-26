@@ -1,19 +1,31 @@
 # backend/app/tests/test_pattern_intelligence.py
 """Hermetic Tests for Fraud Pattern Classification, Evidence Integrity, and Epistemic Tiers."""
 import json
+import shutil
 import unittest
+from pathlib import Path
 from fastapi.testclient import TestClient
 
 from backend.app.main import app
-from backend.app.db import get_db
+from backend.app import db as db_module
 from backend.app import incidents
 
 
 class TestPatternIntelligence(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        temp_dir = Path(__file__).parent / "tmp_db_pattern_intel"
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        db_file = temp_dir / "test_metaview.db"
+        cls._orig_db_path = db_module.DB_PATH
+        db_module.DB_PATH = str(db_file)
+        if db_file.exists():
+            db_file.unlink()
+        db_module.init_db()
+        cls.db_file = db_file
+        cls.temp_dir = temp_dir
         cls.client = TestClient(app)
-        con = get_db()
+        con = db_module.get_db()
         try:
             # 1. Seed warning/awareness intelligence for 'fraudulent_ads' (0 incidents, 1 warning, 1 source)
             con.execute("""
@@ -95,9 +107,16 @@ class TestPatternIntelligence(unittest.TestCase):
         finally:
             con.close()
 
+    @classmethod
+    def tearDownClass(cls):
+        db_module.DB_PATH = cls._orig_db_path
+        if cls.db_file.exists():
+            cls.db_file.unlink()
+        shutil.rmtree(cls.temp_dir, ignore_errors=True)
+
     def test_fraudulent_ads_pattern_integrity(self):
         """Acceptance test specifically for 'إعلانات احتيالية أو وهمية' (0 incidents, 1 warning, 1 source)."""
-        con = get_db()
+        con = db_module.get_db()
         try:
             pats = incidents.build_patterns(con)
         finally:
@@ -144,7 +163,7 @@ class TestPatternIntelligence(unittest.TestCase):
 
     def test_confirmed_fraud_pattern_tier(self):
         """Test pattern with multiple confirmed incidents (e.g. bank_impersonation)."""
-        con = get_db()
+        con = db_module.get_db()
         try:
             pats = incidents.build_patterns(con)
         finally:
@@ -158,7 +177,7 @@ class TestPatternIntelligence(unittest.TestCase):
 
     def test_single_incident_reported_method_tier(self):
         """Test pattern with exactly 1 incident (e.g. ecommerce_fraud)."""
-        con = get_db()
+        con = db_module.get_db()
         try:
             pats = incidents.build_patterns(con)
         finally:

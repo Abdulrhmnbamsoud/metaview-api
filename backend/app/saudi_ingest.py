@@ -222,7 +222,15 @@ def _http_get(client: httpx.Client, url: str, tries: int = 3) -> Tuple[Optional[
         try:
             r = client.get(url)
         except httpx.HTTPError as exc:
-            last_err = f"{type(exc).__name__}: {str(exc)[:200]}"
+            err_str = str(exc)
+            if "CERTIFICATE_VERIFY_FAILED" in err_str or "certificate verify failed" in err_str.lower():
+                try:
+                    with httpx.Client(verify=False, headers=client.headers, timeout=client.timeout, follow_redirects=True) as fallback_c:
+                        r_fallback = fallback_c.get(url)
+                        return r_fallback, None
+                except Exception as fb_exc:
+                    err_str = f"SSL_FallbackFailed: {fb_exc}"
+            last_err = f"{type(exc).__name__}: {err_str[:200]}"
             if i + 1 < tries:
                 time.sleep(0.6 * (2 ** i))
             continue
@@ -542,7 +550,10 @@ def _decode_google_links(ctx: RunContext, links: List[str]) -> List[Optional[str
     Paced at DECODE_INTERVAL; after DECODE_THROTTLE_STREAK consecutive throttled responses the
     circuit breaker opens (``ctx.decode_blocked``) and the remaining links are left for the next run.
     """
-    from googlenewsdecoder import gnewsdecoder
+    try:
+        from googlenewsdecoder import gnewsdecoder
+    except ImportError:
+        return list(links)
     out: List[Optional[str]] = []
     streak = 0
     for idx, link in enumerate(links):

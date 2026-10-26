@@ -378,8 +378,14 @@ def init_db() -> None:
     cur.execute("CREATE INDEX IF NOT EXISTS idx_articles_entity ON articles(entity)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_articles_hash ON articles(content_hash)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_fetch_log_source ON fetch_log(source_code, started_at)")
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_threat_saudi ON threat_intel(is_saudi, fraud_category)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_articles_language ON articles(language)")
+
+    # Incidents table performance indexes
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_incidents_country ON incidents(incident_country)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_incidents_fraud_type ON incidents(fraud_type)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_incidents_first_rep ON incidents(first_reported_at)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_incidents_created ON incidents(created_at)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_incidents_record_type ON incidents(record_type)")
 
     # Derived metadata only (never touches headline/content/url): tag rows that have no language yet.
     untagged = cur.execute(

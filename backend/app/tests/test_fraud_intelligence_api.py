@@ -1,18 +1,30 @@
 # backend/app/tests/test_fraud_intelligence_api.py
 """Unit tests for Fraud Intelligence Analytics Endpoints."""
+import shutil
 import unittest
+from pathlib import Path
 from fastapi.testclient import TestClient
 
-from backend.app.db import get_db
+from backend.app import db as db_module
 from backend.app.main import app
 
 
 class TestFraudIntelligenceApi(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        temp_dir = Path(__file__).parent / "tmp_db_fraud_intel"
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        db_file = temp_dir / "test_metaview.db"
+        cls._orig_db_path = db_module.DB_PATH
+        db_module.DB_PATH = str(db_file)
+        if db_file.exists():
+            db_file.unlink()
+        db_module.init_db()
+        cls.db_file = db_file
+        cls.temp_dir = temp_dir
         cls.client = TestClient(app)
         # Seed test incidents into test database
-        con = get_db()
+        con = db_module.get_db()
         test_rows = [
             (
                 'Chase Bank Phishing Incident', 'Details of scam', 'bank_impersonation', 'انتحال صفة بنوك ومصارف', 'Bank Impersonation',
@@ -86,6 +98,13 @@ class TestFraudIntelligenceApi(unittest.TestCase):
         )
         con.commit()
         con.close()
+
+    @classmethod
+    def tearDownClass(cls):
+        db_module.DB_PATH = cls._orig_db_path
+        if cls.db_file.exists():
+            cls.db_file.unlink()
+        shutil.rmtree(cls.temp_dir, ignore_errors=True)
 
     def test_summary_kpis(self):
         resp = self.client.get("/api/fraud-intelligence/summary")

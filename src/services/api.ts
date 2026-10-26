@@ -367,11 +367,13 @@ export const apiService = {
     bank_relevance?: string;
     record_type?: string;
     review_status?: string;
+    scope?: string;
+    country?: string;
     page?: number;
     page_size?: number;
   } = {}): Promise<SaudiIncidentsResponse> {
     const query = new URLSearchParams();
-    (['category', 'q', 'bank_relevance', 'record_type', 'review_status'] as const).forEach((k) => {
+    (['category', 'q', 'bank_relevance', 'record_type', 'review_status', 'scope', 'country'] as const).forEach((k) => {
       if (params[k]) query.append(k, String(params[k]));
     });
     query.append('page', String(params.page || 1));
@@ -676,6 +678,9 @@ export const apiService = {
     is_emerging?: boolean;
     q?: string;
     incident_ids?: string;
+    date_from?: string;
+    date_to?: string;
+    window_days?: number;
     page?: number;
     page_size?: number;
   } = {}): Promise<DrilldownResponse> {
@@ -690,6 +695,9 @@ export const apiService = {
     if (params.is_emerging !== undefined) sp.append('is_emerging', String(params.is_emerging));
     if (params.q) sp.append('q', params.q);
     if (params.incident_ids) sp.append('incident_ids', params.incident_ids);
+    if (params.date_from) sp.append('date_from', params.date_from);
+    if (params.date_to) sp.append('date_to', params.date_to);
+    if (params.window_days) sp.append('window_days', String(params.window_days));
     if (params.page) sp.append('page', String(params.page));
     if (params.page_size) sp.append('page_size', String(params.page_size));
 

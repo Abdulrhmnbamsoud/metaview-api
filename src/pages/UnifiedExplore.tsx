@@ -183,7 +183,7 @@ export const UnifiedExplore: React.FC = () => {
 
       if (scope === 'saudi') {
         const [incRes, newsRes, patRes] = await Promise.all([
-          apiService.getSaudiIncidents({ page_size: 50, q: searchQuery || undefined }),
+          apiService.getSaudiIncidents({ scope: 'saudi', page_size: 50, q: searchQuery || undefined }),
           apiService.getSaudiNews({ scope: 'saudi', page_size: 100, q: searchQuery || undefined }),
           apiService.getSaudiPatterns(),
         ]);
@@ -191,19 +191,32 @@ export const UnifiedExplore: React.FC = () => {
         setNews(newsRes.items || []);
         setPatterns(patRes.patterns || []);
       } else if (scope === 'global') {
-        const newsRes = await apiService.getSaudiNews({
-          scope: 'global',
-          country: selectedCountry !== 'all' ? selectedCountry : undefined,
-          page_size: 100,
-          q: searchQuery || undefined,
-        });
-        setIncidents([]);
+        const [incRes, newsRes] = await Promise.all([
+          apiService.getSaudiIncidents({
+            scope: 'global',
+            country: selectedCountry !== 'all' ? selectedCountry : undefined,
+            page_size: 50,
+            q: searchQuery || undefined,
+          }),
+          apiService.getSaudiNews({
+            scope: 'global',
+            country: selectedCountry !== 'all' ? selectedCountry : undefined,
+            page_size: 100,
+            q: searchQuery || undefined,
+          }),
+        ]);
+        setIncidents(incRes.items || []);
         setNews(newsRes.items || []);
         setPatterns([]);
       } else {
         // scope === 'all'
         const [incRes, newsRes, patRes] = await Promise.all([
-          apiService.getSaudiIncidents({ page_size: 50, q: searchQuery || undefined }),
+          apiService.getSaudiIncidents({
+            scope: 'all',
+            country: selectedCountry !== 'all' ? selectedCountry : undefined,
+            page_size: 50,
+            q: searchQuery || undefined,
+          }),
           apiService.getSaudiNews({
             scope: 'all',
             country: selectedCountry !== 'all' ? selectedCountry : undefined,
@@ -233,18 +246,22 @@ export const UnifiedExplore: React.FC = () => {
     const seenUrls = new Set<string>();
     const seenIncidentArticleIds = new Set<number>();
 
-    // 1. Incidents (Saudi or All)
-    if (scope === 'saudi' || scope === 'all') {
-      if (itemType === 'all' || itemType === 'incident') {
-        incidents.forEach((inc) => {
-          const incCountry = (inc as any).incident_country || 'SA';
-          // If country filter is applied on 'all', check if matching country is chosen
-          if (scope === 'all' && selectedCountry !== 'all' && selectedCountry !== incCountry) {
-            return;
-          }
-          if (scope === 'saudi' && incCountry !== 'SA' && incCountry !== 'Unknown') {
-            return;
-          }
+    // 1. Incidents
+    if (itemType === 'all' || itemType === 'incident') {
+      incidents.forEach((inc) => {
+        const incCountry = (inc as any).incident_country;
+        const locsStr = Array.isArray(inc.locations) ? inc.locations.join(' ') : (inc.locations || '');
+        const isSaudi = incCountry === 'SA' || locsStr.includes('السعودية') || locsStr.includes('الرياض') || locsStr.includes('جدة') || (inc.title && (inc.title.includes('السعودية') || inc.title.includes('الرياض')));
+
+        if (scope === 'saudi' && !isSaudi) {
+          return;
+        }
+        if (scope === 'global' && isSaudi) {
+          return;
+        }
+        if (selectedCountry !== 'all' && incCountry && incCountry !== selectedCountry) {
+          return;
+        }
 
           inc.articles?.forEach((art) => {
             if (art.article_id) seenIncidentArticleIds.add(art.article_id);
@@ -272,7 +289,6 @@ export const UnifiedExplore: React.FC = () => {
           });
         });
       }
-    }
 
     // 2. Patterns (Saudi or All)
     if (scope === 'saudi' || scope === 'all') {
