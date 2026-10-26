@@ -358,3 +358,55 @@ export interface SaudiRuntime {
   admin_token_configured: boolean;
   manual_cooldown_seconds: number;
 }
+
+export interface XPublicCollectorStatus {
+  source_code: string;
+  handle: string;
+  status: 'active' | 'requires_authentication' | 'access_restricted' | 'failed' | 'not_supported' | string;
+  status_label: string;
+  status_arabic: string;
+  last_success_at: string | null;
+  last_error: string | null;
+  total_posts_stored: number;
+  official_api_token_configured: boolean;
+}
+
+export interface XPublicPostDetail {
+  post_id: string;
+  text: string;
+  published_at: string | null;
+  url: string;
+  author_handle: string;
+  author_name: string;
+  source_code: string;
+  outbound_urls: string[];
+  media_urls: string[];
+  category_key: string;
+  category_label: string;
+  content_type: string;
+  classification_reasons: string[];
+  is_eligible_explore: boolean;
+  is_eligible_incident: boolean;
+}
+
+export interface XPublicCollectionReport {
+  handle: string;
+  source_code: string;
+  status: string;
+  status_label: string;
+  status_arabic: string;
+  error: string | null;
+  total_fetched: number;
+  new_stored: number;
+  duplicates_skipped: number;
+  classified_categories: Record<string, number>;
+  eligible_explore_items: number;
+  canonical_incidents_created: number;
+  stored_items: Array<{
+    post_id: string;
+    url: string;
+    category: string;
+    content_type: string;
+    text_snippet: string;
+  }>;
+}

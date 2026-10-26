@@ -30,6 +30,9 @@ import {
   SaudiRuntime,
   MergeSuggestion,
   CountryDistributionResponse,
+  XPublicCollectorStatus,
+  XPublicPostDetail,
+  XPublicCollectionReport,
 } from '../types/saudi';
 import {
   User,
@@ -764,6 +767,23 @@ export const apiService = {
     if (params.dateBasis) sp.append('date_basis', params.dateBasis);
     const qs = sp.toString();
     return await requestWithRetry<DashboardViewResponse>(`/fraud-intelligence/dashboard-view${qs ? `?${qs}` : ''}`);
+  },
+
+  async getXCollectorStatus(): Promise<XPublicCollectorStatus> {
+    return await requestWithRetry<XPublicCollectorStatus>('/saudi-fraud/x/status');
+  },
+
+  async triggerXPublicCollection(handle: string = 'K_H_AlMuzaini'): Promise<XPublicCollectionReport> {
+    return await requestWithRetry<XPublicCollectionReport>(`/saudi-fraud/x/collect-public?handle=${encodeURIComponent(handle)}`, {
+      method: 'POST',
+    });
+  },
+
+  async analyzeSingleXPost(url: string): Promise<{ status: string; post: XPublicPostDetail }> {
+    return await requestWithRetry<{ status: string; post: XPublicPostDetail }>('/saudi-fraud/x/analyze-post', {
+      method: 'POST',
+      body: JSON.stringify({ url }),
+    });
   },
 
   /**

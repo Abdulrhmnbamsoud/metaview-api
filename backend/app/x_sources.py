@@ -204,18 +204,27 @@ async def check_source_connectivity(src: XSourceDefinition) -> Dict[str, Any]:
                 "error": f"Publisher feed connection error: {str(e)}",
             }
 
-    # No token and no legitimate publisher feed:
-    # Check public reachability of the profile page to confirm URL is valid,
-    # but strictly mark as 'requires_integration' because X requires authentication for tweets.
+    # No token and no publisher feed:
+    # Use official public syndication collector for public accounts like Dr. Al-Muzaini
+    if src.code == "x_k_h_almuzaini":
+        from . import x_public_collector
+        posts, status, error = await x_public_collector.fetch_public_posts_syndication(src.handle)
+        return {
+            "status": status,
+            "http_status": 200 if status == x_public_collector.STATUS_ACTIVE else 403,
+            "mode": "x_public_syndication",
+            "error": error,
+        }
+
+    # Fallback profile verification for other social links
     try:
         async with httpx.AsyncClient(headers={"User-Agent": USER_AGENT}, timeout=REQUEST_TIMEOUT, follow_redirects=True) as client:
             resp = await client.get(src.url)
-            # Profile exists and responds
             return {
-                "status": "requires_integration",
+                "status": "requires_authentication",
                 "http_status": resp.status_code,
                 "mode": "profile_verified",
-                "error": "يتطلب تكامل X API (Requires Integration - X_BEARER_TOKEN) للوصول المصرح إلى المنشورات.",
+                "error": "يتطلب تكامل X API (Requires Authentication - X_BEARER_TOKEN) للوصول المصرح إلى المنشورات.",
             }
     except Exception as e:
         return {
@@ -357,6 +366,22 @@ async def ingest_x_source(src_code: str) -> Dict[str, Any]:
             con.commit()
         finally:
             con.close()
+        return stats
+
+    # Ingestion via public X syndication collector (e.g. Dr. Al-Muzaini)
+    if src.code == "x_k_h_almuzaini":
+        from . import x_public_collector
+        report = await x_public_collector.collect_and_store_x_posts(src.handle, src.code)
+        stats.update({
+            "status": report["status"],
+            "mode": "x_public_syndication",
+            "error": report["error"],
+            "total_fetched": report["total_fetched"],
+            "new_stored": report["new_stored"],
+            "duplicates_linked": report["duplicates_skipped"],
+            "classified_categories": report["classified_categories"],
+            "eligible_intelligence_items": report["eligible_explore_items"],
+        })
         return stats
 
     # Ingestion via publisher feed (e.g. The Hacker News)

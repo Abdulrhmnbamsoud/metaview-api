@@ -717,3 +717,61 @@ def runtime() -> Dict[str, Any]:
         "admin_token_configured": bool(ADMIN_TOKEN),
         "manual_cooldown_seconds": MANUAL_COOLDOWN_SECONDS,
     }
+
+
+# --------------------------------------------------------------------------- #
+# X (Twitter) Public Intelligence Endpoints
+# --------------------------------------------------------------------------- #
+
+class XAnalyzeRequest(BaseModel):
+    url: str
+
+
+@router.post("/x/collect-public")
+async def collect_x_public_posts(handle: str = "K_H_AlMuzaini") -> Dict[str, Any]:
+    """Fetch and ingest public posts from an X profile without credentials using official public syndication."""
+    from . import x_public_collector
+    report = await x_public_collector.collect_and_store_x_posts(handle=handle)
+    return report
+
+
+@router.post("/x/analyze-post")
+async def analyze_x_post(req: XAnalyzeRequest) -> Dict[str, Any]:
+    """Fetch, extract, classify and verify a specific public X post link."""
+    from . import x_public_collector
+    post, status, error = await x_public_collector.fetch_single_public_post(req.url)
+    if not post:
+        raise HTTPException(
+            status_code=400 if status == x_public_collector.STATUS_NOT_SUPPORTED else 502,
+            detail=error or "تعذر جلب المنشور",
+        )
+    return {
+        "status": status,
+        "post": post.to_dict(),
+    }
+
+
+@router.get("/x/status")
+def x_collector_status() -> Dict[str, Any]:
+    """Get the current operational status of the X public collector and official integration options."""
+    from . import x_public_collector
+    con = get_db()
+    try:
+        row = con.execute("SELECT * FROM source_registry WHERE code = 'x_k_h_almuzaini'").fetchone()
+        count = con.execute("SELECT COUNT(*) n FROM articles WHERE source_code = 'x_k_h_almuzaini'").fetchone()["n"]
+    finally:
+        con.close()
+
+    status_code = row["last_status"] if row and row["last_status"] else x_public_collector.STATUS_ACTIVE
+    return {
+        "source_code": "x_k_h_almuzaini",
+        "handle": "@K_H_AlMuzaini",
+        "status": status_code,
+        "status_label": x_public_collector.STATUS_LABELS.get(status_code, status_code),
+        "status_arabic": x_public_collector.STATUS_ARABIC_LABELS.get(status_code, status_code),
+        "last_success_at": row["last_success_at"] if row else None,
+        "last_error": row["last_error"] if row else None,
+        "total_posts_stored": count,
+        "official_api_token_configured": bool(os.environ.get("X_BEARER_TOKEN")),
+    }
+
