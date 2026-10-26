@@ -240,76 +240,66 @@ export const UnifiedExplore: React.FC = () => {
     loadData();
   }, [loadData]);
 
-  // Unify, deduplicate, and filter items into a single coherent list
-  const unifiedItems: UnifiedItem[] = useMemo(() => {
+  // 1. Gather all items in current scope/country/bank/source without filtering by itemType
+  const baseItems: UnifiedItem[] = useMemo(() => {
     const list: UnifiedItem[] = [];
     const seenUrls = new Set<string>();
     const seenIncidentArticleIds = new Set<number>();
 
     // 1. Incidents
-    if (itemType === 'all' || itemType === 'incident') {
-      incidents.forEach((inc) => {
-        const incCountry = (inc as any).incident_country;
-        const locsStr = Array.isArray(inc.locations) ? inc.locations.join(' ') : (inc.locations || '');
-        const isSaudi = incCountry === 'SA' || locsStr.includes('السعودية') || locsStr.includes('الرياض') || locsStr.includes('جدة') || (inc.title && (inc.title.includes('السعودية') || inc.title.includes('الرياض')));
+    incidents.forEach((inc) => {
+      const incCountry = (inc as any).incident_country;
+      const locsStr = Array.isArray(inc.locations) ? inc.locations.join(' ') : (inc.locations || '');
+      const isSaudi = incCountry === 'SA' || locsStr.includes('السعودية') || locsStr.includes('الرياض') || locsStr.includes('جدة') || (inc.title && (inc.title.includes('السعودية') || inc.title.includes('الرياض')));
 
-        if (scope === 'saudi' && !isSaudi) {
-          return;
-        }
-        if (scope === 'global' && isSaudi) {
-          return;
-        }
-        if (selectedCountry !== 'all' && incCountry && incCountry !== selectedCountry) {
-          return;
-        }
+      if (scope === 'saudi' && !isSaudi) return;
+      if (scope === 'global' && isSaudi) return;
+      if (selectedCountry !== 'all' && incCountry && incCountry !== selectedCountry) return;
 
-          inc.articles?.forEach((art) => {
-            if (art.article_id) seenIncidentArticleIds.add(art.article_id);
-            if (art.url) seenUrls.add(art.url);
-          });
+      inc.articles?.forEach((art) => {
+        if (art.article_id) seenIncidentArticleIds.add(art.article_id);
+        if (art.url) seenUrls.add(art.url);
+      });
 
-          const normalizedBankRel = inc.bank_relevance ? (inc.bank_relevance.toLowerCase() as any) : null;
+      const normalizedBankRel = inc.bank_relevance ? (inc.bank_relevance.toLowerCase() as any) : null;
 
-          list.push({
-            id: `inc-${inc.id}`,
-            type: 'incident',
-            typeLabel: inc.record_type_ar || 'حادثة مستقلة',
-            title: inc.title,
-            summary: inc.summary || `حادثة احتيال مرصودة وموثقة عبر ${inc.article_count} مصادر إخبارية ورسمية.`,
-            date: inc.first_reported_at,
-            location: inc.locations && inc.locations.length > 0 ? inc.locations.join('، ') : null,
-            country: incCountry,
-            sourceCount: inc.article_count,
-            sourceName: inc.agencies?.[0] || 'جهات رسمية وقضائية',
-            fraudCategory: inc.fraud_category,
-            fraudCategoryAr: inc.fraud_category_ar,
-            bankRelevance: normalizedBankRel,
-            needsReview: inc.needs_review,
-            rawIncident: inc,
-          });
-        });
-      }
+      list.push({
+        id: `inc-${inc.id}`,
+        type: 'incident',
+        typeLabel: inc.record_type_ar || 'حادثة مستقلة',
+        title: inc.title,
+        summary: inc.summary || `حادثة احتيال مرصودة وموثقة عبر ${inc.article_count} مصادر إخبارية ورسمية.`,
+        date: inc.first_reported_at,
+        location: inc.locations && inc.locations.length > 0 ? inc.locations.join('، ') : null,
+        country: incCountry,
+        sourceCount: inc.article_count,
+        sourceName: inc.agencies?.[0] || 'جهات رسمية وقضائية',
+        fraudCategory: inc.fraud_category,
+        fraudCategoryAr: inc.fraud_category_ar,
+        bankRelevance: normalizedBankRel,
+        needsReview: inc.needs_review,
+        rawIncident: inc,
+      });
+    });
 
     // 2. Patterns (Saudi or All)
     if (scope === 'saudi' || scope === 'all') {
-      if (itemType === 'all' || itemType === 'pattern') {
-        if (scope !== 'all' || selectedCountry === 'all' || selectedCountry === 'SA') {
-          patterns.forEach((p) => {
-            list.push({
-              id: `pat-${p.key}`,
-              type: 'pattern',
-              typeLabel: p.pattern_tier_ar || 'تحذير من أسلوب احتيالي',
-              title: p.label_ar,
-              summary: p.summary || `تحذير من أسلوب احتيالي مستخرج من الأدلة المرصودة.`,
-              date: p.last_seen || p.first_seen,
-              country: 'SA',
-              sourceCount: p.source_count || Math.max(1, (p.incident_count || 0) + (p.warning_article_count || 0)),
-              sourceName: p.channels.join('، ') || (p.warning_articles?.[0]?.source || 'مصادر الرصد المعتمدة'),
-              bankRelevance: p.bank_relevance || 'medium',
-              rawPattern: p,
-            });
+      if (scope !== 'all' || selectedCountry === 'all' || selectedCountry === 'SA') {
+        patterns.forEach((p) => {
+          list.push({
+            id: `pat-${p.key}`,
+            type: 'pattern',
+            typeLabel: p.pattern_tier_ar || 'تحذير من أسلوب احتيالي',
+            title: p.label_ar,
+            summary: p.summary || `تحذير من أسلوب احتيالي مستخرج من الأدلة المرصودة.`,
+            date: p.last_seen || p.first_seen,
+            country: 'SA',
+            sourceCount: p.source_count || Math.max(1, (p.incident_count || 0) + (p.warning_article_count || 0)),
+            sourceName: p.channels.join('، ') || (p.warning_articles?.[0]?.source || 'مصادر الرصد المعتمدة'),
+            bankRelevance: p.bank_relevance || 'medium',
+            rawPattern: p,
           });
-        }
+        });
       }
     }
 
@@ -323,11 +313,7 @@ export const UnifiedExplore: React.FC = () => {
       const isWarning = n.content_type === 'fraud_warning';
       const isAwareness = n.content_type === 'awareness_campaign';
 
-      if (itemType === 'incident') return; // Canonical incidents are strictly provided from the incidents query
-      if (itemType === 'pattern') return; // Patterns handled above
-      if (itemType === 'warning' && !isWarning) return;
-      if (itemType === 'awareness' && !isAwareness) return;
-      if (itemType === 'all' && scope === 'saudi' && !isWarning && !isAwareness) return;
+      if (scope === 'saudi' && !isWarning && !isAwareness) return;
 
       list.push({
         id: `news-${n.id}`,
@@ -383,8 +369,48 @@ export const UnifiedExplore: React.FC = () => {
       });
     }
 
+    return filtered;
+  }, [scope, selectedCountry, bankRel, selectedSource, incidents, patterns, news]);
+
+  // Pre-calculate exact counts for all tabs so users always see the breakdown
+  const itemCounts = useMemo(() => {
+    let incCount = 0;
+    let warnCount = 0;
+    let awareCount = 0;
+    let patCount = 0;
+    let newsCount = 0;
+    baseItems.forEach((i) => {
+      if (i.type === 'incident') incCount++;
+      else if (i.type === 'warning') warnCount++;
+      else if (i.type === 'awareness') awareCount++;
+      else if (i.type === 'pattern') patCount++;
+      else newsCount++;
+    });
+    return {
+      allCount: baseItems.length,
+      incCount,
+      warnCount,
+      awareCount,
+      patCount,
+      newsCount,
+    };
+  }, [baseItems]);
+
+  // Filter items by selected ItemType and apply sorting
+  const unifiedItems: UnifiedItem[] = useMemo(() => {
+    let filtered = baseItems;
+    if (itemType === 'incident') {
+      filtered = filtered.filter((i) => i.type === 'incident');
+    } else if (itemType === 'warning') {
+      filtered = filtered.filter((i) => i.type === 'warning');
+    } else if (itemType === 'awareness') {
+      filtered = filtered.filter((i) => i.type === 'awareness');
+    } else if (itemType === 'pattern') {
+      filtered = filtered.filter((i) => i.type === 'pattern');
+    }
+
     // Sorting
-    return filtered.sort((a, b) => {
+    return [...filtered].sort((a, b) => {
       if (sortBy === 'review_priority') {
         const aScore = a.needsReview ? 10 : 0;
         const bScore = b.needsReview ? 10 : 0;
@@ -398,7 +424,7 @@ export const UnifiedExplore: React.FC = () => {
       // default: newest
       return (b.date || '').localeCompare(a.date || '');
     });
-  }, [scope, itemType, bankRel, sortBy, selectedCountry, selectedSource, incidents, news, patterns]);
+  }, [baseItems, itemType, sortBy]);
 
   // Pagination calculation
   const totalPages = Math.max(1, Math.ceil(unifiedItems.length / ITEMS_PER_PAGE));
@@ -406,23 +432,6 @@ export const UnifiedExplore: React.FC = () => {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
     return unifiedItems.slice(startIndex, startIndex + ITEMS_PER_PAGE);
   }, [unifiedItems, currentPage]);
-
-  // Count breakdowns to maintain strict separation of incident counts from warnings/patterns
-  const itemCounts = useMemo(() => {
-    let incCount = 0;
-    let warnCount = 0;
-    let awareCount = 0;
-    let patCount = 0;
-    let newsCount = 0;
-    unifiedItems.forEach((i) => {
-      if (i.type === 'incident') incCount++;
-      else if (i.type === 'warning') warnCount++;
-      else if (i.type === 'awareness') awareCount++;
-      else if (i.type === 'pattern') patCount++;
-      else newsCount++;
-    });
-    return { incCount, warnCount, awareCount, patCount, newsCount };
-  }, [unifiedItems]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -606,26 +615,44 @@ export const UnifiedExplore: React.FC = () => {
             {/* Type selector */}
             <div className="flex items-center gap-1 overflow-x-auto">
               {[
-                { key: 'all', label: 'كافة الأنواع' },
-                { key: 'incident', label: 'الحوادث' },
-                { key: 'warning', label: 'التحذيرات' },
-                { key: 'awareness', label: 'التوعية' },
-                ...(scope !== 'global' ? [{ key: 'pattern', label: 'الأنماط' }] : []),
+                { key: 'all', label: 'كافة المواد', count: itemCounts.allCount },
+                { key: 'incident', label: 'الحوادث الموثقة', count: itemCounts.incCount, isIncident: true },
+                { key: 'warning', label: 'التحذيرات', count: itemCounts.warnCount },
+                { key: 'awareness', label: 'التوعية', count: itemCounts.awareCount },
+                ...(scope !== 'global' ? [{ key: 'pattern', label: 'الأنماط', count: itemCounts.patCount }] : []),
               ].map((t) => (
                 <button
                   key={t.key}
                   type="button"
+                  id={`btn-type-${t.key}`}
                   onClick={() => {
                     setItemType(t.key as ItemType);
                     updateFilter({ type: t.key as ItemType, p: 1 });
                   }}
-                  className={`px-2.5 py-1 rounded-lg border transition-colors ${
+                  className={`px-2.5 py-1 rounded-lg border transition-all flex items-center gap-1.5 text-xs ${
                     itemType === t.key
-                      ? 'bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 border-sky-300 dark:border-sky-800 font-semibold'
+                      ? t.isIncident
+                        ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 border-emerald-400 dark:border-emerald-700 font-bold shadow-xs'
+                        : 'bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 border-sky-300 dark:border-sky-800 font-semibold'
+                      : t.isIncident
+                      ? 'border-emerald-200 dark:border-emerald-900/40 text-emerald-700 dark:text-emerald-400 bg-emerald-50/40 hover:bg-emerald-50 font-medium'
                       : 'border-transparent text-stone-500 dark:text-slate-400 hover:text-stone-800 dark:hover:text-stone-200'
                   }`}
                 >
-                  {t.label}
+                  <span>{t.label}</span>
+                  <span
+                    className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
+                      itemType === t.key
+                        ? t.isIncident
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-sky-600 text-white'
+                        : t.isIncident
+                        ? 'bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200'
+                        : 'bg-stone-200 dark:bg-slate-800 text-stone-600 dark:text-slate-400'
+                    }`}
+                  >
+                    {t.count}
+                  </span>
                 </button>
               ))}
             </div>
@@ -645,12 +672,12 @@ export const UnifiedExplore: React.FC = () => {
                   }}
                   className="bg-stone-50 dark:bg-slate-900 border border-stone-200 dark:border-slate-700 rounded-lg px-2.5 py-1 text-xs text-stone-700 dark:text-slate-300 outline-none"
                 >
-                  <option value="all">كل الدول ({availableCountries.reduce((acc, c) => acc + c.count, 0)})</option>
+                  <option value="all">كل الدول ({availableCountries.reduce((acc, c) => acc + (c.count || 0), 0)} حوادث موثقة)</option>
                   {availableCountries.map((c) => {
                     const info = COUNTRY_MAP[c.country] || { name: c.country, flag: '🌐' };
                     return (
                       <option key={c.country} value={c.country}>
-                        {info.flag} {info.name} ({c.count})
+                        {info.flag} {info.name} ({c.count} حوادث موثقة)
                       </option>
                     );
                   })}
@@ -728,32 +755,64 @@ export const UnifiedExplore: React.FC = () => {
       {/* Results Count Bar & Scope indicator */}
       <div className="flex flex-wrap items-center justify-between text-xs text-stone-500 dark:text-slate-400 px-1 font-mono gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <span>نتائج العرض والتصفية: {unifiedItems.length} عنصر</span>
-          {itemType === 'all' && (
-            <span className="text-[11px] text-stone-400 dark:text-slate-500">
-              (منها: {itemCounts.incCount} حوادث موثقة • {itemCounts.warnCount} تحذيرات • {itemCounts.awareCount} توعية{itemCounts.patCount > 0 ? ` • ${itemCounts.patCount} أنماط` : ''})
-            </span>
+          {itemType === 'all' ? (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="font-semibold text-stone-800 dark:text-stone-200">
+                إجمالي عناصر الاستخبارات: {unifiedItems.length} عنصر
+              </span>
+              <span className="text-stone-300 dark:text-slate-600">|</span>
+              <span className="text-[11px] text-stone-600 dark:text-slate-400 flex flex-wrap items-center gap-1">
+                منها:
+                <button
+                  type="button"
+                  onClick={() => {
+                    setItemType('incident');
+                    updateFilter({ type: 'incident', p: 1 });
+                  }}
+                  className="px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-bold hover:bg-emerald-200 transition-colors inline-flex items-center gap-1 cursor-pointer"
+                  title="عرض الحوادث الموثقة المطابقة للخريطة فقط"
+                >
+                  <span>🛡️ {itemCounts.incCount} حوادث موثقة (مطابقة للخريطة 100%)</span>
+                </button>
+                <span>• {itemCounts.warnCount} تحذيرات</span>
+                <span>• {itemCounts.awareCount} توعية</span>
+                {itemCounts.patCount > 0 && <span>• {itemCounts.patCount} أنماط</span>}
+              </span>
+            </div>
+          ) : itemType === 'incident' ? (
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-bold inline-flex items-center gap-1 text-xs">
+                ✓ الحوادث الموثقة: {unifiedItems.length} حادثة (مطابقة تماماً للخريطة والداشبورد)
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setItemType('all');
+                  updateFilter({ type: 'all', p: 1 });
+                }}
+                className="text-[11px] text-sky-600 dark:text-sky-400 hover:underline cursor-pointer"
+              >
+                عرض كافة المواد ({itemCounts.allCount}) ↩
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-stone-800 dark:text-stone-200">
+                نتائج التصفية ({itemType === 'warning' ? 'التحذيرات' : itemType === 'awareness' ? 'التوعية' : 'الأنماط'}): {unifiedItems.length} عنصر
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setItemType('all');
+                  updateFilter({ type: 'all', p: 1 });
+                }}
+                className="text-[11px] text-sky-600 dark:text-sky-400 hover:underline cursor-pointer"
+              >
+                عرض كافة المواد ({itemCounts.allCount}) ↩
+              </button>
+            </div>
           )}
-          {itemType === 'incident' && (
-            <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold">
-              (إجمالي الحوادث الموثقة: {itemCounts.incCount})
-            </span>
-          )}
-          {itemType === 'warning' && (
-            <span className="text-[11px] text-amber-600 dark:text-amber-400 font-bold">
-              (إجمالي التحذيرات: {itemCounts.warnCount})
-            </span>
-          )}
-          {itemType === 'awareness' && (
-            <span className="text-[11px] text-blue-600 dark:text-blue-400 font-bold">
-              (إجمالي حملات التوعية: {itemCounts.awareCount})
-            </span>
-          )}
-          {itemType === 'pattern' && (
-            <span className="text-[11px] text-purple-600 dark:text-purple-400 font-bold">
-              (إجمالي الأنماط: {itemCounts.patCount})
-            </span>
-          )}
+
           {scope === 'global' && (
             <span className="text-sky-600 dark:text-sky-400">
               (منظومة الرصد العالمي للاحتيال)

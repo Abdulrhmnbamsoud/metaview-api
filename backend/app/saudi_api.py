@@ -302,7 +302,7 @@ def news(
 
 @router.get("/countries")
 def fraud_countries(scope: str = Query("all", pattern="^(saudi|global|all)$")) -> Dict[str, Any]:
-    """List countries having fraud intelligence records."""
+    """List countries having fraud intelligence records, with canonical incident counts matching map."""
     con = get_db()
     try:
         where = f"t.fraud_category IS NOT NULL AND t.content_type IN ('{_VISIBLE_TYPES}')"
@@ -320,9 +320,35 @@ def fraud_countries(scope: str = Query("all", pattern="^(saudi|global|all)$")) -
             ORDER BY count DESC
             """
         ).fetchall()
+
+        # Query canonical incident counts per country (30 days window default)
+        c_clauses, c_params, c_meta = build_canonical_incident_where(geo="all", window_days=30)
+        c_dt, c_dp = c_meta["make_date_clause"](c_meta["iso_from"], c_meta["iso_to"])
+        if c_dt:
+            c_clauses.append(c_dt)
+            c_params.extend(c_dp)
+        inc_rows = con.execute(
+            f"SELECT incident_country, COUNT(*) as cnt FROM incidents WHERE {' AND '.join(c_clauses)} GROUP BY incident_country",
+            c_params
+        ).fetchall()
+        inc_map = {r["incident_country"]: r["cnt"] for r in inc_rows}
     finally:
         con.close()
-    return {"countries": [{"country": r["country"], "count": r["count"]} for r in rows if r["country"]]}
+
+    result = []
+    for r in rows:
+        c_code = r["country"]
+        if not c_code:
+            continue
+        inc_cnt = inc_map.get(c_code, 0)
+        result.append({
+            "country": c_code,
+            # Prefer real canonical incident count if available, falling back to article count
+            "count": inc_cnt if inc_cnt > 0 else r["count"],
+            "incidents_count": inc_cnt,
+            "articles_count": r["count"],
+        })
+    return {"countries": result}
 
 
 @router.get("/news/{threat_id}")
