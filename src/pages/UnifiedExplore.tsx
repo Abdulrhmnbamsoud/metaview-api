@@ -390,6 +390,9 @@ export const UnifiedExplore: React.FC = () => {
       else if (i.type === 'pattern') patCount++;
       else newsCount++;
     });
+    const xMuzainiCount = news.filter(
+      (n) => n.source_code === 'x_k_h_almuzaini' || Boolean(n.original_url && n.original_url.includes('AlMuzaini'))
+    ).length;
     return {
       allCount: baseItems.length,
       incCount,
@@ -397,8 +400,9 @@ export const UnifiedExplore: React.FC = () => {
       awareCount,
       patCount,
       newsCount,
+      xCount: xMuzainiCount,
     };
-  }, [baseItems]);
+  }, [baseItems, news]);
 
   // Filter items by selected ItemType and apply sorting
   const unifiedItems: UnifiedItem[] = useMemo(() => {
@@ -661,6 +665,37 @@ export const UnifiedExplore: React.FC = () => {
                   </span>
                 </button>
               ))}
+
+              {/* Dedicated X / Dr. Al-Muzaini Source Chip */}
+              {itemCounts.xCount > 0 && (
+                <button
+                  type="button"
+                  id="btn-source-x-muzaini"
+                  onClick={() => {
+                    const next = selectedSource === 'x_k_h_almuzaini' ? 'all' : 'x_k_h_almuzaini';
+                    setSelectedSource(next);
+                    updateFilter({ source: next, p: 1 });
+                  }}
+                  className={`px-2.5 py-1 rounded-lg border transition-all flex items-center gap-1.5 text-xs whitespace-nowrap cursor-pointer ${
+                    selectedSource === 'x_k_h_almuzaini'
+                      ? 'bg-black text-white dark:bg-stone-800 dark:text-stone-100 border-black font-bold shadow-xs'
+                      : 'border-stone-200 dark:border-slate-800 text-stone-700 dark:text-slate-300 hover:border-stone-400 bg-white dark:bg-slate-900 font-medium'
+                  }`}
+                  title="تصفية وعرض منشورات X العامة التابعة لحساب د. خالد بن حمد المزيني"
+                >
+                  <span className="font-bold">𝕏</span>
+                  <span>رصد المزيني</span>
+                  <span
+                    className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
+                      selectedSource === 'x_k_h_almuzaini'
+                        ? 'bg-stone-700 text-white dark:bg-stone-300 dark:text-stone-900'
+                        : 'bg-stone-200 dark:bg-slate-800 text-stone-600 dark:text-slate-400'
+                    }`}
+                  >
+                    {itemCounts.xCount}
+                  </span>
+                </button>
+              )}
             </div>
           </div>
 

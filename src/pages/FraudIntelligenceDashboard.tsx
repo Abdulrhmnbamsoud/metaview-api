@@ -517,6 +517,47 @@ export const FraudIntelligenceDashboard: React.FC = () => {
         </div>
       )}
 
+      {/* X Social Intelligence Integration Banner */}
+      <div
+        dir="rtl"
+        className="bg-white border border-[#E7ECF3] rounded-2xl p-3.5 px-4.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs"
+      >
+        <div className="flex items-center gap-3">
+          <span className="w-8 h-8 rounded-xl bg-black text-white flex items-center justify-center font-black text-sm shrink-0 shadow-xs">
+            𝕏
+          </span>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-xs sm:text-sm text-[#10213D]">
+                رصد المنشورات العامة والتحذيرات المجتمعية (منصة 𝕏)
+              </span>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-50 text-sky-700 border border-sky-200">
+                14 تحذيراً وتوعية نشطة
+              </span>
+            </div>
+            <p className="text-[11px] text-[#64748B] mt-0.5">
+              متابعة حساب د. خالد المزيني (@K_H_AlMuzaini) لتصنيف التهديدات دون اختلاق وقائع وبشفافية كاملة
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <a
+            href="/explore?source=x_k_h_almuzaini"
+            className="px-3 py-1.5 rounded-xl bg-stone-900 hover:bg-black text-white text-xs font-semibold flex items-center gap-1.5 transition shadow-xs"
+          >
+            <span>استعراض المنشورات في Explore</span>
+            <ExternalLink className="w-3.5 h-3.5" />
+          </a>
+          <a
+            href="/system"
+            className="px-3 py-1.5 rounded-xl border border-stone-200 hover:bg-slate-50 text-stone-700 text-xs font-semibold transition"
+          >
+            <span>إعدادات المصدر</span>
+          </a>
+        </div>
+      </div>
+
       {/* ------------------------------------------------------------------- */}
       {/* 2. Top Row: Hero Intelligence Insight (Full-Width Executive Banner) */}
       {/* ------------------------------------------------------------------- */}

@@ -114,6 +114,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const focusAreas = [
     { to: '/explore?type=incident', label: 'الحوادث', icon: ShieldAlert },
     { to: '/explore?type=warning', label: 'التحذيرات', icon: AlertTriangle },
+    { to: '/explore?source=x_k_h_almuzaini', label: 'رصد 𝕏 المزيني', icon: Radio },
     { to: '/explore?type=pattern', label: 'الأنماط', icon: Network },
     { to: '/explore?type=awareness', label: 'التوعية', icon: BellRing },
   ];
@@ -127,6 +128,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       { to: '/', label: 'الرئيسية', icon: Home },
       { to: '/fraud-intelligence', label: 'ميتا فيو 3', icon: Activity, active: true },
       { to: '/explore?type=incident', label: 'الحوادث', icon: ShieldAlert },
+      { to: '/explore?source=x_k_h_almuzaini', label: 'رصد 𝕏 المزيني', icon: Radio },
       { to: '/explore?type=pattern', label: 'الأنماط', icon: Network },
       { to: '/system', label: 'المصادر والنظام', icon: Globe },
       { to: '/rules', label: 'قواعد الكشف', icon: Radio },

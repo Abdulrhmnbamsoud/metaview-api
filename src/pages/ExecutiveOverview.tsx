@@ -33,7 +33,7 @@ import { LoadingBlock, ErrorBlock, fmtDay } from '../components/ui';
 import { getNewsImage } from '../utils/newsImages';
 import { timeAgo } from '../utils/formatDate';
 
-type FeedTab = 'all' | 'confirmed' | 'warnings' | 'review';
+type FeedTab = 'all' | 'confirmed' | 'warnings' | 'x_posts' | 'review';
 
 // Unified feed item representing incidents and news
 interface UnifiedFeedItem {
@@ -46,6 +46,8 @@ interface UnifiedFeedItem {
   badgeText: string;
   date: string;
   sourcesCount: number;
+  isXPost?: boolean;
+  sourceHandle?: string;
   bankRelevance: 'high' | 'medium' | 'low';
   isBankingThreat: boolean;
   locations: string[];
@@ -101,7 +103,7 @@ export const ExecutiveOverview: React.FC = () => {
       const [overviewRes, incidentsRes, newsRes] = await Promise.all([
         apiService.getSaudiOverview({ scope: 'saudi', window_days: 30 }),
         apiService.getSaudiIncidents({ scope: 'saudi', window_days: 30, page_size: 20 }),
-        apiService.getSaudiNews({ scope: 'saudi', page_size: 20 }),
+        apiService.getSaudiNews({ scope: 'saudi', page_size: 60 }),
       ]);
 
       setOv(overviewRes);
@@ -250,6 +252,10 @@ export const ExecutiveOverview: React.FC = () => {
 
       const isWarning = news.content_type === 'fraud_warning';
       const isAwareness = news.content_type === 'awareness_campaign';
+      const isXPost =
+        news.source_code === 'x_k_h_almuzaini' ||
+        Boolean(news.original_url && news.original_url.includes('x.com/K_H_AlMuzaini')) ||
+        Boolean(news.source && news.source.includes('المزيني'));
 
       let badgeType: UnifiedFeedItem['badgeType'] = 'warning';
       let badgeText = 'تحذير';
@@ -280,10 +286,14 @@ export const ExecutiveOverview: React.FC = () => {
         badgeText,
         date: fmtDay(news.published_at) || '02 أكتوبر 2026',
         sourcesCount: 1,
+        isXPost,
+        sourceHandle: isXPost ? '@K_H_AlMuzaini' : undefined,
         bankRelevance: news.bank_relevance || 'low',
         isBankingThreat: isThreat,
         locations: [],
-        tags: [news.fraud_category_ar || 'هندسة اجتماعية'],
+        tags: [
+          isXPost ? 'منشور 𝕏 (@K_H_AlMuzaini)' : (news.fraud_category_ar || 'هندسة اجتماعية'),
+        ],
         channels,
         itemData: news,
       });
@@ -314,6 +324,8 @@ export const ExecutiveOverview: React.FC = () => {
       result = result.filter((i) => i.badgeType === 'confirmed');
     } else if (activeTab === 'warnings') {
       result = result.filter((i) => i.badgeType === 'warning');
+    } else if (activeTab === 'x_posts') {
+      result = result.filter((i) => i.isXPost);
     } else if (activeTab === 'review') {
       result = result.filter((i) => {
         if ('needs_review' in i.itemData) {
@@ -496,11 +508,12 @@ WHERE t.channel IN ('IPM_SARIE', 'ATM_WITHDRAWAL')
             </div>
 
             {/* Quick Filters */}
-            <div className="flex items-center gap-1 pt-1 border-t border-stone-100 dark:border-slate-800 text-[11px]">
+            <div className="flex items-center gap-1 pt-1 border-t border-stone-100 dark:border-slate-800 text-[11px] overflow-x-auto">
               {[
                 { id: 'all', label: 'الكل' },
                 { id: 'confirmed', label: 'حوادث مؤكدة' },
                 { id: 'warnings', label: 'تحذيرات' },
+                { id: 'x_posts', label: '𝕏 المزيني' },
                 { id: 'review', label: 'تحتاج مراجعة' },
               ].map((tab) => {
                 const isActive = activeTab === tab.id;
@@ -508,7 +521,7 @@ WHERE t.channel IN ('IPM_SARIE', 'ATM_WITHDRAWAL')
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id as FeedTab)}
-                    className={`px-2.5 py-1 rounded-md font-medium transition-colors cursor-pointer ${
+                    className={`px-2.5 py-1 rounded-md font-medium transition-colors cursor-pointer whitespace-nowrap ${
                       isActive
                         ? 'bg-blue-600 text-white font-bold'
                         : 'text-stone-500 hover:text-stone-900 dark:text-slate-400 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-slate-800'
@@ -563,18 +576,23 @@ WHERE t.channel IN ('IPM_SARIE', 'ATM_WITHDRAWAL')
                       <div className="space-y-1.5 min-w-0 flex-1">
                         {/* Status Badges & Bank Threat indicator */}
                         <div className="flex items-center justify-between gap-1 text-[11px]">
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {item.isXPost && (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-black text-white dark:bg-stone-800 dark:text-stone-200">
+                                𝕏 {item.sourceHandle || '@K_H_AlMuzaini'}
+                              </span>
+                            )}
                             {item.badgeType === 'confirmed' && (
                               <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200/60 dark:border-rose-900/40">
                                 {item.badgeText}
                               </span>
                             )}
-                            {item.badgeType === 'warning' && (
+                            {item.badgeType === 'warning' && !item.isXPost && (
                               <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200/60 dark:border-amber-900/40">
                                 {item.badgeText}
                               </span>
                             )}
-                            {item.badgeType === 'awareness' && (
+                            {item.badgeType === 'awareness' && !item.isXPost && (
                               <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-50 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300 border border-sky-200/60 dark:border-sky-900/40">
                                 {item.badgeText}
                               </span>
@@ -618,7 +636,7 @@ WHERE t.channel IN ('IPM_SARIE', 'ATM_WITHDRAWAL')
                         <div className="flex items-center justify-between pt-0.5 text-[10px] text-stone-400 font-mono">
                           <span className="flex items-center gap-1">
                             <FileText className="w-3 h-3" />
-                            <span>{item.sourcesCount} مصادر</span>
+                            <span>{item.isXPost ? 'منشور 𝕏 عام' : `${item.sourcesCount} مصادر`}</span>
                           </span>
 
                           <span
@@ -738,7 +756,7 @@ WHERE t.channel IN ('IPM_SARIE', 'ATM_WITHDRAWAL')
 
                   <div className="flex items-center gap-1.5 font-mono">
                     <FileText className="w-3.5 h-3.5 text-stone-400" />
-                    <span>{currentSelectedItem.sourcesCount} مصادر إخبارية موثقة</span>
+                    <span>{currentSelectedItem.isXPost ? 'رصد عام من منصة 𝕏' : `${currentSelectedItem.sourcesCount} مصادر إخبارية موثقة`}</span>
                   </div>
                 </div>
 
@@ -758,6 +776,35 @@ WHERE t.channel IN ('IPM_SARIE', 'ATM_WITHDRAWAL')
                     </span>
                   )}
                 </div>
+
+                {/* X Post Original Attribution Banner */}
+                {currentSelectedItem.isXPost && (
+                  <div className="p-3.5 rounded-xl bg-stone-900 text-white dark:bg-stone-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+                    <div className="flex items-center gap-2.5">
+                      <span className="w-8 h-8 rounded-lg bg-white text-black flex items-center justify-center font-black text-sm shrink-0">𝕏</span>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-xs sm:text-sm">د. خالد بن حمد المزيني</span>
+                          <span className="text-[11px] text-stone-300 font-mono" dir="ltr">@K_H_AlMuzaini</span>
+                        </div>
+                        <span className="text-[10px] text-stone-300 block">
+                          رصد عام لتحذير/توعية احتيال مالي • محتفظ بالرابط والتاريخ الأصلي
+                        </span>
+                      </div>
+                    </div>
+                    {currentSelectedItem.itemData && 'original_url' in currentSelectedItem.itemData && (currentSelectedItem.itemData as any).original_url && (
+                      <a
+                        href={(currentSelectedItem.itemData as any).original_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-3 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-600 text-white font-semibold text-xs flex items-center gap-1.5 self-start sm:self-center transition whitespace-nowrap shadow-xs"
+                      >
+                        <span>فتح المنشور في 𝕏</span>
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* ================================================================= */}
