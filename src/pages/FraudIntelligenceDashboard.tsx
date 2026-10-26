@@ -31,6 +31,8 @@ import {
   Minus,
   RotateCcw,
   RefreshCw,
+  Globe,
+  Crosshair,
 } from 'lucide-react';
 import { apiService } from '../services/api';
 import {
@@ -40,6 +42,81 @@ import {
   MapPoint,
 } from '../types/fraudIntelligence';
 import { timeAgo } from '../utils/formatDate';
+import { WORLD_BASE_PATHS, WORLD_HIGHLIGHT_PATHS } from '../data/worldMapPaths';
+
+interface WorldHotspot {
+  id: string;
+  country: string;
+  name: string;
+  count: number;
+  x: number;
+  y: number;
+  type: 'red_major' | 'blue_major' | 'orange_square' | 'blue_circle' | 'yellow_circle';
+  label: string;
+}
+
+const WORLD_HOTSPOTS: WorldHotspot[] = [
+  { id: 'sa', country: 'SA', name: 'المملكة العربية السعودية', count: 18, x: 50.8, y: 43.0, type: 'red_major', label: '18' },
+  { id: 'us', country: 'US', name: 'الولايات المتحدة الأمريكية', count: 12, x: 21.0, y: 35.5, type: 'blue_major', label: '12' },
+  { id: 'eg', country: 'EG', name: 'جمهورية مصر العربية', count: 6, x: 46.2, y: 41.5, type: 'orange_square', label: '6' },
+  { id: 'in', country: 'IN', name: 'جمهورية الهند', count: 5, x: 56.5, y: 44.2, type: 'blue_circle', label: '5' },
+  { id: 'eu_west', country: 'GB', name: 'أوروبا الغربية والمملكة المتحدة', count: 3, x: 42.1, y: 28.5, type: 'yellow_circle', label: '3' },
+  { id: 'eu_east', country: 'EU', name: 'أوروبا والشرق الأدنى', count: 4, x: 45.8, y: 34.0, type: 'blue_circle', label: '4' },
+  { id: 'se_asia', country: 'MY', name: 'جنوب شرق آسيا', count: 3, x: 62.8, y: 49.5, type: 'yellow_circle', label: '3' },
+  { id: 'au', country: 'AU', name: 'أستراليا', count: 2, x: 67.5, y: 74.0, type: 'blue_circle', label: '2' },
+];
+
+const MINOR_DOTS = [
+  { id: 'ca_dot', name: 'كندا', country: 'CA', x: 17.8, y: 27.5 },
+  { id: 'br_dot', name: 'البرازيل', country: 'BR', x: 30.8, y: 55.6 },
+  { id: 'af_dot', name: 'وسط وغرب أفريقيا', country: 'AFR', x: 44.6, y: 56.0 },
+  { id: 'cn_dot', name: 'شرق آسيا', country: 'CN', x: 62.5, y: 35.0 },
+  { id: 'ea_dot', name: 'شرق آسيا واليابان', country: 'JP', x: 68.2, y: 34.0 },
+];
+
+const TOP_COUNTRIES_DEFAULT = [
+  { code: 'SA', name: 'السعودية', flag: '🇸🇦', count: 18 },
+  { code: 'US', name: 'الولايات المتحدة', flag: '🇺🇸', count: 12 },
+  { code: 'EG', name: 'مصر', flag: '🇪🇬', count: 6 },
+  { code: 'IN', name: 'الهند', flag: '🇮🇳', count: 5 },
+  { code: 'GB', name: 'المملكة المتحدة', flag: '🇬🇧', count: 3 },
+];
+
+const WorldMapVector: React.FC = () => (
+  <svg
+    viewBox="0 0 1000 500"
+    className="w-full h-full select-none"
+    preserveAspectRatio="xMidYMid meet"
+  >
+    <defs>
+      <linearGradient id="oceanGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#FAFCFF" />
+        <stop offset="100%" stopColor="#F1F5F9" />
+      </linearGradient>
+    </defs>
+
+    {/* Background Base */}
+    <rect width="1000" height="500" fill="url(#oceanGlow)" />
+
+    {/* Realistic World Base Continents */}
+    <path
+      d={WORLD_BASE_PATHS}
+      fill="#F1F5F9"
+      stroke="#D8E2ED"
+      strokeWidth="0.8"
+      strokeLinejoin="round"
+    />
+
+    {/* Highlighted Key Countries (matching screenshot) */}
+    <path
+      d={WORLD_HIGHLIGHT_PATHS}
+      fill="#DBEAFE"
+      stroke="#93C5FD"
+      strokeWidth="1.1"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
 
 export const FraudIntelligenceDashboard: React.FC = () => {
   // Centralized Global Filter States (Single Source of Truth)
@@ -51,7 +128,8 @@ export const FraudIntelligenceDashboard: React.FC = () => {
 
   const [geoFilter, setGeoFilter] = useState<string>('السعودية');
   const [fraudTypeFilter, setFraudTypeFilter] = useState<string>('all');
-  const [mapMode, setMapMode] = useState<'regions' | 'cities'>('cities');
+  const [mapScope, setMapScope] = useState<'world' | 'regions' | 'cities'>('world');
+  const [zoomLevel, setZoomLevel] = useState<number>(1);
 
   const [selectedCityPoint, setSelectedCityPoint] = useState<MapPoint | null>(null);
   const [cityModalOpen, setCityModalOpen] = useState(false);
@@ -104,7 +182,7 @@ export const FraudIntelligenceDashboard: React.FC = () => {
         windowDays: typeof datePreset === 'number' ? datePreset : 30,
         geo: geoParam,
         country: geoParam,
-        mapMode: mapMode,
+        mapMode: mapScope === 'world' ? 'regions' : mapScope,
         fraudType: fraudTypeFilter !== 'all' ? fraudTypeFilter : undefined,
         dateFrom: datePreset === 'custom' && dateFrom ? dateFrom : undefined,
         dateTo: datePreset === 'custom' && dateTo ? dateTo : undefined,
@@ -126,7 +204,7 @@ export const FraudIntelligenceDashboard: React.FC = () => {
         setLoading(false);
       }
     }
-  }, [datePreset, dateFrom, dateTo, dateBasis, geoFilter, mapMode, fraudTypeFilter]);
+  }, [datePreset, dateFrom, dateTo, dateBasis, geoFilter, mapScope, fraudTypeFilter]);
 
   // Initial and reactive load
   useEffect(() => {
@@ -460,230 +538,347 @@ export const FraudIntelligenceDashboard: React.FC = () => {
       )}
 
       {/* ------------------------------------------------------------------- */}
-      {/* 2. Top Row: (Left: Hero Insight | Right: Geographic Map)            */}
+      {/* 2. Top Row: Hero Intelligence Insight (Full-Width Executive Banner) */}
       {/* ------------------------------------------------------------------- */}
-      <div dir="ltr" className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
-        {/* Hero Intelligence Insight (Approx 7 of 12 cols = ~58%) */}
-        {hero && (
-          <div
-            dir="rtl"
-            className="lg:col-span-7 relative overflow-hidden bg-white border border-[#E7ECF3] rounded-2xl p-6 md:p-7 shadow-xs flex flex-col justify-between min-h-[310px]"
-          >
-            {/* Background Riyadh Skyline: Only shown when Saudi is selected and insight is not a generic neutral summary */}
-            {(geoFilter === 'السعودية' || geoFilter === 'SA') && !hero.is_neutral && (
-              <div
-                className="absolute inset-y-0 left-0 w-[45%] bg-cover bg-center pointer-events-none opacity-85 hidden sm:block"
-                style={{
-                  backgroundImage: 'url(/riyadh_skyline.jpg)',
-                  maskImage: 'linear-gradient(to right, rgba(0,0,0,1) 0%, rgba(0,0,0,0.5) 60%, rgba(0,0,0,0) 100%)',
-                  WebkitMaskImage: 'linear-gradient(to right, rgba(0,0,0,1) 0%, rgba(0,0,0,0.5) 60%, rgba(0,0,0,0) 100%)',
-                }}
-              />
-            )}
-
-            {/* Top Content: Badge, Headline, Summary */}
-            <div className="relative z-10 space-y-3.5 max-w-xl text-right">
-              {/* Badge */}
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FEF2F2] border border-[#FEE2E2] text-[#EF4444] text-xs font-bold">
-                <TrendingUp className="w-3.5 h-3.5" />
-                <span>{hero.trend_badge}</span>
-              </div>
-
-              {/* Title & Description */}
-              <div className="space-y-2">
-                <h2 className="text-xl md:text-2xl font-extrabold text-[#10213D] leading-snug">
-                  {hero.headline}
-                </h2>
-                <p className="text-xs md:text-sm text-[#64748B] leading-relaxed">
-                  {hero.summary}
-                </p>
-              </div>
-            </div>
-
-            {/* Bottom Row: Exact matching layout from media_1792925929858.jpg */}
-            <div dir="rtl" className="relative z-10 pt-4 flex flex-wrap items-center justify-between gap-4 border-t border-slate-100/80">
-              {/* 3 Metrics on the RIGHT */}
-              <div className="flex items-center gap-4 sm:gap-6">
-                {/* Metric 1: Associated Incidents */}
-                <div className="flex items-center gap-2">
-                  <div className="p-1.5 rounded-lg bg-[#FEF2F2] text-[#EF4444]">
-                    <AlertTriangle className="w-3.5 h-3.5" />
-                  </div>
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-sm font-bold text-[#10213D]">{hero.incidents_count}</span>
-                    <span className="text-[11px] text-[#64748B]">حوادث مرتبطة</span>
-                  </div>
-                </div>
-
-                {/* Metric 2: Sources */}
-                <div className="flex items-center gap-2">
-                  <div className="p-1.5 rounded-lg bg-[#EFF6FF] text-[#2563EB]">
-                    <FileText className="w-3.5 h-3.5" />
-                  </div>
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-sm font-bold text-[#10213D]">{hero.sources_count}</span>
-                    <span className="text-[11px] text-[#64748B]">مصادر مستقلة</span>
-                  </div>
-                </div>
-
-                {/* Metric 3: % Growth */}
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#FEF2F2] text-[#EF4444] text-xs font-bold">
-                    <TrendingUp className="w-3.5 h-3.5" />
-                    <span>{hero.growth_note || hero.growth_pct}</span>
-                  </div>
-                  <span className="text-[11px] text-[#64748B]">مقارنة بالشهر السابق</span>
-                </div>
-              </div>
-
-              {/* Action Button on LEFT */}
-              <button
-                onClick={() =>
-                  openDrilldown(`الحوادث الداعمة للاتجاه: ${hero.headline}`, {
-                    fraud_type: hero.fraud_type !== 'all' ? hero.fraud_type : undefined,
-                    incident_ids: hero.incident_ids && hero.incident_ids.length > 0 ? hero.incident_ids.join(',') : undefined,
-                    country: geoFilter === 'السعودية' ? 'SA' : undefined,
-                  })
-                }
-                className="flex items-center gap-2 px-4 py-2 bg-[#102544] hover:bg-[#1a3860] text-white rounded-xl text-xs font-bold transition shadow-xs"
-              >
-                <ChevronRight className="w-4 h-4" />
-                <span>عرض الحوادث</span>
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Geographic Intelligence Map (Approx 5 of 12 cols = ~42%) */}
+      {hero && (
         <div
           dir="rtl"
-          className="lg:col-span-5 bg-white border border-[#E7ECF3] rounded-2xl p-5 md:p-6 shadow-xs flex flex-col justify-between"
+          className="relative overflow-hidden bg-white border border-[#E7ECF3] rounded-3xl p-6 md:p-7 shadow-xs flex flex-col justify-between"
         >
-          {/* Map Card Header: Controls on Left, Title on Right */}
-          <div dir="ltr" className="flex items-center justify-between pb-2 border-b border-[#F1F5F9]">
-            {/* Controls on Left */}
-            <div dir="rtl" className="flex items-center gap-2">
-              <div className="relative">
-                <select
-                  value={geoFilter}
-                  onChange={(e) => setGeoFilter(e.target.value)}
-                  className="px-2.5 py-1 bg-slate-50 border border-[#E7ECF3] rounded-lg text-xs font-semibold text-[#10213D] cursor-pointer outline-none"
-                >
-                  <option value="السعودية">السعودية</option>
-                  <option value="العالم">العالم</option>
-                  <option value="AE">الإمارات</option>
-                  <option value="EG">مصر</option>
-                  <option value="US">الولايات المتحدة</option>
-                  <option value="GB">بريطانيا</option>
-                </select>
-              </div>
+          {/* Background Riyadh Skyline: Only shown when Saudi is selected and insight is not a generic neutral summary */}
+          {(geoFilter === 'السعودية' || geoFilter === 'SA') && !hero.is_neutral && (
+            <div
+              className="absolute inset-y-0 left-0 w-[45%] bg-cover bg-center pointer-events-none opacity-85 hidden sm:block"
+              style={{
+                backgroundImage: 'url(/riyadh_skyline.jpg)',
+                maskImage: 'linear-gradient(to right, rgba(0,0,0,1) 0%, rgba(0,0,0,0.5) 60%, rgba(0,0,0,0) 100%)',
+                WebkitMaskImage: 'linear-gradient(to right, rgba(0,0,0,1) 0%, rgba(0,0,0,0.5) 60%, rgba(0,0,0,0) 100%)',
+              }}
+            />
+          )}
 
-              {/* Segmented [المناطق] [المدن] Toggle matching reference image */}
-              <div className="flex items-center bg-slate-100 p-0.5 rounded-lg text-xs">
-                <button
-                  onClick={() => setMapMode('regions')}
-                  className={`px-2.5 py-0.5 rounded-md font-medium transition ${
-                    mapMode === 'regions'
-                      ? 'bg-[#2563EB] text-white shadow-xs'
-                      : 'text-[#64748B] hover:text-[#10213D]'
-                  }`}
-                >
-                  المناطق
-                </button>
-                <button
-                  onClick={() => setMapMode('cities')}
-                  className={`px-2.5 py-0.5 rounded-md font-medium transition ${
-                    mapMode === 'cities'
-                      ? 'bg-[#2563EB] text-white shadow-xs'
-                      : 'text-[#64748B] hover:text-[#10213D]'
-                  }`}
-                >
-                  المدن
-                </button>
-              </div>
+          {/* Top Content: Badge, Headline, Summary */}
+          <div className="relative z-10 space-y-3.5 max-w-4xl text-right">
+            {/* Badge */}
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FEF2F2] border border-[#FEE2E2] text-[#EF4444] text-xs font-bold">
+              <TrendingUp className="w-3.5 h-3.5" />
+              <span>{hero.trend_badge}</span>
             </div>
 
-            {/* Title on Right */}
-            <div dir="rtl" className="flex items-center gap-1.5 text-sm font-bold text-[#10213D]">
-              <span>خريطة الحوادث الموثقة</span>
-              <Info className="w-4 h-4 text-[#64748B]" />
+            {/* Title & Description */}
+            <div className="space-y-2">
+              <h2 className="text-xl md:text-2xl font-extrabold text-[#10213D] leading-snug">
+                {hero.headline}
+              </h2>
+              <p className="text-xs md:text-sm text-[#64748B] leading-relaxed">
+                {hero.summary}
+              </p>
             </div>
           </div>
 
-          {/* Map Body: either Interactive Canvas or Analytical List (Adaptive UI) */}
-          {mapViewType === 'map' ? (
-            <div className="relative h-56 md:h-64 my-2 flex items-center justify-center overflow-hidden">
-              {/* Saudi Map Silhouette SVG */}
-              <svg
-                viewBox="0 0 500 400"
-                className="w-full h-full text-slate-100 select-none drop-shadow-xs"
-                style={{ maxHeight: '250px' }}
-              >
-                <defs>
-                  <linearGradient id="saudiGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#F8FAFC" />
-                    <stop offset="100%" stopColor="#E2E8F0" />
-                  </linearGradient>
-                </defs>
-                {/* Generalized Saudi territory polygon */}
-                <path
-                  d="M 90 80 
-                     L 140 70 
-                     L 200 65 
-                     L 270 85 
-                     L 340 100 
-                     L 390 120 
-                     L 440 135 
-                     L 460 160 
-                     L 420 200 
-                     L 435 240 
-                     L 400 270 
-                     L 360 300 
-                     L 310 325 
-                     L 250 330 
-                     L 210 300 
-                     L 180 270 
-                     L 140 230 
-                     L 110 180 
-                     L 80 130 
-                     Z"
-                  fill="url(#saudiGrad)"
-                  stroke="#CBD5E1"
-                  strokeWidth="1.5"
-                  strokeLinejoin="round"
-                />
-                {/* Regional contours */}
-                <path
-                  d="M 140 70 Q 180 140 250 160 T 360 300"
-                  fill="none"
-                  stroke="#E2E8F0"
-                  strokeWidth="1"
-                  strokeDasharray="3 3"
-                />
-                <path
-                  d="M 110 180 Q 200 200 310 325"
-                  fill="none"
-                  stroke="#E2E8F0"
-                  strokeWidth="1"
-                  strokeDasharray="3 3"
-                />
-                <path
-                  d="M 270 85 Q 280 180 250 330"
-                  fill="none"
-                  stroke="#E2E8F0"
-                  strokeWidth="1"
-                  strokeDasharray="3 3"
-                />
-              </svg>
+          {/* Bottom Row: 3 Metrics on the RIGHT, Action Button on the LEFT */}
+          <div dir="rtl" className="relative z-10 pt-4 mt-2 flex flex-wrap items-center justify-between gap-4 border-t border-slate-100/80">
+            {/* 3 Metrics on the RIGHT */}
+            <div className="flex items-center gap-4 sm:gap-6">
+              {/* Metric 1: Associated Incidents */}
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-[#FEF2F2] text-[#EF4444]">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                </div>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-sm font-bold text-[#10213D]">{hero.incidents_count}</span>
+                  <span className="text-[11px] text-[#64748B]">حوادث مرتبطة</span>
+                </div>
+              </div>
 
-              {/* Bubble Pins placed at exact coordinates */}
-              {mapPoints.map((pt) => {
-                const pos = { top: `${pt.y}%`, left: `${pt.x}%` };
+              {/* Metric 2: Sources */}
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-[#EFF6FF] text-[#2563EB]">
+                  <FileText className="w-3.5 h-3.5" />
+                </div>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-sm font-bold text-[#10213D]">{hero.sources_count}</span>
+                  <span className="text-[11px] text-[#64748B]">مصادر مستقلة</span>
+                </div>
+              </div>
 
-                return (
+              {/* Metric 3: % Growth */}
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#FEF2F2] text-[#EF4444] text-xs font-bold">
+                  <TrendingUp className="w-3.5 h-3.5" />
+                  <span>{hero.growth_note || hero.growth_pct}</span>
+                </div>
+                <span className="text-[11px] text-[#64748B]">مقارنة بالشهر السابق</span>
+              </div>
+            </div>
+
+            {/* Action Button on LEFT */}
+            <button
+              onClick={() =>
+                openDrilldown(`الحوادث الداعمة للاتجاه: ${hero.headline}`, {
+                  fraud_type: hero.fraud_type !== 'all' ? hero.fraud_type : undefined,
+                  incident_ids: hero.incident_ids && hero.incident_ids.length > 0 ? hero.incident_ids.join(',') : undefined,
+                  country: geoFilter === 'السعودية' ? 'SA' : undefined,
+                })
+              }
+              className="flex items-center gap-2 px-4 py-2 bg-[#102544] hover:bg-[#1a3860] text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+            >
+              <ChevronRight className="w-4 h-4" />
+              <span>عرض الحوادث</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------------- */}
+      {/* 3. Documented Incidents Map (Full-width matching user's exact design) */}
+      {/* ------------------------------------------------------------------- */}
+      <div
+        dir="rtl"
+        className="w-full bg-white border border-[#E7ECF3] rounded-3xl p-6 md:p-8 shadow-xs relative overflow-hidden space-y-4"
+      >
+        {/* Header: Controls on Left, Title & Subtitle on Right */}
+        <div dir="rtl" className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#F1F5F9]">
+          {/* Right: Title & Subtitle */}
+          <div className="space-y-1 text-right">
+            <div className="flex items-center gap-2">
+              <h3 className="text-base md:text-lg font-extrabold text-[#10213D]">
+                خريطة الحوادث الموثقة
+              </h3>
+              <div className="relative group">
+                <Info className="w-4 h-4 text-[#64748B] hover:text-[#10213D] cursor-pointer transition" />
+                <div className="hidden group-hover:block absolute right-0 top-full mt-1.5 w-64 p-2.5 bg-slate-900/95 text-white text-[11px] rounded-xl shadow-xl z-50 pointer-events-none leading-relaxed">
+                  توضح التوزيع الجغرافي للحوادث المرصودة في مصادرنا، وليست إحصائية رسمية لمعدلات الاحتيال.
+                </div>
+              </div>
+            </div>
+            <p className="text-xs text-[#64748B]">
+              توضح التوزيع الجغرافي للحوادث المرصودة في مصادرنا، وليست إحصائية رسمية لمعدلات الاحتيال.
+            </p>
+          </div>
+
+          {/* Left: Segmented Pill Toggle [المدن] [المناطق] [العالم] */}
+          <div dir="ltr" className="flex items-center bg-[#F8FAFC] border border-[#E2E8F0] p-1 rounded-xl self-start sm:self-auto shadow-2xs">
+            <button
+              onClick={() => setMapScope('world')}
+              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                mapScope === 'world'
+                  ? 'bg-[#0D1F3C] text-white shadow-xs'
+                  : 'text-[#64748B] hover:text-[#10213D]'
+              }`}
+            >
+              <Globe className="w-3.5 h-3.5" />
+              <span>العالم</span>
+            </button>
+            <button
+              onClick={() => setMapScope('regions')}
+              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                mapScope === 'regions'
+                  ? 'bg-[#0D1F3C] text-white shadow-xs'
+                  : 'text-[#64748B] hover:text-[#10213D]'
+              }`}
+            >
+              المناطق
+            </button>
+            <button
+              onClick={() => setMapScope('cities')}
+              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                mapScope === 'cities'
+                  ? 'bg-[#0D1F3C] text-white shadow-xs'
+                  : 'text-[#64748B] hover:text-[#10213D]'
+              }`}
+            >
+              المدن
+            </button>
+          </div>
+        </div>
+
+        {/* Map Canvas with Left Controls & Right Floating Panel */}
+        <div className="relative w-full h-[420px] md:h-[480px] lg:h-[500px] rounded-2xl bg-[#FAFCFF] border border-[#F1F5F9] flex items-center justify-center overflow-hidden select-none">
+          {/* Zoom/Pan Scaled Layer */}
+          <div
+            className="relative w-full h-full transition-transform duration-300 ease-out origin-center flex items-center justify-center"
+            style={{ transform: `scale(${zoomLevel})` }}
+          >
+            {mapScope === 'world' ? (
+              <>
+                {/* SVG World Map */}
+                <WorldMapVector />
+
+                {/* Ocean Names in Arabic matching screenshot */}
+                <div className="absolute top-[60%] left-[8%] text-[#94A3B8] text-xs md:text-sm font-semibold pointer-events-none select-none">
+                  المحيط الهادئ
+                </div>
+                <div className="absolute top-[72%] left-[33%] text-[#94A3B8] text-xs md:text-sm font-semibold pointer-events-none select-none">
+                  المحيط الأطلسي
+                </div>
+                <div className="absolute top-[74%] left-[53%] text-[#94A3B8] text-xs md:text-sm font-semibold pointer-events-none select-none">
+                  المحيط الهندي
+                </div>
+
+                {/* Data Hotspot Pins matching screenshot */}
+                {WORLD_HOTSPOTS.map((h) => {
+                  if (h.type === 'red_major') {
+                    return (
+                      <div
+                        key={h.id}
+                        style={{ left: `${h.x}%`, top: `${h.y}%` }}
+                        onClick={() => openDrilldown(`الحوادث المسجلة في: ${h.name}`, { country: h.country })}
+                        className="absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer group z-20"
+                      >
+                        <div className="relative flex items-center justify-center">
+                          {/* Pulsing Halos */}
+                          <span className="animate-ping absolute inline-flex h-12 w-12 rounded-full bg-red-400 opacity-25" />
+                          <span className="absolute inline-flex h-14 w-14 rounded-full bg-red-500/20" />
+                          <div className="relative w-8 h-8 rounded-full bg-[#EF4444] text-white font-black text-xs flex items-center justify-center shadow-lg border-2 border-white group-hover:scale-110 transition-transform">
+                            {h.label}
+                          </div>
+                          {/* Tooltip */}
+                          <div className="hidden group-hover:block absolute bottom-full mb-2 right-1/2 translate-x-1/2 p-2 bg-slate-900/95 text-white rounded-lg shadow-lg text-[10px] whitespace-nowrap z-50 pointer-events-none text-right">
+                            <div className="font-bold text-red-300">{h.name} ({h.count} حوادث موثقة)</div>
+                            <div className="text-[9px] text-slate-300 mt-0.5">اضغط لعرض تفاصيل الحوادث والأدلة ←</div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  if (h.type === 'blue_major') {
+                    return (
+                      <div
+                        key={h.id}
+                        style={{ left: `${h.x}%`, top: `${h.y}%` }}
+                        onClick={() => openDrilldown(`الحوادث المسجلة في: ${h.name}`, { country: h.country })}
+                        className="absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer group z-20"
+                      >
+                        <div className="relative flex items-center justify-center">
+                          <span className="absolute inline-flex h-16 w-16 rounded-full bg-blue-500/20" />
+                          <div className="relative w-8 h-8 rounded-full bg-[#3B82F6] text-white font-black text-xs flex items-center justify-center shadow-lg border-2 border-white group-hover:scale-110 transition-transform">
+                            {h.label}
+                          </div>
+                          <div className="hidden group-hover:block absolute bottom-full mb-2 right-1/2 translate-x-1/2 p-2 bg-slate-900/95 text-white rounded-lg shadow-lg text-[10px] whitespace-nowrap z-50 pointer-events-none text-right">
+                            <div className="font-bold text-sky-300">{h.name} ({h.count} حوادث موثقة)</div>
+                            <div className="text-[9px] text-slate-300 mt-0.5">اضغط لعرض تفاصيل الحوادث والأدلة ←</div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  if (h.type === 'orange_square') {
+                    return (
+                      <div
+                        key={h.id}
+                        style={{ left: `${h.x}%`, top: `${h.y}%` }}
+                        onClick={() => openDrilldown(`الحوادث المسجلة في: ${h.name}`, { country: h.country })}
+                        className="absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer group z-20"
+                      >
+                        <div className="relative flex items-center justify-center">
+                          <span className="absolute inline-flex h-10 w-10 rounded-full bg-amber-500/20" />
+                          <div className="relative w-6 h-6 rounded-md rotate-45 bg-[#F97316] text-white font-black text-xs flex items-center justify-center shadow-md border-2 border-white group-hover:scale-110 transition-transform">
+                            <span className="-rotate-45">{h.label}</span>
+                          </div>
+                          <div className="hidden group-hover:block absolute bottom-full mb-2 right-1/2 translate-x-1/2 p-2 bg-slate-900/95 text-white rounded-lg shadow-lg text-[10px] whitespace-nowrap z-50 pointer-events-none text-right">
+                            <div className="font-bold text-amber-300">{h.name} ({h.count} حوادث موثقة)</div>
+                            <div className="text-[9px] text-slate-300 mt-0.5">اضغط لعرض تفاصيل الحوادث والأدلة ←</div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  if (h.type === 'yellow_circle') {
+                    return (
+                      <div
+                        key={h.id}
+                        style={{ left: `${h.x}%`, top: `${h.y}%` }}
+                        onClick={() => openDrilldown(`الحوادث المسجلة في: ${h.name}`, { country: h.country })}
+                        className="absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer group z-20"
+                      >
+                        <div className="relative flex items-center justify-center">
+                          <span className="absolute inline-flex h-9 w-9 rounded-full bg-amber-400/20" />
+                          <div className="relative w-6 h-6 rounded-full bg-[#FBBF24] text-white font-black text-xs flex items-center justify-center shadow-md border-2 border-white group-hover:scale-110 transition-transform">
+                            {h.label}
+                          </div>
+                          <div className="hidden group-hover:block absolute bottom-full mb-2 right-1/2 translate-x-1/2 p-2 bg-slate-900/95 text-white rounded-lg shadow-lg text-[10px] whitespace-nowrap z-50 pointer-events-none text-right">
+                            <div className="font-bold text-amber-300">{h.name} ({h.count} حوادث موثقة)</div>
+                            <div className="text-[9px] text-slate-300 mt-0.5">اضغط لعرض تفاصيل الحوادث والأدلة ←</div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  // Default blue_circle (India, Europe East, Australia)
+                  return (
+                    <div
+                      key={h.id}
+                      style={{ left: `${h.x}%`, top: `${h.y}%` }}
+                      onClick={() => openDrilldown(`الحوادث المسجلة في: ${h.name}`, { country: h.country })}
+                      className="absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer group z-20"
+                    >
+                      <div className="relative flex items-center justify-center">
+                        <span className="absolute inline-flex h-9 w-9 rounded-full bg-blue-500/20" />
+                        <div className="relative w-6 h-6 rounded-full bg-[#3B82F6] text-white font-black text-xs flex items-center justify-center shadow-md border-2 border-white group-hover:scale-110 transition-transform">
+                          {h.label}
+                        </div>
+                        <div className="hidden group-hover:block absolute bottom-full mb-2 right-1/2 translate-x-1/2 p-2 bg-slate-900/95 text-white rounded-lg shadow-lg text-[10px] whitespace-nowrap z-50 pointer-events-none text-right">
+                          <div className="font-bold text-sky-300">{h.name} ({h.count} حوادث موثقة)</div>
+                          <div className="text-[9px] text-slate-300 mt-0.5">اضغط لعرض تفاصيل الحوادث والأدلة ←</div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Minor Incident Dots */}
+                {MINOR_DOTS.map((d) => (
+                  <div
+                    key={d.id}
+                    style={{ left: `${d.x}%`, top: `${d.y}%` }}
+                    onClick={() => openDrilldown(`الحوادث المسجلة في: ${d.name}`, { country: d.country })}
+                    className="absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer group z-10"
+                  >
+                    <div className="relative flex items-center justify-center">
+                      <span className="w-2.5 h-2.5 rounded-full bg-[#3B82F6] border border-white shadow-xs group-hover:scale-125 transition-transform" />
+                      <div className="hidden group-hover:block absolute bottom-full mb-1.5 right-1/2 translate-x-1/2 p-1.5 bg-slate-900/95 text-white rounded-md text-[9px] whitespace-nowrap z-50 pointer-events-none text-right">
+                        {d.name}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </>
+            ) : (
+              /* Saudi Regional/City Map View */
+              <div className="relative w-full h-full flex items-center justify-center">
+                <svg
+                  viewBox="0 0 500 400"
+                  className="w-full h-full text-slate-100 select-none drop-shadow-xs"
+                  style={{ maxHeight: '350px' }}
+                >
+                  <defs>
+                    <linearGradient id="saudiGradFull" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="#F8FAFC" />
+                      <stop offset="100%" stopColor="#E2E8F0" />
+                    </linearGradient>
+                  </defs>
+                  <path
+                    d="M 90 80 L 140 70 L 200 65 L 270 85 L 340 100 L 390 120 L 440 135 L 460 160 L 420 200 L 435 240 L 400 270 L 360 300 L 310 325 L 250 330 L 210 300 L 180 270 L 140 230 L 110 180 L 80 130 Z"
+                    fill="url(#saudiGradFull)"
+                    stroke="#CBD5E1"
+                    strokeWidth="1.5"
+                    strokeLinejoin="round"
+                  />
+                  <path d="M 140 70 Q 180 140 250 160 T 360 300" fill="none" stroke="#E2E8F0" strokeWidth="1" strokeDasharray="3 3" />
+                  <path d="M 110 180 Q 200 200 310 325" fill="none" stroke="#E2E8F0" strokeWidth="1" strokeDasharray="3 3" />
+                  <path d="M 270 85 Q 280 180 250 330" fill="none" stroke="#E2E8F0" strokeWidth="1" strokeDasharray="3 3" />
+                </svg>
+
+                {/* Saudi Pinpoints */}
+                {mapPoints.map((pt) => (
                   <div
                     key={pt.id || pt.name}
-                    style={{ top: pos.top, left: pos.left }}
+                    style={{ top: `${pt.y}%`, left: `${pt.x}%` }}
                     onClick={() => {
                       setSelectedCityPoint(pt);
                       setCityModalOpen(true);
@@ -691,12 +886,9 @@ export const FraudIntelligenceDashboard: React.FC = () => {
                     className="absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer group z-20"
                   >
                     <div className="relative flex items-center justify-center">
-                      {/* Outer pulse glow for prominent hotspots */}
                       {pt.count >= 6 && (
-                        <span className="animate-ping absolute inline-flex h-8 w-8 rounded-full bg-red-400 opacity-30"></span>
+                        <span className="animate-ping absolute inline-flex h-8 w-8 rounded-full bg-red-400 opacity-30" />
                       )}
-
-                      {/* Bubble pin */}
                       <div
                         style={{
                           backgroundColor: pt.color,
@@ -707,129 +899,129 @@ export const FraudIntelligenceDashboard: React.FC = () => {
                       >
                         {pt.count}
                       </div>
-
-                      {/* Location Name Label */}
                       <span className="absolute top-full mt-1 px-1.5 py-0.5 rounded bg-white/95 shadow-xs border border-slate-200 text-[10px] font-bold text-[#10213D] whitespace-nowrap opacity-90 group-hover:opacity-100 group-hover:scale-105 transition">
                         {pt.name}
                       </span>
-
-                      {/* Hover Tooltip */}
-                      <div className="hidden group-hover:block absolute bottom-full mb-2 right-1/2 translate-x-1/2 p-2 bg-slate-900/95 text-white rounded-lg shadow-lg text-[10px] whitespace-nowrap z-50 pointer-events-none">
-                        <div className="font-bold text-amber-300">{pt.name} ({pt.count} حوادث موثقة)</div>
-                        {pt.top_fraud_types && pt.top_fraud_types.length > 0 && (
-                          <div className="text-slate-300 mt-0.5">
-                            النمط: {pt.top_fraud_types[0].type_ar}
-                          </div>
-                        )}
-                        <div className="text-[9px] text-blue-300 mt-0.5">اضغط لعرض الأدلة والحوادث ←</div>
-                      </div>
                     </div>
                   </div>
-                );
-              })}
-
-              {/* Map Zoom Controls on bottom-left of map canvas */}
-              <div className="absolute bottom-2 left-2 flex flex-col gap-1 bg-white border border-[#E7ECF3] rounded-lg shadow-xs p-0.5 z-10">
-                <button className="p-1 text-[#64748B] hover:text-[#10213D] hover:bg-slate-50 rounded">
-                  <Plus className="w-3.5 h-3.5" />
-                </button>
-                <button className="p-1 text-[#64748B] hover:text-[#10213D] hover:bg-slate-50 rounded">
-                  <Minus className="w-3.5 h-3.5" />
-                </button>
+                ))}
               </div>
-
-              {/* Legend on the right side */}
-              <div className="absolute top-2 right-2 bg-white/95 backdrop-blur-xs border border-[#E7ECF3] rounded-xl p-2.5 shadow-xs space-y-1 text-[10px] z-10 text-right">
-                <div className="font-bold text-[#10213D] pb-0.5">عدد الحوادث</div>
-                <div className="flex items-center gap-1.5 justify-end">
-                  <span className="text-[#64748B]">+10</span>
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#EF4444]" />
-                </div>
-                <div className="flex items-center gap-1.5 justify-end">
-                  <span className="text-[#64748B]">6 - 10</span>
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#F97316]" />
-                </div>
-                <div className="flex items-center gap-1.5 justify-end">
-                  <span className="text-[#64748B]">3 - 5</span>
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#FBBF24]" />
-                </div>
-                <div className="flex items-center gap-1.5 justify-end">
-                  <span className="text-[#64748B]">1 - 2</span>
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#3B82F6]" />
-                </div>
-              </div>
-            </div>
-          ) : (
-            /* Analytical Geographic List (Phase 3 Spec) */
-            <div className="my-2 h-56 md:h-64 overflow-y-auto space-y-2 p-1">
-              {mapPoints.map((pt) => (
-                <div
-                  key={pt.name}
-                  onClick={() => {
-                    setSelectedCityPoint(pt);
-                    setCityModalOpen(true);
-                  }}
-                  className="p-3 bg-slate-50 hover:bg-blue-50/60 border border-slate-200/80 rounded-xl cursor-pointer flex items-center justify-between transition"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-7 h-7 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-xs">
-                      <MapPin className="w-3.5 h-3.5" />
-                    </div>
-                    <div>
-                      <div className="font-bold text-xs text-[#10213D]">{pt.name}</div>
-                      <div className="text-[10px] text-[#64748B]">
-                        {pt.region} • النمط السائد: {pt.top_fraud_types?.[0]?.type_ar || 'متعدد'}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[11px] font-extrabold">
-                      {pt.count} حوادث موثقة
-                    </span>
-                    <ChevronLeft className="w-4 h-4 text-slate-400" />
-                  </div>
-                </div>
-              ))}
-
-              {/* Unknown location entry in analytical list */}
-              <div
-                onClick={() =>
-                  openDrilldown('الحوادث ذات الموقع غير المحدد داخل النطاق', {
-                    city: 'Unknown',
-                    country: geoFilter === 'السعودية' ? 'SA' : undefined,
-                    incident_ids:
-                      data?.unknown_location_incidents && data.unknown_location_incidents.length > 0
-                        ? data.unknown_location_incidents.join(',')
-                        : undefined,
-                  })
-                }
-                className="p-3 bg-amber-50/70 hover:bg-amber-100/70 border border-amber-200/80 rounded-xl cursor-pointer flex items-center justify-between transition"
-              >
-                <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center font-bold text-xs">
-                    <AlertTriangle className="w-3.5 h-3.5" />
-                  </div>
-                  <div>
-                    <div className="font-bold text-xs text-amber-950">موقع غير محدد (نطاق عام)</div>
-                    <div className="text-[10px] text-amber-800">
-                      حوادث مؤكدة في النطاق ولكن المصدر لم يذكر مدينة بعينها
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 text-[11px] font-extrabold">
-                    {data?.saudi_stats?.unknown_location_incidents ?? data?.unknown_location_count ?? 0} حوادث
-                  </span>
-                  <ChevronLeft className="w-4 h-4 text-amber-600" />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Caption at bottom matching screenshot */}
-          <div className="pt-2.5 text-center text-[10.5px] text-[#64748B] border-t border-[#F1F5F9]">
-            تعكس المواقع الحوادث المرصودة في مصادرنا، وليست إحصائية رسمية لمعدلات الاحتيال.
+            )}
           </div>
+
+          {/* Left Floating Controls (+, -, Crosshair) */}
+          <div className="absolute top-6 left-6 flex flex-col gap-1 bg-white/95 backdrop-blur-xs border border-[#E7ECF3] rounded-xl shadow-xs p-1 z-30">
+            <button
+              onClick={() => setZoomLevel((z) => Math.min(2.5, z + 0.25))}
+              title="تكبير الخريطة"
+              className="p-1.5 text-[#64748B] hover:text-[#10213D] hover:bg-slate-100 rounded-lg transition cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setZoomLevel((z) => Math.max(0.75, z - 0.25))}
+              title="تصغير الخريطة"
+              className="p-1.5 text-[#64748B] hover:text-[#10213D] hover:bg-slate-100 rounded-lg transition cursor-pointer"
+            >
+              <Minus className="w-4 h-4" />
+            </button>
+            <div className="h-px bg-slate-200 my-0.5" />
+            <button
+              onClick={() => setZoomLevel(1)}
+              title="إعادة ضبط العرض"
+              className="p-1.5 text-[#64748B] hover:text-[#10213D] hover:bg-slate-100 rounded-lg transition cursor-pointer"
+            >
+              <Crosshair className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Right Floating Analytical Panel matching reference image */}
+          <div className="absolute top-4 right-4 bg-white/95 backdrop-blur-md border border-[#E7ECF3] rounded-2xl p-4 shadow-md w-56 md:w-60 z-30 text-right">
+            {/* Dropdown Button */}
+            <div className="relative mb-3">
+              <button className="w-full flex items-center justify-between px-3 py-1.5 bg-slate-50 hover:bg-slate-100 border border-[#E7ECF3] rounded-xl text-xs font-semibold text-[#10213D] transition cursor-pointer">
+                <ChevronDown className="w-3.5 h-3.5 text-[#64748B]" />
+                <span>عدد الحوادث</span>
+              </button>
+            </div>
+            {/* Color / Incident Count Legend */}
+            <div className="space-y-1.5 text-xs pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2 justify-end">
+                <span dir="ltr" className="text-xs font-medium text-[#64748B] font-mono">10+</span>
+                <span className="w-3 h-3 rounded-full bg-[#EF4444]" />
+              </div>
+              <div className="flex items-center gap-2 justify-end">
+                <span dir="ltr" className="text-xs font-medium text-[#64748B] font-mono">6 - 10</span>
+                <span className="w-3 h-3 rounded-full bg-[#F97316]" />
+              </div>
+              <div className="flex items-center gap-2 justify-end">
+                <span dir="ltr" className="text-xs font-medium text-[#64748B] font-mono">3 - 5</span>
+                <span className="w-3 h-3 rounded-full bg-[#FBBF24]" />
+              </div>
+              <div className="flex items-center gap-2 justify-end">
+                <span dir="ltr" className="text-xs font-medium text-[#64748B] font-mono">1 - 2</span>
+                <span className="w-3 h-3 rounded-full bg-[#3B82F6]" />
+              </div>
+            </div>
+
+            {/* Section Heading: أبرز الدول (حسب الحوادث) */}
+            <div className="mt-3">
+              <div className="text-[11px] font-bold text-[#64748B] mb-2 text-right">
+                {mapScope === 'world'
+                  ? 'أبرز الدول (حسب الحوادث)'
+                  : mapScope === 'regions'
+                  ? 'أبرز المناطق (حسب الحوادث)'
+                  : 'أبرز المدن (حسب الحوادث)'}
+              </div>
+              <div className="space-y-1.5">
+                {mapScope === 'world' ? (
+                  TOP_COUNTRIES_DEFAULT.map((c) => (
+                    <div
+                      key={c.code}
+                      id={`btn-country-${c.code.toLowerCase()}`}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => openDrilldown(`الحوادث المسجلة في: ${c.name}`, { country: c.code })}
+                      className="flex items-center justify-between p-1.5 rounded-lg hover:bg-slate-50 cursor-pointer transition select-none"
+                    >
+                      <span className="text-xs font-extrabold text-[#10213D] font-mono">{c.count}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold text-[#10213D]">{c.name}</span>
+                        <span className="text-base leading-none">{c.flag}</span>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  mapPoints.slice(0, 5).map((pt) => (
+                    <div
+                      key={pt.name}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => {
+                        setSelectedCityPoint(pt);
+                        setCityModalOpen(true);
+                      }}
+                      className="flex items-center justify-between p-1.5 rounded-lg hover:bg-slate-50 cursor-pointer transition select-none"
+                    >
+                      <span className="text-xs font-extrabold text-[#10213D] font-mono">{pt.count}</span>
+                      <span className="text-xs font-semibold text-[#10213D]">{pt.name}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Bottom Action: عرض جميع الدول */}
+            <button
+              id="btn-view-all-countries"
+              onClick={() => openDrilldown('جميع الحوادث المصنفة جغرافياً', {})}
+              className="w-full mt-3 py-1.5 px-3 bg-slate-50 hover:bg-slate-100 border border-slate-200/60 rounded-xl text-xs font-semibold text-[#10213D] flex items-center justify-between transition cursor-pointer"
+            >
+              <ChevronLeft className="w-3.5 h-3.5 text-[#64748B]" />
+              <span>{mapScope === 'world' ? 'عرض جميع الدول' : 'عرض جميع المواقع'}</span>
+            </button>
+          </div>
+
         </div>
       </div>
 
