@@ -71,6 +71,9 @@ export const IncidentRegistry: React.FC = () => {
   const [page, setPage] = useState(1);
   const [recordType, setRecordType] = useState('');
   const [reviewStatus, setReviewStatus] = useState('');
+  const [scope, setScope] = useState<'saudi' | 'all'>('saudi');
+  const [windowDays, setWindowDays] = useState<number>(30);
+  const [fraudType, setFraudType] = useState<string>('');
   const [query, setQuery] = useState('');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -82,7 +85,6 @@ export const IncidentRegistry: React.FC = () => {
   const [sideLoading, setSideLoading] = useState(false);
 
   useEffect(() => {
-    apiService.getSaudiOverview().then(setOverview).catch(() => {});
     apiService.getSaudiIncidentReport().then(setReport).catch(() => {});
   }, []);
 
@@ -90,21 +92,32 @@ export const IncidentRegistry: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await apiService.getSaudiIncidents({
-        record_type: recordType || undefined,
-        review_status: reviewStatus || undefined,
-        q: search || undefined,
-        page,
-        page_size: PAGE_SIZE,
-      });
+      const [res, ovRes] = await Promise.all([
+        apiService.getSaudiIncidents({
+          scope,
+          window_days: windowDays > 0 ? windowDays : undefined,
+          fraud_type: fraudType || undefined,
+          record_type: recordType || undefined,
+          review_status: reviewStatus || undefined,
+          q: search || undefined,
+          page,
+          page_size: PAGE_SIZE,
+        }),
+        apiService.getSaudiOverview({
+          scope,
+          window_days: windowDays > 0 ? windowDays : undefined,
+          fraud_type: fraudType || undefined,
+        }).catch(() => null),
+      ]);
       setIncidents(res.items);
       setTotal(res.total);
+      if (ovRes) setOverview(ovRes);
     } catch (e: any) {
       setError(e.message || 'تعذر تحميل سجل الحوادث');
     } finally {
       setLoading(false);
     }
-  }, [recordType, reviewStatus, search, page]);
+  }, [scope, windowDays, fraudType, recordType, reviewStatus, search, page]);
 
   useEffect(() => {
     loadIncidents();
@@ -143,7 +156,7 @@ export const IncidentRegistry: React.FC = () => {
   const inc = report?.incidents;
 
   const stats = [
-    { label: 'حوادث مستقلة', value: inc?.independent_total ?? overview?.incidents_total ?? '…', icon: FolderSearch },
+    { label: 'حوادث مستقلة (وفق النطاق)', value: total, icon: FolderSearch },
     { label: 'مقالات خلف الحوادث', value: inc?.articles_behind_incidents ?? '…', icon: Newspaper },
     { label: 'مؤكدة / مُبلَّغ عنها', value: inc ? `${inc.confirmed} / ${inc.reported}` : '…', icon: CheckCircle2 },
     { label: 'تحتاج مراجعة بشرية', value: inc?.needs_review ?? '…', icon: ClipboardCheck },
@@ -239,6 +252,39 @@ export const IncidentRegistry: React.FC = () => {
               />
               <Search className="w-4 h-4 text-gray-500 absolute right-3 top-1/2 -translate-y-1/2" />
             </form>
+            <select
+              id="incident-scope-filter"
+              value={scope}
+              onChange={(e) => { setScope(e.target.value as 'saudi' | 'all'); setPage(1); }}
+              className="bg-[#0F172A] border border-white/10 rounded-xl text-xs text-gray-200 px-3 py-2.5"
+            >
+              <option value="saudi">🇸🇦 المملكة العربية السعودية</option>
+              <option value="all">🌐 كافة النطاقات (العالم والكل)</option>
+            </select>
+            <select
+              id="incident-window-filter"
+              value={windowDays}
+              onChange={(e) => { setWindowDays(Number(e.target.value)); setPage(1); }}
+              className="bg-[#0F172A] border border-white/10 rounded-xl text-xs text-gray-200 px-3 py-2.5"
+            >
+              <option value={30}>آخر 30 يومًا (المعياري)</option>
+              <option value={90}>آخر 90 يومًا</option>
+              <option value={365}>آخر سنة (365 يومًا)</option>
+              <option value={0}>كامل السجل التاريخي</option>
+            </select>
+            <select
+              id="incident-fraud-type-filter"
+              value={fraudType}
+              onChange={(e) => { setFraudType(e.target.value); setPage(1); }}
+              className="bg-[#0F172A] border border-white/10 rounded-xl text-xs text-gray-200 px-3 py-2.5"
+            >
+              <option value="">كافة أنواع الاحتيال</option>
+              <option value="gov_impersonation">انتحال جهات حكومية</option>
+              <option value="bank_impersonation">انتحال صفة بنكية</option>
+              <option value="phishing">تصيد احتيالي</option>
+              <option value="investment_fraud">احتيال استثماري</option>
+              <option value="job_fraud">احتيال توظيفي</option>
+            </select>
             <select
               value={recordType}
               onChange={(e) => { setRecordType(e.target.value); setPage(1); }}

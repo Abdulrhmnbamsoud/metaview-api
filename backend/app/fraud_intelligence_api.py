@@ -32,6 +32,12 @@ from .intelligence_enrichment import (
     SECTORS_DEF,
 )
 
+from .canonical_query import (
+    get_canonical_incidents,
+    get_canonical_aggregations,
+    build_canonical_incident_where,
+)
+
 log = logging.getLogger("metaview.fraud_intelligence_api")
 
 router = APIRouter(prefix="/fraud-intelligence", tags=["Fraud Intelligence Dashboard"])
@@ -1004,111 +1010,24 @@ def query_filtered_incidents(
     date_basis: str = "first_reported_at",
 ) -> Tuple[List[sqlite3.Row], List[sqlite3.Row], Dict[str, Any]]:
     """Centralized SQL query builder for Dashboard Filters Single Source of Truth."""
-    if date_from and date_to:
-        try:
-            d_from = datetime.fromisoformat(date_from.replace("Z", "+00:00"))
-            d_to = datetime.fromisoformat(date_to.replace("Z", "+00:00"))
-            if d_from.tzinfo is None:
-                d_from = d_from.replace(tzinfo=timezone.utc)
-            if d_to.tzinfo is None:
-                d_to = d_to.replace(tzinfo=timezone.utc)
-        except Exception:
-            d_to = datetime.now(timezone.utc)
-            d_from = d_to - timedelta(days=window_days)
-    else:
-        d_to = datetime.now(timezone.utc)
-        d_from = d_to - timedelta(days=window_days)
-
-    duration = d_to - d_from
-    prev_d_to = d_from
-    prev_d_from = prev_d_to - duration
-
-    iso_from = d_from.isoformat()
-    iso_to = d_to.isoformat()
-    prev_iso_from = prev_d_from.isoformat()
-    prev_iso_to = prev_d_to.isoformat()
-
-    base_clauses = ["1=1"]
-    base_params: List[Any] = []
-
-    # Geographic filter
-    effective_geo = (country or geo or "SA").strip() if isinstance(country or geo, str) else "SA"
-    if effective_geo in ("SA", "السعودية"):
-        base_clauses.append(
-            "(incident_country = 'SA' OR incident_region IN ('المملكة العربية السعودية', 'Saudi Arabia', 'منطقة الرياض') OR incident_city IN ('الرياض', 'جدة', 'الدمام', 'مكة المكرمة', 'المدينة المنورة', 'تبوك', 'الخبر', 'عسير'))"
-        )
-    elif effective_geo.upper() not in ("ALL", "العالم"):
-        base_clauses.append("incident_country = ?")
-        base_params.append(effective_geo)
-
-    # City filter
-    if isinstance(city, str) and city.strip() not in ("", "all", "الكل", "جميع المدن"):
-        base_clauses.append("(incident_city = ? OR incident_city LIKE ?)")
-        base_params += [city, f"%{city}%"]
-
-    # Region filter
-    if isinstance(region, str) and region.strip() not in ("", "all", "الكل", "جميع المناطق"):
-        base_clauses.append("(incident_region = ? OR incident_region LIKE ?)")
-        base_params += [region, f"%{region}%"]
-
-    # Fraud type filter
-    if isinstance(fraud_type, str) and fraud_type.strip().lower() not in ("", "all", "جميع الأنواع", "كل الأنواع"):
-        ft = fraud_type.strip().lower()
-        if ft in ("gov_impersonation", "انتحال جهات حكومية"):
-            base_clauses.append("(fraud_type IN ('gov_impersonation') OR secondary_fraud_types LIKE '%gov_impersonation%')")
-        elif ft in ("bank_impersonation", "انتحال بنوك ومصارف"):
-            base_clauses.append("(fraud_type IN ('bank_impersonation') OR secondary_fraud_types LIKE '%bank_impersonation%')")
-        elif ft in ("investment_fraud", "احتيال استثماري"):
-            base_clauses.append("(fraud_type = 'investment_fraud' OR secondary_fraud_types LIKE '%investment_fraud%')")
-        elif ft in ("phishing", "تصيد احتيالي"):
-            base_clauses.append("(fraud_type = 'phishing' OR secondary_fraud_types LIKE '%phishing%')")
-        elif ft in ("ecommerce_fraud", "احتيال تجاري"):
-            base_clauses.append("(fraud_type = 'ecommerce_fraud' OR secondary_fraud_types LIKE '%ecommerce_fraud%')")
-        elif ft in ("job_scam", "احتيال وظيفي"):
-            base_clauses.append("(fraud_type = 'job_scam' OR secondary_fraud_types LIKE '%job_scam%')")
-        elif ft in ("romance_scam", "احتيال عاطفي"):
-            base_clauses.append("(fraud_type = 'romance_scam' OR secondary_fraud_types LIKE '%romance_scam%')")
-        elif ft in ("other", "أنواع أخرى", "other_fraud"):
-            base_clauses.append("(fraud_type NOT IN ('gov_impersonation', 'bank_impersonation', 'investment_fraud', 'phishing', 'ecommerce_fraud', 'job_scam', 'romance_scam') OR fraud_type = 'other')")
-        else:
-            base_clauses.append("(fraud_type = ? OR fraud_type_ar LIKE ?)")
-            base_params += [fraud_type, f"%{fraud_type}%"]
-
-    valid_date_basis = "occurred_at" if date_basis == "occurred_at" else "first_reported_at"
-
-    # Current Window Query
-    curr_clauses = list(base_clauses)
-    curr_params = list(base_params)
-    curr_clauses.append(f"datetime({valid_date_basis}) >= datetime(?) AND datetime({valid_date_basis}) <= datetime(?)")
-    curr_params += [iso_from, iso_to]
-
-    curr_sql = f"SELECT * FROM incidents WHERE {' AND '.join(curr_clauses)} ORDER BY {valid_date_basis} DESC"
-    current_incidents = con.execute(curr_sql, curr_params).fetchall()
-
-    # Previous Equal-Length Window Query
-    prev_clauses = list(base_clauses)
-    prev_params = list(base_params)
-    prev_clauses.append(f"datetime({valid_date_basis}) >= datetime(?) AND datetime({valid_date_basis}) <= datetime(?)")
-    prev_params += [prev_iso_from, prev_iso_to]
-
-    prev_sql = f"SELECT * FROM incidents WHERE {' AND '.join(prev_clauses)} ORDER BY {valid_date_basis} DESC"
-    prev_incidents = con.execute(prev_sql, prev_params).fetchall()
-
-    filter_meta = {
-        "geo": effective_geo,
-        "country": effective_geo,
-        "fraud_type": fraud_type if isinstance(fraud_type, str) else "all",
-        "date_from": iso_from,
-        "date_to": iso_to,
-        "prev_date_from": prev_iso_from,
-        "prev_date_to": prev_iso_to,
-        "date_basis": valid_date_basis,
-        "window_days": (d_to - d_from).days,
-        "d_from_dt": d_from,
-        "d_to_dt": d_to,
-    }
-
-    return current_incidents, prev_incidents, filter_meta
+    current_incidents, prev_incidents, meta = get_canonical_incidents(
+        con=con,
+        geo=geo,
+        country=country,
+        city=city,
+        region=region,
+        fraud_type=fraud_type,
+        date_from=date_from,
+        date_to=date_to,
+        window_days=window_days,
+        date_basis=date_basis,
+    )
+    # Maintain backward compatibility with filter_meta keys
+    meta["date_from"] = meta.get("iso_from")
+    meta["date_to"] = meta.get("iso_to")
+    meta["prev_date_from"] = meta.get("prev_iso_from")
+    meta["prev_date_to"] = meta.get("prev_iso_to")
+    return current_incidents, prev_incidents, meta
 
 
 def _build_dynamic_hero_insight(
@@ -1696,9 +1615,11 @@ def get_dashboard_view(
 
         is_empty = len(current_incidents) == 0
 
-        # 1. Geographic Map Data (Zero invented coordinates, separated unknown counts)
-        map_points, unknown_geo_count, unknown_geo_ids, total_scope, mapped_count, unknown_incidents = _build_dynamic_map_points(
-            current_incidents, filter_meta["geo"], map_mode
+        # 1. Canonical Aggregations (Single Source of Truth for counts, countries, and cities)
+        canonical_aggs = get_canonical_aggregations(
+            current_incidents=current_incidents,
+            filter_geo=filter_meta["geo"],
+            map_mode=map_mode,
         )
 
         hero_insight = _build_dynamic_hero_insight(current_incidents, prev_incidents, filter_meta)
@@ -1708,39 +1629,27 @@ def get_dashboard_view(
         latest_table = _build_dynamic_latest_table(current_incidents)
         banking_implications = _build_dynamic_banking_implications(current_incidents)
         data_quality_stats = _build_dynamic_data_quality_stats(
-            current_incidents, con, filter_meta["date_from"], filter_meta["date_to"]
+            current_incidents, con, filter_meta["date_from"] or "", filter_meta["date_to"]
         )
 
-        # 9. Adaptive Intelligence State & Saudi Statistics
+        total_scope = canonical_aggs["total_incidents"]
         data_state = "insufficient_evidence" if total_scope == 0 else ("data_limited" if total_scope < 10 else "data_rich")
-
-        saudi_matching = [
-            i for i in current_incidents
-            if i["incident_country"] == "SA" or (i["incident_region"] and "السعودية" in i["incident_region"])
-        ]
-        tot_saudi = len(saudi_matching)
-        verified_saudi = len([
-            i for i in saudi_matching
-            if i["incident_city"] and i["incident_city"] not in ("Unknown", "غير محدد", "")
-        ])
-        unknown_saudi = tot_saudi - verified_saudi
 
         return {
             "is_empty": is_empty,
             "empty_message": "لا توجد حوادث موثقة تطابق الفلاتر المحددة ضمن هذه الفترة الزمنية" if is_empty else None,
             "data_state": data_state,
             "hero_insight": hero_insight,
-            "map_points": map_points,
-            "unknown_location_count": unknown_geo_count,
-            "unknown_location_incident_ids": unknown_geo_ids,
-            "unknown_location_incidents": unknown_incidents,
+            "map_points": canonical_aggs["map_points"],
+            "unknown_location_count": canonical_aggs["unknown_location_count"],
+            "unknown_location_incident_ids": canonical_aggs["unknown_location_incident_ids"],
+            "unknown_location_incidents": canonical_aggs["unknown_location_incidents"],
             "total_scope_incidents": total_scope,
-            "mapped_incidents_count": mapped_count,
-            "saudi_stats": {
-                "total_saudi_incidents": tot_saudi,
-                "verified_location_incidents": verified_saudi,
-                "unknown_location_incidents": unknown_saudi,
-            },
+            "mapped_incidents_count": canonical_aggs["mapped_count"],
+            "world_hotspots": canonical_aggs["world_hotspots"],
+            "top_countries": canonical_aggs["top_countries"],
+            "incident_ids": canonical_aggs["incident_ids"],
+            "saudi_stats": canonical_aggs["saudi_stats"],
             "top_patterns": top_patterns,
             "relationship_flow": flow_data,
             "what_changed": what_changed,
@@ -1749,12 +1658,12 @@ def get_dashboard_view(
             "data_quality_stats": data_quality_stats,
             "active_filters": {
                 "geo": filter_meta["geo"],
-                "country": filter_meta["country"],
+                "country": filter_meta.get("country"),
                 "fraud_type": filter_meta["fraud_type"],
-                "date_from": filter_meta["date_from"],
-                "date_to": filter_meta["date_to"],
+                "date_from": filter_meta.get("date_from"),
+                "date_to": filter_meta.get("date_to"),
                 "date_basis": filter_meta["date_basis"],
-                "window_days": filter_meta["window_days"],
+                "window_days": filter_meta.get("window_days"),
                 "map_mode": map_mode,
             },
         }

@@ -99,9 +99,9 @@ export const ExecutiveOverview: React.FC = () => {
     setError(null);
     try {
       const [overviewRes, incidentsRes, newsRes] = await Promise.all([
-        apiService.getSaudiOverview(),
-        apiService.getSaudiIncidents({ page_size: 20 }),
-        apiService.getSaudiNews({ page_size: 20 }),
+        apiService.getSaudiOverview({ scope: 'saudi', window_days: 30 }),
+        apiService.getSaudiIncidents({ scope: 'saudi', window_days: 30, page_size: 20 }),
+        apiService.getSaudiNews({ scope: 'saudi', page_size: 20 }),
       ]);
 
       setOv(overviewRes);

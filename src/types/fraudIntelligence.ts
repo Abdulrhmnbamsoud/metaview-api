@@ -334,12 +334,38 @@ export interface SaudiLocationStats {
   unknown_location_incidents: number;
 }
 
+export interface WorldHotspot {
+  id: string;
+  country: string;
+  name: string;
+  count: number;
+  x: number;
+  y: number;
+  type: 'red_major' | 'blue_major' | 'orange_square' | 'blue_circle' | 'yellow_circle';
+  label: string;
+  incident_ids: number[];
+}
+
+export interface TopCountryItem {
+  code: string;
+  name: string;
+  flag: string;
+  count: number;
+  share: number;
+  trend: 'up' | 'down' | 'stable';
+  color: string;
+  incident_ids: number[];
+}
+
 export interface DashboardViewResponse {
   is_empty?: boolean;
   empty_message?: string | null;
   data_state?: 'data_rich' | 'data_limited' | 'insufficient_evidence';
   hero_insight: HeroInsight;
   map_points: MapPoint[];
+  world_hotspots?: WorldHotspot[];
+  top_countries?: TopCountryItem[];
+  incident_ids?: number[];
   unknown_location_count?: number;
   unknown_location_incident_ids?: number[];
   unknown_location_incidents?: Array<{

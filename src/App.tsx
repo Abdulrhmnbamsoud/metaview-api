@@ -59,6 +59,7 @@ export const App: React.FC = () => {
                   {/* Deep links & Backward-compatible aliases */}
                   <Route path="/explorer" element={<UnifiedExplore />} />
                   <Route path="/incident-registry" element={<IncidentRegistry />} />
+                  <Route path="/incidents" element={<IncidentRegistry />} />
                   <Route path="/saudi-fraud" element={<SaudiFraud />} />
                   <Route path="/patterns" element={<FraudPatterns />} />
                   <Route path="/sources" element={<SourcesAndSystem />} />

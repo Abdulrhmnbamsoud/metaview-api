@@ -323,24 +323,11 @@ export const UnifiedExplore: React.FC = () => {
       const isWarning = n.content_type === 'fraud_warning';
       const isAwareness = n.content_type === 'awareness_campaign';
 
-      if (scope === 'saudi') {
-        // In Saudi view, incident articles are grouped under incidents.
-        // Only show separate warnings or awareness campaigns if requested
-        if (itemType === 'warning' && !isWarning) return;
-        if (itemType === 'awareness' && !isAwareness) return;
-        if (itemType === 'incident') return; // incidents handled above
-        if (itemType === 'pattern') return; // patterns handled above
-        if (itemType === 'all' && !isWarning && !isAwareness) return;
-      } else if (scope === 'global') {
-        if (itemType === 'warning' && !isWarning) return;
-        if (itemType === 'awareness' && !isAwareness) return;
-        if (itemType === 'incident' && n.content_type !== 'confirmed_incident' && n.content_type !== 'reported_incident') return;
-      } else {
-        // scope === 'all'
-        if (itemType === 'warning' && !isWarning) return;
-        if (itemType === 'awareness' && !isAwareness) return;
-        if (itemType === 'incident' && n.content_type !== 'confirmed_incident' && n.content_type !== 'reported_incident') return;
-      }
+      if (itemType === 'incident') return; // Canonical incidents are strictly provided from the incidents query
+      if (itemType === 'pattern') return; // Patterns handled above
+      if (itemType === 'warning' && !isWarning) return;
+      if (itemType === 'awareness' && !isAwareness) return;
+      if (itemType === 'all' && scope === 'saudi' && !isWarning && !isAwareness) return;
 
       list.push({
         id: `news-${n.id}`,
@@ -419,6 +406,23 @@ export const UnifiedExplore: React.FC = () => {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
     return unifiedItems.slice(startIndex, startIndex + ITEMS_PER_PAGE);
   }, [unifiedItems, currentPage]);
+
+  // Count breakdowns to maintain strict separation of incident counts from warnings/patterns
+  const itemCounts = useMemo(() => {
+    let incCount = 0;
+    let warnCount = 0;
+    let awareCount = 0;
+    let patCount = 0;
+    let newsCount = 0;
+    unifiedItems.forEach((i) => {
+      if (i.type === 'incident') incCount++;
+      else if (i.type === 'warning') warnCount++;
+      else if (i.type === 'awareness') awareCount++;
+      else if (i.type === 'pattern') patCount++;
+      else newsCount++;
+    });
+    return { incCount, warnCount, awareCount, patCount, newsCount };
+  }, [unifiedItems]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -603,7 +607,7 @@ export const UnifiedExplore: React.FC = () => {
             <div className="flex items-center gap-1 overflow-x-auto">
               {[
                 { key: 'all', label: 'كافة الأنواع' },
-                ...(scope !== 'global' ? [{ key: 'incident', label: 'الحوادث' }] : []),
+                { key: 'incident', label: 'الحوادث' },
                 { key: 'warning', label: 'التحذيرات' },
                 { key: 'awareness', label: 'التوعية' },
                 ...(scope !== 'global' ? [{ key: 'pattern', label: 'الأنماط' }] : []),
@@ -722,9 +726,34 @@ export const UnifiedExplore: React.FC = () => {
       </div>
 
       {/* Results Count Bar & Scope indicator */}
-      <div className="flex items-center justify-between text-xs text-stone-500 dark:text-slate-400 px-1 font-mono">
-        <div className="flex items-center gap-2">
-          <span>نتائج البحث والتصفية: {unifiedItems.length} عنصر</span>
+      <div className="flex flex-wrap items-center justify-between text-xs text-stone-500 dark:text-slate-400 px-1 font-mono gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span>نتائج العرض والتصفية: {unifiedItems.length} عنصر</span>
+          {itemType === 'all' && (
+            <span className="text-[11px] text-stone-400 dark:text-slate-500">
+              (منها: {itemCounts.incCount} حوادث موثقة • {itemCounts.warnCount} تحذيرات • {itemCounts.awareCount} توعية{itemCounts.patCount > 0 ? ` • ${itemCounts.patCount} أنماط` : ''})
+            </span>
+          )}
+          {itemType === 'incident' && (
+            <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold">
+              (إجمالي الحوادث الموثقة: {itemCounts.incCount})
+            </span>
+          )}
+          {itemType === 'warning' && (
+            <span className="text-[11px] text-amber-600 dark:text-amber-400 font-bold">
+              (إجمالي التحذيرات: {itemCounts.warnCount})
+            </span>
+          )}
+          {itemType === 'awareness' && (
+            <span className="text-[11px] text-blue-600 dark:text-blue-400 font-bold">
+              (إجمالي حملات التوعية: {itemCounts.awareCount})
+            </span>
+          )}
+          {itemType === 'pattern' && (
+            <span className="text-[11px] text-purple-600 dark:text-purple-400 font-bold">
+              (إجمالي الأنماط: {itemCounts.patCount})
+            </span>
+          )}
           {scope === 'global' && (
             <span className="text-sky-600 dark:text-sky-400">
               (منظومة الرصد العالمي للاحتيال)

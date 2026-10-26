@@ -1,7 +1,7 @@
 // src/pages/FraudIntelligenceDashboard.tsx
 // MetaView 3 — Fraud Intelligence Dashboard
 // Pixel-Accurate Implementation Matching Approved Reference Design
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Download,
   Calendar,
@@ -40,31 +40,11 @@ import {
   EnrichedIncident,
   DrilldownResponse,
   MapPoint,
+  WorldHotspot,
+  TopCountryItem,
 } from '../types/fraudIntelligence';
 import { timeAgo } from '../utils/formatDate';
 import { WORLD_BASE_PATHS, WORLD_HIGHLIGHT_PATHS } from '../data/worldMapPaths';
-
-interface WorldHotspot {
-  id: string;
-  country: string;
-  name: string;
-  count: number;
-  x: number;
-  y: number;
-  type: 'red_major' | 'blue_major' | 'orange_square' | 'blue_circle' | 'yellow_circle';
-  label: string;
-}
-
-const WORLD_HOTSPOTS: WorldHotspot[] = [
-  { id: 'sa', country: 'SA', name: 'المملكة العربية السعودية', count: 18, x: 50.8, y: 43.0, type: 'red_major', label: '18' },
-  { id: 'us', country: 'US', name: 'الولايات المتحدة الأمريكية', count: 12, x: 21.0, y: 35.5, type: 'blue_major', label: '12' },
-  { id: 'eg', country: 'EG', name: 'جمهورية مصر العربية', count: 6, x: 46.2, y: 41.5, type: 'orange_square', label: '6' },
-  { id: 'in', country: 'IN', name: 'جمهورية الهند', count: 5, x: 56.5, y: 44.2, type: 'blue_circle', label: '5' },
-  { id: 'eu_west', country: 'GB', name: 'أوروبا الغربية والمملكة المتحدة', count: 3, x: 42.1, y: 28.5, type: 'yellow_circle', label: '3' },
-  { id: 'eu_east', country: 'EU', name: 'أوروبا والشرق الأدنى', count: 4, x: 45.8, y: 34.0, type: 'blue_circle', label: '4' },
-  { id: 'se_asia', country: 'MY', name: 'جنوب شرق آسيا', count: 3, x: 62.8, y: 49.5, type: 'yellow_circle', label: '3' },
-  { id: 'au', country: 'AU', name: 'أستراليا', count: 2, x: 67.5, y: 74.0, type: 'blue_circle', label: '2' },
-];
 
 const MINOR_DOTS = [
   { id: 'ca_dot', name: 'كندا', country: 'CA', x: 17.8, y: 27.5 },
@@ -72,14 +52,6 @@ const MINOR_DOTS = [
   { id: 'af_dot', name: 'وسط وغرب أفريقيا', country: 'AFR', x: 44.6, y: 56.0 },
   { id: 'cn_dot', name: 'شرق آسيا', country: 'CN', x: 62.5, y: 35.0 },
   { id: 'ea_dot', name: 'شرق آسيا واليابان', country: 'JP', x: 68.2, y: 34.0 },
-];
-
-const TOP_COUNTRIES_DEFAULT = [
-  { code: 'SA', name: 'السعودية', flag: '🇸🇦', count: 18 },
-  { code: 'US', name: 'الولايات المتحدة', flag: '🇺🇸', count: 12 },
-  { code: 'EG', name: 'مصر', flag: '🇪🇬', count: 6 },
-  { code: 'IN', name: 'الهند', flag: '🇮🇳', count: 5 },
-  { code: 'GB', name: 'المملكة المتحدة', flag: '🇬🇧', count: 3 },
 ];
 
 const WorldMapVector: React.FC = () => (
@@ -145,6 +117,14 @@ export const FraudIntelligenceDashboard: React.FC = () => {
   const [data, setData] = useState<DashboardViewResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+
+  const worldHotspots: WorldHotspot[] = useMemo(() => {
+    return data?.world_hotspots || [];
+  }, [data?.world_hotspots]);
+
+  const topCountriesList: TopCountryItem[] = useMemo(() => {
+    return data?.top_countries || [];
+  }, [data?.top_countries]);
 
   // Race condition protection ref
   const reqSequenceRef = React.useRef<number>(0);
@@ -645,6 +625,20 @@ export const FraudIntelligenceDashboard: React.FC = () => {
               <h3 className="text-base md:text-lg font-extrabold text-[#10213D]">
                 خريطة الحوادث الموثقة
               </h3>
+              {data?.total_scope_incidents !== undefined && (
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => openDrilldown('جميع حوادث النطاق الموثقة', {
+                    country: geoFilter === 'السعودية' ? 'SA' : undefined,
+                    incident_ids: data?.incident_ids && data.incident_ids.length > 0 ? data.incident_ids.join(',') : undefined,
+                  })}
+                  className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-blue-50 text-blue-700 border border-blue-200/60 hover:bg-blue-100 transition cursor-pointer"
+                  title="اضغط لعرض كافة الحوادث المندرجة ضمن الإجمالي"
+                >
+                  {data.total_scope_incidents} حادثة موثقة
+                </span>
+              )}
               <div className="relative group">
                 <Info className="w-4 h-4 text-[#64748B] hover:text-[#10213D] cursor-pointer transition" />
                 <div className="hidden group-hover:block absolute right-0 top-full mt-1.5 w-64 p-2.5 bg-slate-900/95 text-white text-[11px] rounded-xl shadow-xl z-50 pointer-events-none leading-relaxed">
@@ -654,6 +648,7 @@ export const FraudIntelligenceDashboard: React.FC = () => {
             </div>
             <p className="text-xs text-[#64748B]">
               توضح التوزيع الجغرافي للحوادث المرصودة في مصادرنا، وليست إحصائية رسمية لمعدلات الاحتيال.
+              {mapScope !== 'world' && Boolean(data?.unknown_location_count) ? ` (يشمل الإجمالي ${data?.unknown_location_count} حادثة داخل المملكة غير محددة المدينة بدقة).` : ''}
             </p>
           </div>
 
@@ -716,14 +711,20 @@ export const FraudIntelligenceDashboard: React.FC = () => {
                   المحيط الهندي
                 </div>
 
-                {/* Data Hotspot Pins matching screenshot */}
-                {WORLD_HOTSPOTS.map((h) => {
+                {/* Data Hotspot Pins dynamically matching active query */}
+                {worldHotspots.map((h) => {
+                  const onClickHandler = () =>
+                    openDrilldown(`الحوادث المسجلة في: ${h.name}`, {
+                      country: h.country,
+                      incident_ids: h.incident_ids && h.incident_ids.length > 0 ? h.incident_ids.join(',') : undefined,
+                    });
+
                   if (h.type === 'red_major') {
                     return (
                       <div
                         key={h.id}
                         style={{ left: `${h.x}%`, top: `${h.y}%` }}
-                        onClick={() => openDrilldown(`الحوادث المسجلة في: ${h.name}`, { country: h.country })}
+                        onClick={onClickHandler}
                         className="absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer group z-20"
                       >
                         <div className="relative flex items-center justify-center">
@@ -748,7 +749,7 @@ export const FraudIntelligenceDashboard: React.FC = () => {
                       <div
                         key={h.id}
                         style={{ left: `${h.x}%`, top: `${h.y}%` }}
-                        onClick={() => openDrilldown(`الحوادث المسجلة في: ${h.name}`, { country: h.country })}
+                        onClick={onClickHandler}
                         className="absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer group z-20"
                       >
                         <div className="relative flex items-center justify-center">
@@ -770,7 +771,7 @@ export const FraudIntelligenceDashboard: React.FC = () => {
                       <div
                         key={h.id}
                         style={{ left: `${h.x}%`, top: `${h.y}%` }}
-                        onClick={() => openDrilldown(`الحوادث المسجلة في: ${h.name}`, { country: h.country })}
+                        onClick={onClickHandler}
                         className="absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer group z-20"
                       >
                         <div className="relative flex items-center justify-center">
@@ -792,7 +793,7 @@ export const FraudIntelligenceDashboard: React.FC = () => {
                       <div
                         key={h.id}
                         style={{ left: `${h.x}%`, top: `${h.y}%` }}
-                        onClick={() => openDrilldown(`الحوادث المسجلة في: ${h.name}`, { country: h.country })}
+                        onClick={onClickHandler}
                         className="absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer group z-20"
                       >
                         <div className="relative flex items-center justify-center">
@@ -814,7 +815,7 @@ export const FraudIntelligenceDashboard: React.FC = () => {
                     <div
                       key={h.id}
                       style={{ left: `${h.x}%`, top: `${h.y}%` }}
-                      onClick={() => openDrilldown(`الحوادث المسجلة في: ${h.name}`, { country: h.country })}
+                      onClick={onClickHandler}
                       className="absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer group z-20"
                     >
                       <div className="relative flex items-center justify-center">
@@ -975,13 +976,18 @@ export const FraudIntelligenceDashboard: React.FC = () => {
               </div>
               <div className="space-y-1.5">
                 {mapScope === 'world' ? (
-                  TOP_COUNTRIES_DEFAULT.map((c) => (
+                  topCountriesList.map((c) => (
                     <div
                       key={c.code}
                       id={`btn-country-${c.code.toLowerCase()}`}
                       role="button"
                       tabIndex={0}
-                      onClick={() => openDrilldown(`الحوادث المسجلة في: ${c.name}`, { country: c.code })}
+                      onClick={() =>
+                        openDrilldown(`الحوادث المسجلة في: ${c.name}`, {
+                          country: c.code,
+                          incident_ids: c.incident_ids && c.incident_ids.length > 0 ? c.incident_ids.join(',') : undefined,
+                        })
+                      }
                       className="flex items-center justify-between p-1.5 rounded-lg hover:bg-slate-50 cursor-pointer transition select-none"
                     >
                       <span className="text-xs font-extrabold text-[#10213D] font-mono">{c.count}</span>
@@ -992,21 +998,40 @@ export const FraudIntelligenceDashboard: React.FC = () => {
                     </div>
                   ))
                 ) : (
-                  mapPoints.slice(0, 5).map((pt) => (
-                    <div
-                      key={pt.name}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => {
-                        setSelectedCityPoint(pt);
-                        setCityModalOpen(true);
-                      }}
-                      className="flex items-center justify-between p-1.5 rounded-lg hover:bg-slate-50 cursor-pointer transition select-none"
-                    >
-                      <span className="text-xs font-extrabold text-[#10213D] font-mono">{pt.count}</span>
-                      <span className="text-xs font-semibold text-[#10213D]">{pt.name}</span>
-                    </div>
-                  ))
+                  <>
+                    {mapPoints.slice(0, 5).map((pt) => (
+                      <div
+                        key={pt.name}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => {
+                          setSelectedCityPoint(pt);
+                          setCityModalOpen(true);
+                        }}
+                        className="flex items-center justify-between p-1.5 rounded-lg hover:bg-slate-50 cursor-pointer transition select-none"
+                      >
+                        <span className="text-xs font-extrabold text-[#10213D] font-mono">{pt.count}</span>
+                        <span className="text-xs font-semibold text-[#10213D]">{pt.name}</span>
+                      </div>
+                    ))}
+                    {Boolean(data?.unknown_location_count && data.unknown_location_count > 0) && (
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        onClick={() =>
+                          openDrilldown('حوادث نطاق المملكة (دون تحديد مدينة بدقة)', {
+                            country: 'SA',
+                            incident_ids: data?.unknown_location_incident_ids ? data.unknown_location_incident_ids.join(',') : undefined,
+                          })
+                        }
+                        className="flex items-center justify-between p-1.5 rounded-lg hover:bg-slate-50 cursor-pointer transition select-none border-t border-slate-100 mt-1 pt-1.5"
+                        title="حوادث مثبتة داخل المملكة لكن دون تعيين مدينة محددة"
+                      >
+                        <span className="text-xs font-extrabold text-[#64748B] font-mono">{data?.unknown_location_count}</span>
+                        <span className="text-[11px] font-medium text-[#64748B]">عموم المملكة (دون تحديد مدينة)</span>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -1014,11 +1039,16 @@ export const FraudIntelligenceDashboard: React.FC = () => {
             {/* Bottom Action: عرض جميع الدول */}
             <button
               id="btn-view-all-countries"
-              onClick={() => openDrilldown('جميع الحوادث المصنفة جغرافياً', {})}
+              onClick={() =>
+                openDrilldown(mapScope === 'world' ? 'جميع الحوادث المرصودة عالمياً' : 'جميع حوادث النطاق الموثقة', {
+                  country: geoFilter === 'السعودية' ? 'SA' : undefined,
+                  incident_ids: data?.incident_ids && data.incident_ids.length > 0 ? data.incident_ids.join(',') : undefined,
+                })
+              }
               className="w-full mt-3 py-1.5 px-3 bg-slate-50 hover:bg-slate-100 border border-slate-200/60 rounded-xl text-xs font-semibold text-[#10213D] flex items-center justify-between transition cursor-pointer"
             >
               <ChevronLeft className="w-3.5 h-3.5 text-[#64748B]" />
-              <span>{mapScope === 'world' ? 'عرض جميع الدول' : 'عرض جميع المواقع'}</span>
+              <span>{mapScope === 'world' ? 'عرض جميع الدول' : 'عرض جميع حوادث النطاق'}</span>
             </button>
           </div>
 
@@ -1999,7 +2029,10 @@ export const FraudIntelligenceDashboard: React.FC = () => {
               <button
                 onClick={() => {
                   setCityModalOpen(false);
-                  openDrilldown(`الحوادث الموثقة في: ${selectedCityPoint.name}`, { city: selectedCityPoint.name });
+                  openDrilldown(`الحوادث الموثقة في: ${selectedCityPoint.name}`, {
+                    city: selectedCityPoint.name,
+                    incident_ids: selectedCityPoint.incident_ids ? selectedCityPoint.incident_ids.join(',') : undefined,
+                  });
                 }}
                 className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold transition"
               >

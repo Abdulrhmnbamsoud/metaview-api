@@ -18,6 +18,7 @@ from .db import get_db
 from . import incidents, saudi_ingest
 from .fraud_intel import CATEGORY_AR, CATEGORY_ORDER, CONTENT_TYPE_AR, VISIBLE_CONTENT_TYPES
 from .auth import validate_session
+from .canonical_query import build_canonical_incident_where
 
 router = APIRouter(prefix="/saudi-fraud", tags=["saudi-fraud-intelligence"])
 
@@ -151,13 +152,73 @@ def _where(category: Optional[str], source: Optional[str], q: Optional[str],
 
 
 @router.get("/overview")
-def overview() -> Dict[str, Any]:
+def overview(
+    window_days: Optional[int] = Query(None, ge=1, le=365),
+    scope: str = Query("saudi", pattern="^(saudi|global|all)$"),
+    country: Optional[str] = None,
+    fraud_type: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    date_basis: str = Query("first_reported_at"),
+) -> Dict[str, Any]:
     """Headline indicators. The success metric is INDEPENDENT INCIDENTS, not articles: warnings and
     awareness campaigns are counted separately and general-cybersecurity/unrelated articles are
     excluded from every indicator (they remain stored)."""
     con = get_db()
     try:
         inc = incidents.counts(con)
+
+        # 30-day canonical benchmark for Saudi Arabia
+        c30_clauses, c30_params, c30_meta = build_canonical_incident_where(geo="saudi", window_days=30)
+        c30_dt, c30_dp = c30_meta["make_date_clause"](c30_meta["iso_from"], c30_meta["iso_to"])
+        if c30_dt:
+            c30_clauses.append(c30_dt)
+            c30_params.extend(c30_dp)
+        c30_total = con.execute(f"SELECT COUNT(*) n FROM incidents WHERE {' AND '.join(c30_clauses)}", c30_params).fetchone()["n"]
+
+        # If filtered by window or scope, compute canonical window counts
+        if window_days or date_from or date_to or scope != "saudi" or country or fraud_type:
+            clauses, params, meta = build_canonical_incident_where(
+                geo=scope,
+                country=country,
+                fraud_type=fraud_type,
+                date_from=date_from,
+                date_to=date_to,
+                window_days=window_days,
+                date_basis=date_basis,
+            )
+            dt_clause, dt_params = meta["make_date_clause"](meta["iso_from"], meta["iso_to"])
+            if dt_clause:
+                clauses.append(dt_clause)
+                params.extend(dt_params)
+            where = " AND ".join(clauses)
+            canonical_total = con.execute(f"SELECT COUNT(*) n FROM incidents WHERE {where}", params).fetchone()["n"]
+            canonical_high = con.execute(f"SELECT COUNT(*) n FROM incidents WHERE {where} AND LOWER(bank_relevance) = 'high'", params).fetchone()["n"]
+            canonical_confirmed = con.execute(f"SELECT COUNT(*) n FROM incidents WHERE {where} AND record_type = 'confirmed_incident'", params).fetchone()["n"]
+            canonical_reported = con.execute(f"SELECT COUNT(*) n FROM incidents WHERE {where} AND record_type = 'reported_incident'", params).fetchone()["n"]
+
+            # 7-day canonical count within this scope
+            c7_clauses, c7_params, c7_meta = build_canonical_incident_where(
+                geo=scope, country=country, fraud_type=fraud_type, window_days=7, date_basis=date_basis
+            )
+            c7_dt, c7_dp = c7_meta["make_date_clause"](c7_meta["iso_from"], c7_meta["iso_to"])
+            if c7_dt:
+                c7_clauses.append(c7_dt)
+                c7_params.extend(c7_dp)
+            canonical_last7 = con.execute(f"SELECT COUNT(*) n FROM incidents WHERE {' AND '.join(c7_clauses)}", c7_params).fetchone()["n"]
+
+            inc_total = canonical_total
+            inc_last7 = canonical_last7
+            inc_high = canonical_high
+            inc_confirmed = canonical_confirmed
+            inc_reported = canonical_reported
+        else:
+            inc_total = inc["incidents_total"]
+            inc_last7 = inc["incidents_last_7_days"]
+            inc_high = inc["incidents_high_bank_relevance"]
+            inc_confirmed = inc["incidents_confirmed"]
+            inc_reported = inc["incidents_reported"]
+
         total = con.execute(
             f"SELECT COUNT(*) n FROM threat_intel t WHERE {_BASE_WHERE}").fetchone()["n"]
         srcs = con.execute(
@@ -173,12 +234,13 @@ def overview() -> Dict[str, Any]:
     cats = inc["incident_categories"]
     return {
         # --- success metric -------------------------------------------------
-        "incidents_total": inc["incidents_total"],
+        "incidents_total": inc_total,
+        "incidents_last_30_days": c30_total if not window_days else inc_total,
         "incident_articles_total": inc["incident_articles_total"],
-        "incidents_last_7_days": inc["incidents_last_7_days"],
-        "incidents_high_bank_relevance": inc["incidents_high_bank_relevance"],
-        "incidents_confirmed": inc["incidents_confirmed"],
-        "incidents_reported": inc["incidents_reported"],
+        "incidents_last_7_days": inc_last7,
+        "incidents_high_bank_relevance": inc_high,
+        "incidents_confirmed": inc_confirmed,
+        "incidents_reported": inc_reported,
         "incidents_needs_review": inc["incidents_needs_review"],
         "merge_suggestions_pending": inc["merge_suggestions_pending"],
         # --- separate, NOT counted as incidents -----------------------------
@@ -191,8 +253,8 @@ def overview() -> Dict[str, Any]:
         "by_content_type": inc["by_content_type"],
         # --- legacy field names (same values, now incident-based) ------------
         "total_items": total,  # visible articles only: confirmed + warning + awareness (NOT incidents)
-        "last_7_days": inc["incidents_last_7_days"],
-        "high_bank_relevance": inc["incidents_high_bank_relevance"],
+        "last_7_days": inc_last7,
+        "high_bank_relevance": inc_high,
         "distinct_sources": srcs,
         "categories": [
             {"key": k, "label_ar": CATEGORY_AR.get(k, k), "count": cats.get(k, 0)}
@@ -290,54 +352,70 @@ def sources() -> Dict[str, Any]:
 @router.get("/incidents")
 def incidents_list(
     category: Optional[str] = None,
+    fraud_type: Optional[str] = None,
     q: Optional[str] = None,
     bank_relevance: Optional[str] = Query(None, pattern="^(high|medium|low)$"),
     record_type: Optional[str] = Query(None, pattern="^(confirmed_incident|reported_incident)$"),
     review_status: Optional[str] = Query(None, pattern="^(auto_merged|single_source|needs_review|human_confirmed)$"),
     scope: str = Query("saudi", pattern="^(saudi|global|all)$"),
     country: Optional[str] = None,
+    city: Optional[str] = None,
+    region: Optional[str] = None,
+    window_days: Optional[int] = Query(None, ge=1, le=365),
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    date_basis: str = Query("first_reported_at"),
+    incident_ids: Optional[str] = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ) -> Dict[str, Any]:
-    """Independent fraud incidents (one row per real event), each with ALL the articles covering it."""
-    clauses, params = ["1=1"], []
-    if category:
-        clauses.append("fraud_category = ?")
-        params.append(category)
-    if bank_relevance:
-        clauses.append("LOWER(bank_relevance) = LOWER(?)")
-        params.append(bank_relevance)
-    if record_type:
-        clauses.append("record_type = ?")
-        params.append(record_type)
-    if review_status:
-        clauses.append("review_status = ?")
-        params.append(review_status)
-    if country:
-        clauses.append("incident_country = ?")
-        params.append(country)
-    elif scope == "saudi":
-        clauses.append(
-            "(incident_country = 'SA' OR incident_region IN ('المملكة العربية السعودية', 'Saudi Arabia', 'منطقة الرياض') OR incident_city IN ('الرياض', 'جدة', 'الدمام', 'مكة المكرمة', 'المدينة المنورة', 'تبوك', 'الخبر', 'عسير'))"
-        )
-    elif scope == "global":
-        clauses.append(
-            "(incident_country != 'SA' AND (incident_region NOT IN ('المملكة العربية السعودية', 'Saudi Arabia') OR incident_region IS NULL))"
-        )
-    if q:
-        clauses.append("(title LIKE ? OR summary LIKE ? OR locations LIKE ? OR agencies LIKE ?)")
-        params += [f"%{q}%"] * 4
+    """Independent fraud incidents (one row per real event), each with ALL the articles covering it.
+    Uses the canonical query engine to guarantee 100% cross-page reconciliation."""
+    raw_ids = [int(x.strip()) for x in str(incident_ids).split(",") if x.strip().isdigit()] if incident_ids else None
+    eff_fraud_type = fraud_type or category
+
+    clauses, params, meta = build_canonical_incident_where(
+        geo=scope,
+        country=country,
+        city=city,
+        region=region,
+        fraud_type=eff_fraud_type,
+        date_from=date_from,
+        date_to=date_to,
+        window_days=window_days,
+        date_basis=date_basis,
+        record_type=record_type,
+        review_status=review_status,
+        bank_relevance=bank_relevance,
+        q=q,
+        incident_ids=raw_ids,
+    )
+
+    valid_date_basis = meta["date_basis"]
+    order_col = f"COALESCE({valid_date_basis}, created_at)"
+
+    # Apply date clause if date bounds exist
+    dt_clause, dt_params = meta["make_date_clause"](meta["iso_from"], meta["iso_to"])
+    if dt_clause:
+        clauses.append(dt_clause)
+        params.extend(dt_params)
+
     where = " AND ".join(clauses)
     con = get_db()
     try:
         total = con.execute(f"SELECT COUNT(*) n FROM incidents WHERE {where}", params).fetchone()["n"]
         rows = con.execute(
-            f"SELECT * FROM incidents WHERE {where} ORDER BY COALESCE(last_reported_at, created_at) DESC, id DESC "
+            f"SELECT * FROM incidents WHERE {where} ORDER BY {order_col} DESC, id DESC "
             "LIMIT ? OFFSET ?", params + [page_size, (page - 1) * page_size]).fetchall()
     finally:
         con.close()
-    return {"page": page, "page_size": page_size, "total": total,
-            "items": [incidents.incident_to_dict(r) for r in rows]}
+    return {
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "incident_ids": [int(r["id"]) for r in rows],
+        "items": [incidents.incident_to_dict(r) for r in rows],
+    }
 
 
 def _check_admin(

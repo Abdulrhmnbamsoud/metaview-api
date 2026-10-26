@@ -318,8 +318,25 @@ export const apiService = {
   },
 
   // ---- Saudi Fraud Intelligence ----
-  async getSaudiOverview(): Promise<SaudiOverview> {
-    return await requestWithRetry<SaudiOverview>('/saudi-fraud/overview');
+  async getSaudiOverview(params: {
+    scope?: string;
+    country?: string;
+    window_days?: number;
+    date_from?: string;
+    date_to?: string;
+    date_basis?: string;
+    fraud_type?: string;
+  } = {}): Promise<SaudiOverview> {
+    const sp = new URLSearchParams();
+    if (params.scope) sp.append('scope', params.scope);
+    if (params.country) sp.append('country', params.country);
+    if (params.window_days !== undefined) sp.append('window_days', String(params.window_days));
+    if (params.date_from) sp.append('date_from', params.date_from);
+    if (params.date_to) sp.append('date_to', params.date_to);
+    if (params.date_basis) sp.append('date_basis', params.date_basis);
+    if (params.fraud_type) sp.append('fraud_type', params.fraud_type);
+    const qs = sp.toString();
+    return await requestWithRetry<SaudiOverview>(`/saudi-fraud/overview${qs ? `?${qs}` : ''}`);
   },
 
   async getSaudiNews(params: SaudiNewsParams = {}): Promise<SaudiNewsResponse> {
@@ -363,19 +380,32 @@ export const apiService = {
   // ---- Incident Registry (read-only; reviewer decisions are admin-API only) ----
   async getSaudiIncidents(params: {
     category?: string;
+    fraud_type?: string;
     q?: string;
     bank_relevance?: string;
     record_type?: string;
     review_status?: string;
     scope?: string;
     country?: string;
+    city?: string;
+    region?: string;
+    window_days?: number;
+    date_from?: string;
+    date_to?: string;
+    date_basis?: string;
+    incident_ids?: string;
     page?: number;
     page_size?: number;
   } = {}): Promise<SaudiIncidentsResponse> {
     const query = new URLSearchParams();
-    (['category', 'q', 'bank_relevance', 'record_type', 'review_status', 'scope', 'country'] as const).forEach((k) => {
+    ([
+      'category', 'fraud_type', 'q', 'bank_relevance', 'record_type',
+      'review_status', 'scope', 'country', 'city', 'region',
+      'date_from', 'date_to', 'date_basis', 'incident_ids'
+    ] as const).forEach((k) => {
       if (params[k]) query.append(k, String(params[k]));
     });
+    if (params.window_days !== undefined) query.append('window_days', String(params.window_days));
     query.append('page', String(params.page || 1));
     query.append('page_size', String(params.page_size || 20));
     return await requestWithRetry<SaudiIncidentsResponse>(`/saudi-fraud/incidents?${query.toString()}`);
