@@ -79,6 +79,7 @@ export const UnifiedExplore: React.FC = () => {
   const [selectedSource, setSelectedSource] = useState<string>(params.get('source') || 'all');
   const [itemType, setItemType] = useState<ItemType>((params.get('type') as ItemType) || 'all');
   const [bankRel, setBankRel] = useState<BankRel>((params.get('bank') as BankRel) || 'all');
+  const [windowDays, setWindowDays] = useState<number>(Number(params.get('window')) || 30);
   const [sortBy, setSortBy] = useState<SortOption>('newest');
   const [currentPage, setCurrentPage] = useState<number>(Number(params.get('p')) || 1);
 
@@ -102,6 +103,7 @@ export const UnifiedExplore: React.FC = () => {
     const s = params.get('source') || 'all';
     const ty = (params.get('type') as ItemType) || 'all';
     const bk = (params.get('bank') as BankRel) || 'all';
+    const w = Number(params.get('window')) || 30;
     const p = Number(params.get('p')) || 1;
     const incId = params.get('incident');
     const newsId = params.get('news');
@@ -112,6 +114,7 @@ export const UnifiedExplore: React.FC = () => {
     if (s !== selectedSource) setSelectedSource(s);
     if (ty !== itemType) setItemType(ty);
     if (bk !== bankRel) setBankRel(bk);
+    if (w !== windowDays) setWindowDays(w);
     if (p !== currentPage) setCurrentPage(p);
 
     if (incId) {
@@ -151,6 +154,7 @@ export const UnifiedExplore: React.FC = () => {
       source: string;
       type: ItemType;
       bank: BankRel;
+      window: number;
       p: number;
     }>
   ) => {
@@ -160,6 +164,7 @@ export const UnifiedExplore: React.FC = () => {
     const nextSource = updates.source !== undefined ? updates.source : selectedSource;
     const nextType = updates.type !== undefined ? updates.type : itemType;
     const nextBank = updates.bank !== undefined ? updates.bank : bankRel;
+    const nextWindow = updates.window !== undefined ? updates.window : windowDays;
     const nextP = updates.p !== undefined ? updates.p : 1;
 
     const p = new URLSearchParams();
@@ -169,6 +174,7 @@ export const UnifiedExplore: React.FC = () => {
     if (nextSource && nextSource !== 'all') p.set('source', nextSource);
     if (nextType && nextType !== 'all') p.set('type', nextType);
     if (nextBank && nextBank !== 'all') p.set('bank', nextBank);
+    if (nextWindow !== 30) p.set('window', String(nextWindow));
     if (nextP > 1) p.set('p', String(nextP));
     setParams(p);
   };
@@ -181,9 +187,17 @@ export const UnifiedExplore: React.FC = () => {
       const countryRes = await apiService.getFraudCountries(scope);
       setAvailableCountries(countryRes.countries || []);
 
+      const incParams = {
+        scope,
+        country: selectedCountry !== 'all' ? selectedCountry : undefined,
+        window_days: windowDays > 0 ? windowDays : undefined,
+        page_size: 50,
+        q: searchQuery || undefined,
+      };
+
       if (scope === 'saudi') {
         const [incRes, newsRes, patRes] = await Promise.all([
-          apiService.getSaudiIncidents({ scope: 'saudi', page_size: 50, q: searchQuery || undefined }),
+          apiService.getSaudiIncidents(incParams),
           apiService.getSaudiNews({ scope: 'saudi', page_size: 100, q: searchQuery || undefined }),
           apiService.getSaudiPatterns(),
         ]);
@@ -192,12 +206,7 @@ export const UnifiedExplore: React.FC = () => {
         setPatterns(patRes.patterns || []);
       } else if (scope === 'global') {
         const [incRes, newsRes] = await Promise.all([
-          apiService.getSaudiIncidents({
-            scope: 'global',
-            country: selectedCountry !== 'all' ? selectedCountry : undefined,
-            page_size: 50,
-            q: searchQuery || undefined,
-          }),
+          apiService.getSaudiIncidents(incParams),
           apiService.getSaudiNews({
             scope: 'global',
             country: selectedCountry !== 'all' ? selectedCountry : undefined,
@@ -211,12 +220,7 @@ export const UnifiedExplore: React.FC = () => {
       } else {
         // scope === 'all'
         const [incRes, newsRes, patRes] = await Promise.all([
-          apiService.getSaudiIncidents({
-            scope: 'all',
-            country: selectedCountry !== 'all' ? selectedCountry : undefined,
-            page_size: 50,
-            q: searchQuery || undefined,
-          }),
+          apiService.getSaudiIncidents(incParams),
           apiService.getSaudiNews({
             scope: 'all',
             country: selectedCountry !== 'all' ? selectedCountry : undefined,
@@ -234,7 +238,7 @@ export const UnifiedExplore: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [scope, searchQuery, selectedCountry]);
+  }, [scope, searchQuery, selectedCountry, windowDays]);
 
   useEffect(() => {
     loadData();
@@ -506,7 +510,8 @@ export const UnifiedExplore: React.FC = () => {
     selectedCountry !== 'all' ||
     selectedSource !== 'all' ||
     itemType !== 'all' ||
-    bankRel !== 'all';
+    bankRel !== 'all' ||
+    windowDays !== 30;
 
   const resetAllFilters = () => {
     setSearchQuery('');
@@ -515,6 +520,7 @@ export const UnifiedExplore: React.FC = () => {
     setSelectedSource('all');
     setItemType('all');
     setBankRel('all');
+    setWindowDays(30);
     setSortBy('newest');
     setCurrentPage(1);
     setParams(new URLSearchParams());
@@ -721,6 +727,22 @@ export const UnifiedExplore: React.FC = () => {
               <option value="high">صلة بنكية عالية</option>
               <option value="medium">صلة متوسطة</option>
               <option value="low">صلة منخفضة</option>
+            </select>
+
+            {/* Time Window filter */}
+            <select
+              value={windowDays}
+              onChange={(e) => {
+                const val = Number(e.target.value);
+                setWindowDays(val);
+                updateFilter({ window: val, p: 1 });
+              }}
+              className="bg-stone-50 dark:bg-slate-900 border border-stone-200 dark:border-slate-700 rounded-lg px-2.5 py-1 text-xs text-stone-700 dark:text-slate-300 outline-none"
+            >
+              <option value={7}>آخر 7 أيام</option>
+              <option value={30}>آخر 30 يوماً (الخريطة والداشبورد)</option>
+              <option value={90}>آخر 90 يوماً</option>
+              <option value={0}>كافة الفترات</option>
             </select>
 
             {/* Sort order */}
