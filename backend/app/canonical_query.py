@@ -78,6 +78,15 @@ def build_canonical_incident_where(
     Returns:
         (clauses, params, meta_dict)
     """
+    # 0. Sanitize parameter types
+    window_days = window_days if isinstance(window_days, int) and window_days > 0 else None
+    record_type = record_type if isinstance(record_type, str) and record_type else None
+    review_status = review_status if isinstance(review_status, str) and review_status else None
+    bank_relevance = bank_relevance if isinstance(bank_relevance, str) and bank_relevance else None
+    date_basis = date_basis if isinstance(date_basis, str) else "first_reported_at"
+    date_from = date_from if isinstance(date_from, str) else None
+    date_to = date_to if isinstance(date_to, str) else None
+
     # 1. Date window resolution
     d_to = datetime.now(timezone.utc)
     if date_to:

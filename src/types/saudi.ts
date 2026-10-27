@@ -17,8 +17,14 @@ export interface SaudiOverview {
   refresh_every_hours: number;
   auto_ingest_enabled: boolean;
   ingest_running: boolean;
+  // Separate telemetry indicators
+  last_source_check?: string | null;
+  last_successful_fetch?: string | null;
+  last_new_item?: string | null;
+  last_analysis_update?: string | null;
   // incident layer
   incidents_total?: number;
+  incidents_high_bank_relevance?: number;
   incident_articles_total?: number;
   incidents_confirmed?: number;
   incidents_reported?: number;
@@ -77,6 +83,9 @@ export interface SaudiFraudItem {
   required_data?: string[] | null;
   matched_terms?: string[] | null;
   country?: string | null;
+  incident_country?: string | null;
+  incident_city?: string | null;
+  occurred_at?: string | null;
   domain?: string | null;
   is_saudi?: boolean;
   content_excerpt?: string;
@@ -206,6 +215,10 @@ export interface SaudiNewsParams {
   content_type?: string;
   scope?: 'saudi' | 'global' | 'all';
   country?: string;
+  window_days?: number;
+  date_from?: string;
+  date_to?: string;
+  sort_by?: 'latest' | 'importance';
   page?: number;
   page_size?: number;
 }
@@ -256,6 +269,9 @@ export interface SaudiIncident {
   fraud_type_ar?: string;
   targeted_sector_ar?: string;
   reporting_agency?: string;
+  occurred_at?: string | null;
+  modus_operandi_detailed?: string | null;
+  country?: string;
   // detail only
   facts?: {
     origin: string;

@@ -63,7 +63,8 @@ def extract_domain(url: str) -> str:
     except Exception:
         return ""
 
-def safe_dt_to_iso(entry: Any) -> str:
+def safe_dt_to_iso(entry: Any) -> Optional[str]:
+    import email.utils
     try:
         if getattr(entry, "published_parsed", None):
             ts = time.mktime(entry.published_parsed)
@@ -71,6 +72,20 @@ def safe_dt_to_iso(entry: Any) -> str:
         if getattr(entry, "updated_parsed", None):
             ts = time.mktime(entry.updated_parsed)
             return datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
+        # Fallback to string parsing if feedparser tuple was None
+        for raw_field in ("published", "updated", "pubDate", "created"):
+            val = getattr(entry, raw_field, None)
+            if isinstance(val, str) and val.strip():
+                try:
+                    dt = email.utils.parsedate_to_datetime(val.strip())
+                    return dt.astimezone(timezone.utc).isoformat()
+                except Exception:
+                    pass
+                try:
+                    dt = datetime.fromisoformat(val.strip().replace("Z", "+00:00"))
+                    return dt.astimezone(timezone.utc).isoformat()
+                except Exception:
+                    pass
     except Exception:
         pass
-    return datetime.now(timezone.utc).isoformat()
+    return None

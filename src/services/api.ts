@@ -351,6 +351,10 @@ export const apiService = {
     if (params.content_type) query.append('content_type', params.content_type);
     if (params.scope) query.append('scope', params.scope);
     if (params.country) query.append('country', params.country);
+    if (params.window_days !== undefined) query.append('window_days', String(params.window_days));
+    if (params.date_from) query.append('date_from', params.date_from);
+    if (params.date_to) query.append('date_to', params.date_to);
+    if (params.sort_by) query.append('sort_by', params.sort_by);
     query.append('page', String(params.page || 1));
     query.append('page_size', String(params.page_size || 20));
     return await requestWithRetry<SaudiNewsResponse>(`/saudi-fraud/news?${query.toString()}`);

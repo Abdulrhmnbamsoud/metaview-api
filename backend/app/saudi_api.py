@@ -6,7 +6,7 @@ import hmac
 import json
 import os
 import shutil
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Header, HTTPException, Query
@@ -48,6 +48,10 @@ def _loads(v: Any) -> Any:
 
 
 def _item(r, detail: bool = False) -> Dict[str, Any]:
+    incident_country = r["incident_country"] if ("incident_country" in r.keys() and r["incident_country"] and r["incident_country"] != "Unknown") else None
+    article_country = r["country"] if ("country" in r.keys() and r["country"] and r["country"] != "Global") else None
+    resolved_country = incident_country or ("SA" if r["is_saudi"] else (article_country or "Unknown"))
+
     d: Dict[str, Any] = {
         "id": r["id"],
         "article_id": r["article_id"],
@@ -73,7 +77,10 @@ def _item(r, detail: bool = False) -> Dict[str, Any]:
         "content_type": r["content_type"] or "unclassified",
         "content_type_ar": CONTENT_TYPE_AR.get(r["content_type"], "غير مصنّف"),
         "incident_id": r["incident_id"],
-        "country": r["country"] if ("country" in r.keys() and r["country"]) else ("SA" if r["is_saudi"] else "Global"),
+        "country": resolved_country,
+        "incident_country": incident_country,
+        "incident_city": r["incident_city"] if ("incident_city" in r.keys() and r["incident_city"]) else None,
+        "occurred_at": r["occurred_at"] if ("occurred_at" in r.keys() and r["occurred_at"]) else None,
         "domain": r["domain"] if "domain" in r.keys() else None,
         "is_saudi": bool(r["is_saudi"]),
     }
@@ -88,26 +95,34 @@ def _item(r, detail: bool = False) -> Dict[str, Any]:
 
 _SELECT = """
     SELECT t.*, a.headline, a.source, a.url, a.published_at, a.fetched_at, a.source_code,
-           a.language, a.content, a.country, a.domain
-    FROM threat_intel t JOIN articles a ON a.id = t.article_id
+           a.language, a.content, a.country, a.domain,
+           i.incident_country, i.incident_city, i.incident_region, i.occurred_at
+    FROM threat_intel t
+    JOIN articles a ON a.id = t.article_id
+    LEFT JOIN incidents i ON i.id = t.incident_id
 """
 
 
 def _where(category: Optional[str], source: Optional[str], q: Optional[str],
            date_from: Optional[str], date_to: Optional[str], bank: Optional[str],
-           content_type: Optional[str] = None, scope: str = "saudi", country: Optional[str] = None):
+           content_type: Optional[str] = None, scope: str = "all", country: Optional[str] = None,
+           window_days: Optional[int] = None):
     clauses = []
     params: List[Any] = []
 
-    # Scope condition
-    if scope == "saudi":
-        clauses.append("t.is_saudi = 1")
+    # Geographic / Scope condition
+    if country and country != "all":
+        if country.upper() == "SA":
+            clauses.append("(t.is_saudi = 1 OR (t.incident_id IS NOT NULL AND i.incident_country = 'SA'))")
+        else:
+            clauses.append("((t.incident_id IS NOT NULL AND i.incident_country = ?) OR (t.incident_id IS NULL AND a.country = ?))")
+            params.extend([country.upper(), country.upper()])
+    elif scope == "saudi":
+        clauses.append("(t.is_saudi = 1 OR (t.incident_id IS NOT NULL AND i.incident_country = 'SA'))")
     elif scope == "global":
-        clauses.append("(t.is_saudi = 0 OR t.is_saudi IS NULL)")
+        clauses.append("(t.is_saudi = 0 OR t.is_saudi IS NULL) AND (i.incident_country != 'SA' OR i.incident_country IS NULL)")
     elif scope == "all":
-        pass  # Both Saudi and Global
-    else:
-        clauses.append("t.is_saudi = 1")
+        pass  # Both Saudi and Global included
 
     clauses.append("t.fraud_category IS NOT NULL")
 
@@ -116,13 +131,6 @@ def _where(category: Optional[str], source: Optional[str], q: Optional[str],
         params.append(content_type)
     else:
         clauses.append(f"t.content_type IN ('{_VISIBLE_TYPES}')")
-
-    if country and country != "all":
-        if country.upper() == "SA":
-            clauses.append("(t.is_saudi = 1 OR a.country = 'SA')")
-        else:
-            clauses.append("a.country = ?")
-            params.append(country.upper())
 
     if category and category != "all":
         clauses.append("t.fraud_category = ?")
@@ -148,13 +156,18 @@ def _where(category: Optional[str], source: Optional[str], q: Optional[str],
         clauses.append("a.published_at <= ?")
         params.append(date_to + "T23:59:59" if len(date_to) == 10 else date_to)
 
+    if isinstance(window_days, int) and window_days > 0 and not date_from:
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=window_days)).isoformat()
+        clauses.append("a.published_at >= ?")
+        params.append(cutoff)
+
     return (" AND ".join(clauses) if clauses else "1=1"), params
 
 
 @router.get("/overview")
 def overview(
     window_days: Optional[int] = Query(None, ge=1, le=365),
-    scope: str = Query("saudi", pattern="^(saudi|global|all)$"),
+    scope: str = Query("all", pattern="^(saudi|global|all)$"),
     country: Optional[str] = None,
     fraud_type: Optional[str] = None,
     date_from: Optional[str] = None,
@@ -168,79 +181,75 @@ def overview(
     try:
         inc = incidents.counts(con)
 
-        # 30-day canonical benchmark for Saudi Arabia
-        c30_clauses, c30_params, c30_meta = build_canonical_incident_where(geo="saudi", window_days=30)
+        # 30-day canonical benchmark
+        c30_clauses, c30_params, c30_meta = build_canonical_incident_where(geo=scope, country=country, window_days=30)
         c30_dt, c30_dp = c30_meta["make_date_clause"](c30_meta["iso_from"], c30_meta["iso_to"])
         if c30_dt:
             c30_clauses.append(c30_dt)
             c30_params.extend(c30_dp)
         c30_total = con.execute(f"SELECT COUNT(*) n FROM incidents WHERE {' AND '.join(c30_clauses)}", c30_params).fetchone()["n"]
 
-        # If filtered by window or scope, compute canonical window counts
-        if window_days or date_from or date_to or scope != "saudi" or country or fraud_type:
-            clauses, params, meta = build_canonical_incident_where(
-                geo=scope,
-                country=country,
-                fraud_type=fraud_type,
-                date_from=date_from,
-                date_to=date_to,
-                window_days=window_days,
-                date_basis=date_basis,
-            )
-            dt_clause, dt_params = meta["make_date_clause"](meta["iso_from"], meta["iso_to"])
-            if dt_clause:
-                clauses.append(dt_clause)
-                params.extend(dt_params)
-            where = " AND ".join(clauses)
-            canonical_total = con.execute(f"SELECT COUNT(*) n FROM incidents WHERE {where}", params).fetchone()["n"]
-            canonical_high = con.execute(f"SELECT COUNT(*) n FROM incidents WHERE {where} AND LOWER(bank_relevance) = 'high'", params).fetchone()["n"]
-            canonical_confirmed = con.execute(f"SELECT COUNT(*) n FROM incidents WHERE {where} AND record_type = 'confirmed_incident'", params).fetchone()["n"]
-            canonical_reported = con.execute(f"SELECT COUNT(*) n FROM incidents WHERE {where} AND record_type = 'reported_incident'", params).fetchone()["n"]
+        eff_w = window_days if isinstance(window_days, int) and window_days > 0 else 30
+        clauses, params, meta = build_canonical_incident_where(
+            geo=scope,
+            country=country,
+            fraud_type=fraud_type,
+            date_from=date_from,
+            date_to=date_to,
+            window_days=eff_w,
+            date_basis=date_basis,
+        )
+        dt_clause, dt_params = meta["make_date_clause"](meta["iso_from"], meta["iso_to"])
+        if dt_clause:
+            clauses.append(dt_clause)
+            params.extend(dt_params)
+        where_inc = " AND ".join(clauses)
+        canonical_total = con.execute(f"SELECT COUNT(*) n FROM incidents WHERE {where_inc}", params).fetchone()["n"]
+        canonical_high = con.execute(f"SELECT COUNT(*) n FROM incidents WHERE {where_inc} AND LOWER(bank_relevance) = 'high'", params).fetchone()["n"]
+        canonical_confirmed = con.execute(f"SELECT COUNT(*) n FROM incidents WHERE {where_inc} AND record_type = 'confirmed_incident'", params).fetchone()["n"]
+        canonical_reported = con.execute(f"SELECT COUNT(*) n FROM incidents WHERE {where_inc} AND record_type = 'reported_incident'", params).fetchone()["n"]
 
-            # 7-day canonical count within this scope
-            c7_clauses, c7_params, c7_meta = build_canonical_incident_where(
-                geo=scope, country=country, fraud_type=fraud_type, window_days=7, date_basis=date_basis
-            )
-            c7_dt, c7_dp = c7_meta["make_date_clause"](c7_meta["iso_from"], c7_meta["iso_to"])
-            if c7_dt:
-                c7_clauses.append(c7_dt)
-                c7_params.extend(c7_dp)
-            canonical_last7 = con.execute(f"SELECT COUNT(*) n FROM incidents WHERE {' AND '.join(c7_clauses)}", c7_params).fetchone()["n"]
+        # 7-day canonical count within this scope
+        c7_clauses, c7_params, c7_meta = build_canonical_incident_where(
+            geo=scope, country=country, fraud_type=fraud_type, window_days=7, date_basis=date_basis
+        )
+        c7_dt, c7_dp = c7_meta["make_date_clause"](c7_meta["iso_from"], c7_meta["iso_to"])
+        if c7_dt:
+            c7_clauses.append(c7_dt)
+            c7_params.extend(c7_dp)
+        canonical_last7 = con.execute(f"SELECT COUNT(*) n FROM incidents WHERE {' AND '.join(c7_clauses)}", c7_params).fetchone()["n"]
 
-            inc_total = canonical_total
-            inc_last7 = canonical_last7
-            inc_high = canonical_high
-            inc_confirmed = canonical_confirmed
-            inc_reported = canonical_reported
-        else:
-            inc_total = inc["incidents_total"]
-            inc_last7 = inc["incidents_last_7_days"]
-            inc_high = inc["incidents_high_bank_relevance"]
-            inc_confirmed = inc["incidents_confirmed"]
-            inc_reported = inc["incidents_reported"]
-
-        total = con.execute(
-            f"SELECT COUNT(*) n FROM threat_intel t WHERE {_BASE_WHERE}").fetchone()["n"]
+        # Total monitored items within current scope
+        where_items, items_params = _where(None, None, None, date_from, date_to, None, scope=scope, country=country, window_days=window_days)
+        total_items_count = con.execute(
+            f"SELECT COUNT(*) n FROM threat_intel t JOIN articles a ON a.id=t.article_id LEFT JOIN incidents i ON i.id = t.incident_id WHERE {where_items}",
+            items_params).fetchone()["n"]
         srcs = con.execute(
-            f"SELECT COUNT(DISTINCT a.source) n FROM threat_intel t JOIN articles a ON a.id=t.article_id "
-            f"WHERE {_BASE_WHERE}").fetchone()["n"]
-        last_run = con.execute(
-            "SELECT MAX(finished_at) m FROM fetch_log").fetchone()["m"]
-        ok_sources = con.execute(
-            "SELECT COUNT(*) n FROM source_registry WHERE last_status='ok'").fetchone()["n"]
+            f"SELECT COUNT(DISTINCT a.source) n FROM threat_intel t JOIN articles a ON a.id=t.article_id LEFT JOIN incidents i ON i.id = t.incident_id WHERE {where_items}",
+            items_params).fetchone()["n"]
+
+        # Telemetry metrics
+        last_check = con.execute("SELECT MAX(finished_at) m FROM fetch_log").fetchone()["m"]
+        last_success = con.execute("SELECT MAX(finished_at) m FROM fetch_log WHERE ok = 1").fetchone()["m"]
+        last_item_dt = con.execute(
+            f"SELECT MAX(a.published_at) m FROM threat_intel t JOIN articles a ON a.id = t.article_id LEFT JOIN incidents i ON i.id = t.incident_id WHERE {where_items}",
+            items_params).fetchone()["m"]
+        last_analysis = con.execute("SELECT MAX(updated_at) m FROM threat_intel").fetchone()["m"]
+
+        ok_sources = con.execute("SELECT COUNT(*) n FROM source_registry WHERE last_status='ok'").fetchone()["n"]
         all_sources = con.execute("SELECT COUNT(*) n FROM source_registry").fetchone()["n"]
     finally:
         con.close()
     cats = inc["incident_categories"]
     return {
         # --- success metric -------------------------------------------------
-        "incidents_total": inc_total,
-        "incidents_last_30_days": c30_total if not window_days else inc_total,
+        "incidents_total": canonical_total,
+        "incidents_last_30_days": c30_total,
         "incident_articles_total": inc["incident_articles_total"],
-        "incidents_last_7_days": inc_last7,
-        "incidents_high_bank_relevance": inc_high,
-        "incidents_confirmed": inc_confirmed,
-        "incidents_reported": inc_reported,
+        "incidents_last_7_days": canonical_last7,
+        "incidents_high_bank_relevance": canonical_high,
+        "incidents_confirmed": canonical_confirmed,
+        "incidents_reported": canonical_reported,
         "incidents_needs_review": inc["incidents_needs_review"],
         "merge_suggestions_pending": inc["merge_suggestions_pending"],
         # --- separate, NOT counted as incidents -----------------------------
@@ -251,16 +260,21 @@ def overview(
         "excluded_unrelated": inc["excluded_unrelated"],
         "unclassified": inc["unclassified"],
         "by_content_type": inc["by_content_type"],
-        # --- legacy field names (same values, now incident-based) ------------
-        "total_items": total,  # visible articles only: confirmed + warning + awareness (NOT incidents)
-        "last_7_days": inc_last7,
-        "high_bank_relevance": inc_high,
+        # --- legacy & compatibility field names -----------------------------
+        "total_items": total_items_count,
+        "last_7_days": canonical_last7,
+        "high_bank_relevance": canonical_high,
         "distinct_sources": srcs,
         "categories": [
             {"key": k, "label_ar": CATEGORY_AR.get(k, k), "count": cats.get(k, 0)}
             for k in CATEGORY_ORDER
         ],
-        "last_fetch_at": last_run,
+        "last_fetch_at": last_check,
+        # Separate telemetry indicators
+        "last_source_check": last_check,
+        "last_successful_fetch": last_success,
+        "last_new_item": last_item_dt,
+        "last_analysis_update": last_analysis,
         "sources_ok": ok_sources,
         "sources_total": all_sources,
         "refresh_every_hours": SAUDI_INGEST_EVERY_HOURS,
@@ -276,24 +290,49 @@ def news(
     q: Optional[str] = None,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
+    window_days: Optional[int] = Query(None, ge=1, le=365),
+    sort_by: Optional[str] = Query("latest", pattern="^(latest|importance)$"),
     bank_relevance: Optional[str] = Query(None, pattern="^(high|medium|low)$"),
     content_type: Optional[str] = Query(
         None, pattern="^(confirmed_incident|reported_incident|fraud_warning|awareness_campaign|general_cybersecurity|unrelated)$"),
-    scope: str = Query("saudi", pattern="^(saudi|global|all)$"),
+    scope: str = Query("all", pattern="^(saudi|global|all)$"),
     country: Optional[str] = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ) -> Dict[str, Any]:
-    """Articles across Saudi or Global scope. By default only fraud-relevant content types."""
-    where, params = _where(category, source, q, date_from, date_to, bank_relevance, content_type, scope=scope, country=country)
+    """Articles across Saudi or Global scope. Default is 'all' global scope.
+    Strictly orders by original published_at or explainable importance formula."""
+    eff_content_type = content_type if isinstance(content_type, str) else None
+    eff_bank = bank_relevance if isinstance(bank_relevance, str) else None
+    eff_scope = scope if isinstance(scope, str) and scope in ("saudi", "global", "all") else "all"
+    eff_country = country if isinstance(country, str) else None
+    eff_window = window_days if isinstance(window_days, int) and window_days > 0 else None
+    eff_sort = sort_by if isinstance(sort_by, str) and sort_by in ("latest", "importance") else "latest"
+    eff_page = page if isinstance(page, int) and page >= 1 else 1
+    eff_page_size = page_size if isinstance(page_size, int) and page_size >= 1 else 20
+
+    where, params = _where(
+        category, source, q, date_from, date_to, eff_bank, eff_content_type,
+        scope=eff_scope, country=eff_country, window_days=eff_window
+    )
     con = get_db()
     try:
         total = con.execute(
-            f"SELECT COUNT(*) n FROM threat_intel t JOIN articles a ON a.id=t.article_id WHERE {where}",
+            f"SELECT COUNT(*) n FROM threat_intel t JOIN articles a ON a.id=t.article_id LEFT JOIN incidents i ON i.id = t.incident_id WHERE {where}",
             params).fetchone()["n"]
+
+        if eff_sort == "importance":
+            order_clause = (
+                "((CASE WHEN LOWER(t.bank_relevance) = 'high' THEN 3 WHEN LOWER(t.bank_relevance) = 'medium' THEN 2 ELSE 1 END) * 10 + "
+                "(CASE WHEN t.content_type = 'confirmed_incident' THEN 5 WHEN t.content_type = 'fraud_warning' THEN 3 ELSE 1 END)) DESC, "
+                "a.published_at DESC, t.id DESC"
+            )
+        else:
+            order_clause = "a.published_at DESC, t.id DESC"
+
         rows = con.execute(
-            f"{_SELECT} WHERE {where} ORDER BY COALESCE(a.published_at, a.created_at) DESC, t.id DESC "
-            "LIMIT ? OFFSET ?", params + [page_size, (page - 1) * page_size]).fetchall()
+            f"{_SELECT} WHERE {where} ORDER BY {order_clause} "
+            "LIMIT ? OFFSET ?", params + [eff_page_size, (eff_page - 1) * eff_page_size]).fetchall()
     finally:
         con.close()
     return {"page": page, "page_size": page_size, "total": total,
@@ -426,18 +465,21 @@ def incidents_list(
         clauses.append(dt_clause)
         params.extend(dt_params)
 
+    eff_page = page if isinstance(page, int) and page >= 1 else 1
+    eff_page_size = page_size if isinstance(page_size, int) and page_size >= 1 else 20
+
     where = " AND ".join(clauses)
     con = get_db()
     try:
         total = con.execute(f"SELECT COUNT(*) n FROM incidents WHERE {where}", params).fetchone()["n"]
         rows = con.execute(
             f"SELECT * FROM incidents WHERE {where} ORDER BY {order_col} DESC, id DESC "
-            "LIMIT ? OFFSET ?", params + [page_size, (page - 1) * page_size]).fetchall()
+            "LIMIT ? OFFSET ?", params + [eff_page_size, (eff_page - 1) * eff_page_size]).fetchall()
     finally:
         con.close()
     return {
-        "page": page,
-        "page_size": page_size,
+        "page": eff_page,
+        "page_size": eff_page_size,
         "total": total,
         "incident_ids": [int(r["id"]) for r in rows],
         "items": [incidents.incident_to_dict(r) for r in rows],

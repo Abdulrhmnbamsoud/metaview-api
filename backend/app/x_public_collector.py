@@ -388,12 +388,28 @@ async def fetch_single_public_post(tweet_url_or_id: str) -> Tuple[Optional[XPubl
 
             outbound_urls = [a.get("href") for a in soup.find_all("a") if a.get("href") and not a.get("href", "").startswith("https://twitter.com")]
 
+            # Extract real publication date from status anchor tag; NEVER default to current time
+            post_published_at: Optional[str] = None
+            for a_el in soup.find_all("a"):
+                href = a_el.get("href", "")
+                if f"status/{tweet_id}" in href:
+                    raw_date_text = a_el.get_text().strip()
+                    for fmt in ("%B %d, %Y", "%b %d, %Y", "%d %B %Y", "%d %b %Y", "%Y-%m-%d"):
+                        try:
+                            dt = datetime.strptime(raw_date_text, fmt).replace(tzinfo=timezone.utc)
+                            post_published_at = dt.isoformat()
+                            break
+                        except ValueError:
+                            pass
+                    if post_published_at:
+                        break
+
             cls = classify_x_post(text, author_handle=author_handle)
 
             post = XPublicPost(
                 post_id=tweet_id,
                 text=text,
-                published_at=datetime.now(timezone.utc).isoformat(),
+                published_at=post_published_at,
                 url=url,
                 author_handle=author_handle,
                 author_name=author_name,

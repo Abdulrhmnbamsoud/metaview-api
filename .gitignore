@@ -22,4 +22,5 @@ Thumbs.db
 backend/data/*.db
 *.db
 -MetaView-3/
+scratch/*.png
 
