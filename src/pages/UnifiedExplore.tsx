@@ -815,7 +815,7 @@ export const UnifiedExplore: React.FC = () => {
           {itemType === 'all' ? (
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="font-semibold text-stone-800 dark:text-stone-200">
-                إجمالي عناصر الاستخبارات: {unifiedItems.length} عنصر
+                إجمالي المواد المرصودة: {unifiedItems.length} عنصر
               </span>
               <span className="text-stone-300 dark:text-slate-600">|</span>
               <span className="text-[11px] text-stone-600 dark:text-slate-400 flex flex-wrap items-center gap-1">
