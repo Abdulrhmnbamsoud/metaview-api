@@ -61,6 +61,12 @@ import {
   DrilldownResponse,
   DashboardViewResponse,
 } from '../types/fraudIntelligence';
+import {
+  UnifiedRule,
+  RulesStudioOverview,
+  SystemCapabilityEnvironment,
+  SimulationSuiteResult,
+} from '../types/rules_studio';
 
 // Base URL resolution: Environment variable -> Vite Proxy (/api) -> direct localhost
 let API_BASE_URL: string;
@@ -662,6 +668,69 @@ export const apiService = {
     return await requestWithRetry(`/saudi-fraud/incidents/merge-suggestions/${suggestionId}/decision`, {
       method: 'POST',
       body: JSON.stringify({ decision, reason, reviewer: reviewer || '' }),
+    });
+  },
+
+  // --------------------------------------------------------------------------- //
+  // Rules Studio (Unified Fraud Detection Intelligence & Rule Deployment Studio)
+  // --------------------------------------------------------------------------- //
+  async getRulesStudioOverview(): Promise<RulesStudioOverview> {
+    return await requestWithRetry<RulesStudioOverview>('/rules-studio/overview');
+  },
+
+  async getRulesStudioList(params?: {
+    origin?: string;
+    category?: string;
+    status?: string;
+    environment?: string;
+    q?: string;
+  }): Promise<{ rules: UnifiedRule[]; total: number }> {
+    const qp = new URLSearchParams();
+    if (params?.origin && params.origin !== 'all') qp.set('origin', params.origin);
+    if (params?.category && params.category !== 'all') qp.set('category', params.category);
+    if (params?.status && params.status !== 'all') qp.set('status', params.status);
+    if (params?.environment && params.environment !== 'all') qp.set('environment', params.environment);
+    if (params?.q) qp.set('q', params.q);
+    const qs = qp.toString() ? `?${qp.toString()}` : '';
+    return await requestWithRetry<{ rules: UnifiedRule[]; total: number }>(`/rules-studio/rules${qs}`);
+  },
+
+  async getRulesStudioDetail(ruleId: string): Promise<{ rule: UnifiedRule }> {
+    return await requestWithRetry<{ rule: UnifiedRule }>(`/rules-studio/rules/${encodeURIComponent(ruleId)}`);
+  },
+
+  async parseRulesStudioScenario(scenarioText: string): Promise<{ status: string; extracted_scenario: any; proposed_rule: UnifiedRule }> {
+    return await requestWithRetry('/rules-studio/parse-scenario', {
+      method: 'POST',
+      body: JSON.stringify({ scenario_text: scenarioText }),
+    });
+  },
+
+  async saveRulesStudioRule(rule: Partial<UnifiedRule>, changeSummary?: string, changeReason?: string): Promise<{ status: string; rule_id: string; rule: UnifiedRule }> {
+    return await requestWithRetry('/rules-studio/rules', {
+      method: 'POST',
+      body: JSON.stringify({ rule, change_summary: changeSummary, change_reason: changeReason }),
+    });
+  },
+
+  async simulateRulesStudioRule(ruleId: string, customCases?: any[]): Promise<SimulationSuiteResult> {
+    return await requestWithRetry<SimulationSuiteResult>(`/rules-studio/rules/${encodeURIComponent(ruleId)}/simulate`, {
+      method: 'POST',
+      body: JSON.stringify({ custom_cases: customCases }),
+    });
+  },
+
+  async getRulesStudioEnvironments(): Promise<{ environments: Record<string, SystemCapabilityEnvironment>; total: number; disclaimer_ar: string }> {
+    return await requestWithRetry('/rules-studio/environments');
+  },
+
+  async updateRulesStudioGovernance(
+    ruleId: string,
+    payload: { new_status: string; reason: string; reviewer_name?: string; external_approval?: any }
+  ): Promise<any> {
+    return await requestWithRetry(`/rules-studio/rules/${encodeURIComponent(ruleId)}/governance`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
     });
   },
 

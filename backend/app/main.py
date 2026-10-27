@@ -41,6 +41,7 @@ from .auth import init_auth_tables
 from .auth_api import router as auth_router, team_router
 from .governance_api import router as governance_router
 from .fraud_intelligence_api import router as fraud_intel_router
+from .rules_studio_api import router as rules_studio_router
 
 init_db()
 init_auth_tables()
@@ -50,6 +51,8 @@ app.include_router(governance_router)
 app.include_router(saudi_router)
 app.include_router(fraud_intel_router)
 app.include_router(fraud_intel_router, prefix="/api")
+app.include_router(rules_studio_router)
+app.include_router(rules_studio_router, prefix="/api")
 # Automatic one-time safe pipeline migration for production database if incidents count is below 10
 try:
     _con = get_db()
