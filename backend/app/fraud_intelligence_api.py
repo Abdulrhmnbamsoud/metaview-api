@@ -1671,13 +1671,18 @@ def get_dashboard_view(
         con.close()
 
 
+from fastapi import Depends, Header
+from .auth import User, require_permission
+
+
 @router.post("/migrate-database")
-@router.get("/migrate-database")
-def trigger_database_migration(user_tag: str = "api_trigger") -> Dict[str, Any]:
-    """Execute safe migration on the live database with automatic backup and deduplication verification."""
+def trigger_database_migration(
+    user_tag: str = "api_trigger",
+    current_user: User = Depends(require_permission("system.manage")),
+) -> Dict[str, Any]:
+    """Execute safe migration on the live database (Admin only with audit logging)."""
     from datetime import datetime, timezone
     from .intelligence_builder import rebuild_fraud_intelligence
-    import traceback
 
     try:
         ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
@@ -1696,8 +1701,7 @@ def trigger_database_migration(user_tag: str = "api_trigger") -> Dict[str, Any]:
         return {
             "status": "error",
             "error_type": type(exc).__name__,
-            "error_message": str(exc),
-            "traceback": traceback.format_exc(),
+            "error_message": "فشلت عملية ترحيل وتحديث بنية البيانات. تم حفظ التفاصيل في سجل التدقيق الداخلي.",
         }
 
 

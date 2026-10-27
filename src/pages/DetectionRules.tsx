@@ -35,6 +35,7 @@ import {
   Fingerprint,
 } from 'lucide-react';
 import { apiService } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 import {
   UnifiedRule,
   RulesStudioOverview,
@@ -111,6 +112,10 @@ const getOriginBadge = (origin: RuleOrigin) => {
 };
 
 export const DetectionRules: React.FC = () => {
+  const { user, can } = useAuth();
+  const canCreateRule = can('rule.create');
+  const canApproveRule = can('rule.approve');
+
   // Navigation
   const [activeTab, setActiveTab] = useState<'discovery' | 'builder' | 'advisor' | 'simulation'>('discovery');
 
@@ -820,14 +825,21 @@ export const DetectionRules: React.FC = () => {
                   </button>
                   <button
                     onClick={() => {
+                      if (!canApproveRule) return;
                       setGovTargetRule(selectedRule);
                       setGovNewStatus(selectedRule.status);
                       setGovReason('');
                       setIsGovModalOpen(true);
                     }}
-                    className="px-3 py-2 rounded-xl text-xs font-medium border border-stone-200 dark:border-slate-800 hover:bg-stone-100 dark:hover:bg-slate-800 text-stone-700 dark:text-slate-300 transition-colors"
+                    disabled={!canApproveRule}
+                    title={!canApproveRule ? 'يتطلب اعتماد الحوكمة صلاحية مدير المنصة' : 'مراجعة واعتماد الحوكمة'}
+                    className={`px-3 py-2 rounded-xl text-xs font-medium border transition-colors ${
+                      canApproveRule
+                        ? 'border-stone-200 dark:border-slate-800 hover:bg-stone-100 dark:hover:bg-slate-800 text-stone-700 dark:text-slate-300 cursor-pointer'
+                        : 'border-stone-200 dark:border-slate-800/60 text-stone-400 dark:text-slate-600 cursor-not-allowed bg-stone-50 dark:bg-slate-900/40'
+                    }`}
                   >
-                    الحوكمة
+                    الحوكمة {!canApproveRule && '(مدير)'}
                   </button>
                 </div>
               </div>
@@ -982,10 +994,20 @@ export const DetectionRules: React.FC = () => {
                 )}
 
                 {/* Save Draft Action */}
-                <div className="pt-2 border-t border-stone-100 dark:border-slate-800 flex items-center gap-3">
+                <div className="pt-2 border-t border-stone-100 dark:border-slate-800 space-y-2">
+                  {!canCreateRule && (
+                    <div className="p-2.5 rounded-xl bg-stone-100 dark:bg-slate-800/80 text-[11px] text-stone-600 dark:text-slate-400 border border-stone-200 dark:border-slate-700">
+                      * وضع المستعرض العام (قراءة فقط): لحفظ مسودات القواعد في مساحة العمل يتطلب تسجيل الدخول بصلاحية محلل مكافحة الاحتيال أو مدير.
+                    </div>
+                  )}
                   <button
                     onClick={handleSaveDraft}
-                    className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm transition-all"
+                    disabled={!canCreateRule}
+                    className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold shadow-sm transition-all ${
+                      canCreateRule
+                        ? 'bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer'
+                        : 'bg-stone-200 dark:bg-slate-800 text-stone-400 dark:text-slate-500 cursor-not-allowed border border-stone-300 dark:border-slate-700'
+                    }`}
                   >
                     <Check className="w-4 h-4" />
                     حفظ كمسودة قاعدة موحدة (Save to Workspace)

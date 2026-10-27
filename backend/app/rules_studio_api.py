@@ -19,9 +19,10 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
+from .auth import User, require_permission
 from .db import get_db
 from .rules_studio_engine import (
     ENV_BRANCH,
@@ -73,7 +74,7 @@ class GovernanceUpdateRequest(BaseModel):
 
 @router.get("/rules-studio/overview")
 def get_rules_overview() -> Dict[str, Any]:
-    """Summary metrics of all rules in the unified studio."""
+    """Summary metrics of all rules in the unified studio (Public Read-Only)."""
     all_rules = get_all_unified_rules()
     
     total = len(all_rules)
@@ -137,7 +138,7 @@ def list_rules(
     environment: Optional[str] = Query("all"),
     q: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """List filtered unified rules."""
+    """List filtered unified rules (Public Read-Only)."""
     rules = get_all_unified_rules(
         origin_filter=origin if origin != "all" else None,
         category_filter=category if category != "all" else None,
@@ -166,7 +167,7 @@ def list_rules(
 
 @router.get("/rules-studio/rules/{rule_id}")
 def get_rule_details(rule_id: str) -> Dict[str, Any]:
-    """Get full details of a single unified rule."""
+    """Get full details of a single unified rule (Public Read-Only)."""
     rule = get_rule_by_id(rule_id)
     if not rule:
         raise HTTPException(status_code=404, detail=f"قاعدة الكشف [{rule_id}] غير موجودة.")
@@ -174,8 +175,11 @@ def get_rule_details(rule_id: str) -> Dict[str, Any]:
 
 
 @router.post("/rules-studio/parse-scenario")
-def parse_scenario(payload: ScenarioParseRequest) -> Dict[str, Any]:
-    """Natural Language Scenario Builder: transforms analyst narrative into a Unified Rule."""
+def parse_scenario(
+    payload: ScenarioParseRequest,
+    current_user: User = Depends(require_permission("rule.create")),
+) -> Dict[str, Any]:
+    """Natural Language Scenario Builder: requires analyst or admin permission."""
     try:
         draft_rule = parse_natural_language_scenario(payload.scenario_text)
         return {
@@ -189,13 +193,18 @@ def parse_scenario(payload: ScenarioParseRequest) -> Dict[str, Any]:
 
 
 @router.post("/rules-studio/rules")
-def save_rule(payload: RuleSaveRequest) -> Dict[str, Any]:
-    """Save or update a rule draft with versioning."""
+def save_rule(
+    payload: RuleSaveRequest,
+    current_user: User = Depends(require_permission("rule.create")),
+) -> Dict[str, Any]:
+    """Save or update a rule draft with versioning (analyst or admin only)."""
     try:
         res = save_or_update_rule(
             rule_dict=payload.rule,
-            user_id=1,
-            user_name="محلل مكافحة الاحتيال"
+            user_id=current_user.id,
+            user_name=current_user.full_name,
+            change_summary=payload.change_summary,
+            change_reason=payload.change_reason,
         )
         return res
     except Exception as e:
@@ -204,8 +213,12 @@ def save_rule(payload: RuleSaveRequest) -> Dict[str, Any]:
 
 
 @router.post("/rules-studio/rules/{rule_id}/simulate")
-def run_simulation(rule_id: str, payload: Optional[SimulationRequest] = None) -> Dict[str, Any]:
-    """Execute the 6-case logic simulation suite for the rule."""
+def run_simulation(
+    rule_id: str,
+    payload: Optional[SimulationRequest] = None,
+    current_user: User = Depends(require_permission("rule.test")),
+) -> Dict[str, Any]:
+    """Execute the 6-case logic simulation suite for the rule (analyst or admin only)."""
     rule = get_rule_by_id(rule_id)
     if not rule:
         raise HTTPException(status_code=404, detail=f"قاعدة الكشف [{rule_id}] غير موجودة.")
@@ -216,14 +229,19 @@ def run_simulation(rule_id: str, payload: Optional[SimulationRequest] = None) ->
     # If all logic passed and status is draft, advance status to simulation
     if results.get("all_logic_passed") and rule.get("status") == "draft":
         rule["status"] = "simulation"
-        save_or_update_rule(rule, change_summary="اجتياز المحاكاة المنطقية للسيناريوهات الستة بنجاح.")
+        save_or_update_rule(
+            rule,
+            user_id=current_user.id,
+            user_name=current_user.full_name,
+            change_summary="اجتياز المحاكاة المنطقية للسيناريوهات الستة بنجاح."
+        )
 
     return results
 
 
 @router.get("/rules-studio/environments")
 def get_environments_registry() -> Dict[str, Any]:
-    """Return the System Capability Registry with real technical capabilities & limitations."""
+    """Return the System Capability Registry with real technical capabilities & limitations (Public)."""
     return {
         "environments": SYSTEM_CAPABILITY_REGISTRY,
         "total": len(SYSTEM_CAPABILITY_REGISTRY),
@@ -232,16 +250,23 @@ def get_environments_registry() -> Dict[str, Any]:
 
 
 @router.post("/rules-studio/recommend-deployment")
-def evaluate_deployment(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """Advise the best deployment environment based on verified capabilities."""
+def evaluate_deployment(
+    payload: Dict[str, Any],
+    current_user: User = Depends(require_permission("rule.create")),
+) -> Dict[str, Any]:
+    """Advise the best deployment environment based on verified capabilities (analyst or admin)."""
     rule = payload.get("rule", payload)
     advice = advise_deployment(rule)
     return advice
 
 
 @router.post("/rules-studio/rules/{rule_id}/governance")
-def update_rule_governance(rule_id: str, payload: GovernanceUpdateRequest) -> Dict[str, Any]:
-    """Update rule lifecycle status with audit justification.
+def update_rule_governance(
+    rule_id: str,
+    payload: GovernanceUpdateRequest,
+    current_user: User = Depends(require_permission("rule.approve")),
+) -> Dict[str, Any]:
+    """Update rule lifecycle status with audit justification (Admin only).
     
     CRITICAL INVARIANT:
     'approved_externally' CANNOT be granted automatically without external documented reference.
@@ -266,7 +291,7 @@ def update_rule_governance(rule_id: str, payload: GovernanceUpdateRequest) -> Di
     history.append({
         "version": gov.get("current_version", "1.0.0"),
         "timestamp": now,
-        "author": payload.reviewer_name or "المراجع",
+        "author": current_user.full_name or payload.reviewer_name or "المراجع",
         "change_summary": f"تغيير حالة الحوكمة من [{old_status}] إلى [{payload.new_status}].",
         "reason": payload.reason
     })
@@ -282,7 +307,13 @@ def update_rule_governance(rule_id: str, payload: GovernanceUpdateRequest) -> Di
         }
 
     rule["governance"] = gov
-    save_or_update_rule(rule, change_summary=f"تحديث حالة الحوكمة إلى {payload.new_status}", change_reason=payload.reason)
+    save_or_update_rule(
+        rule,
+        user_id=current_user.id,
+        user_name=current_user.full_name,
+        change_summary=f"تحديث حالة الحوكمة إلى {payload.new_status}",
+        change_reason=payload.reason
+    )
 
     return {
         "status": "success",

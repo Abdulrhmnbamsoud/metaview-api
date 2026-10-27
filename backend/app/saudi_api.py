@@ -725,11 +725,39 @@ def ingest_run(
 
 
 @router.get("/runtime")
-def runtime() -> Dict[str, Any]:
-    """Read-only deployment diagnostics (no secrets): deployed commit, DB/disk binding, scheduler state."""
+def runtime(
+    x_admin_token: Optional[str] = Header(None),
+    authorization: Optional[str] = Header(None),
+) -> Dict[str, Any]:
+    """Deployment diagnostics. Server paths are masked for public callers; full paths require admin authentication."""
+    is_admin = False
+    try:
+        _check_admin(x_admin_token, authorization, required_permission="system.manage")
+        is_admin = True
+    except Exception:
+        pass
+
     db_real = os.path.realpath(DB_PATH)
     data_real = os.path.realpath(DATA_DIR)
     in_data = db_real == data_real or db_real.startswith(data_real + os.sep)
+
+    if not is_admin:
+        # Sanitized, safe response for banking demo without internal server paths
+        return {
+            "commit": os.getenv("RENDER_GIT_COMMIT", "configured"),
+            "branch": os.getenv("RENDER_GIT_BRANCH", "render-deploy"),
+            "service": "metaview-api",
+            "on_render": bool(os.getenv("RENDER")),
+            "storage": {
+                "engine": "sqlite3",
+                "persisted": in_data,
+                "status": "healthy",
+            },
+            "security_hardened": True,
+            "access_mode": "public_viewer_readonly",
+            "scheduler_active": saudi_ingest.scheduler_info().get("running", True),
+        }
+
     disk: Dict[str, Any] = {"data_dir": DATA_DIR, "db_path": DB_PATH, "db_inside_data_dir": in_data}
     try:
         disk["data_dir_is_mount_point"] = os.path.ismount(data_real)
@@ -770,16 +798,37 @@ class XAnalyzeRequest(BaseModel):
 
 
 @router.post("/x/collect-public")
-async def collect_x_public_posts(handle: str = "K_H_AlMuzaini") -> Dict[str, Any]:
-    """Fetch and ingest public posts from an X profile without credentials using official public syndication."""
+async def collect_x_public_posts(
+    handle: str = "K_H_AlMuzaini",
+    x_admin_token: Optional[str] = Header(None),
+    authorization: Optional[str] = Header(None),
+) -> Dict[str, Any]:
+    """Fetch and ingest public posts from an X profile (admin only)."""
+    _check_admin(x_admin_token, authorization, required_permission="ingestion.trigger")
     from . import x_public_collector
     report = await x_public_collector.collect_and_store_x_posts(handle=handle)
     return report
 
 
 @router.post("/x/analyze-post")
-async def analyze_x_post(req: XAnalyzeRequest) -> Dict[str, Any]:
-    """Fetch, extract, classify and verify a specific public X post link."""
+async def analyze_x_post(
+    req: XAnalyzeRequest,
+    x_admin_token: Optional[str] = Header(None),
+    authorization: Optional[str] = Header(None),
+) -> Dict[str, Any]:
+    """Fetch, extract, classify and verify a specific public X post link with SSRF verification."""
+    # Validate SSRF
+    from .security_network import validate_url_for_ssrf
+    is_safe, reason = validate_url_for_ssrf(req.url)
+    if not is_safe:
+        raise HTTPException(status_code=400, detail=f"رفض الرابط لأسباب أمنية (SSRF): {reason}")
+
+    # Validate domain is actually X / Twitter
+    from urllib.parse import urlparse
+    host = (urlparse(req.url).hostname or "").lower()
+    if host not in ("x.com", "www.x.com", "twitter.com", "www.twitter.com", "mobile.twitter.com", "mobile.x.com"):
+        raise HTTPException(status_code=400, detail="الرابط المدخل يجب أن ينتمي إلى نطاق x.com أو twitter.com فقط.")
+
     from . import x_public_collector
     post, status, error = await x_public_collector.fetch_single_public_post(req.url)
     if not post:

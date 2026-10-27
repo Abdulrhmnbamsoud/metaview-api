@@ -1,5 +1,5 @@
 # backend/app/main.py
-from fastapi import FastAPI, Query, HTTPException
+from fastapi import FastAPI, Query, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional, Tuple, List, Dict, Any
 import os
@@ -19,21 +19,40 @@ from .ingest import ingest_once
 from .saudi_api import router as saudi_router
 from .saudi_ingest import start_scheduler as start_saudi_scheduler, run_startup_backfill
 
+from .security_middleware import (
+    SecurityHeadersMiddleware,
+    RequestSizeLimiterMiddleware,
+    RateLimiterMiddleware,
+    register_global_exception_handlers,
+)
+
 app = FastAPI(title=APP_NAME, version=APP_VERSION, description="Global News Intelligence API")
+
+# Banking-Grade Security Middlewares
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RequestSizeLimiterMiddleware)
+app.add_middleware(RateLimiterMiddleware)
+register_global_exception_handlers(app)
 
 origins = os.getenv("CORS_ORIGINS")
 if origins:
     allow_origins = [origin.strip() for origin in origins.split(",") if origin.strip()]
 else:
-    allow_origins = ["*"]
+    # Restrict default origins in development to local Vite/React servers
+    allow_origins = [
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:5173",
+        "https://metaview-frontend.onrender.com",
+    ]
 # Optional regex for origins whose hostname may vary (e.g. Render adds a random suffix).
-allow_origin_regex = os.getenv("CORS_ORIGIN_REGEX") or None
+allow_origin_regex = os.getenv("CORS_ORIGIN_REGEX") or r"^https://metaview-frontend(-[a-z0-9]+)?\.onrender\.com$"
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allow_origins,
     allow_origin_regex=allow_origin_regex,
-    allow_credentials=False,
-    allow_methods=["*"],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -191,7 +210,7 @@ def health():
         "status": "ok",
         "service": "metaview",
         "rows": row_count(),
-        "db_path": DB_PATH,
+        "db_path": "sqlite (persisted)",
         "time": datetime.now(timezone.utc).isoformat()
     }
 
@@ -250,10 +269,22 @@ def list_countries(lang: Optional[str] = Query(None, pattern="^(ar|en)$")):
     return [{"country": r["country"], "count": r["count"]} for r in rows]
 
 
+from .auth import User, require_permission
+from .security_network import validate_url_for_ssrf
+
+
 @app.post("/ingest/run")
 @app.post("/ingest-run")
-async def ingest_run(body: Optional[IngestRequest] = None):
+async def ingest_run(
+    body: Optional[IngestRequest] = None,
+    current_user: User = Depends(require_permission("ingestion.trigger")),
+):
     feeds = DEFAULT_SOURCES if (not body or not body.feeds) else body.feeds
+    if body and body.feeds:
+        for feed in body.feeds:
+            is_safe, reason = validate_url_for_ssrf(feed)
+            if not is_safe:
+                raise HTTPException(status_code=400, detail=f"رفض الرابط لأسباب أمنية (SSRF): {reason}")
     limit = MAX_ITEMS_PER_FEED if (not body) else int(body.limit_per_feed)
     allow_web = False if not body else bool(body.allow_web_scrape)
     return await ingest_once(feeds, limit_per_feed=limit, allow_web_image_scrape=allow_web)

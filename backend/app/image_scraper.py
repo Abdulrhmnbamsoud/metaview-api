@@ -50,36 +50,13 @@ BLOCKED_IP_NETWORKS = [
 ]
 
 
+from .security_network import validate_url_for_ssrf
+
+
 def is_safe_url(url: str) -> bool:
     """Verifies that the URL is public, uses HTTP/HTTPS, and avoids SSRF targets."""
-    if not url or not isinstance(url, str):
-        return False
-    try:
-        parsed = urlparse(url.strip())
-        if parsed.scheme not in ("http", "https"):
-            return False
-        hostname = parsed.hostname
-        if not hostname:
-            return False
-
-        # Disallow localhost directly
-        if hostname.lower() in ("localhost", "127.0.0.1", "::1", "metadata.google.internal"):
-            return False
-
-        # Resolve IP to check for private subnet targets
-        try:
-            ip_str = socket.gethostbyname(hostname)
-            ip_obj = ipaddress.ip_address(ip_str)
-            for net in BLOCKED_IP_NETWORKS:
-                if ip_obj in net:
-                    return False
-        except Exception:
-            # If resolution fails, don't allow
-            return False
-
-        return True
-    except Exception:
-        return False
+    safe, _ = validate_url_for_ssrf(url)
+    return safe
 
 
 def is_candidate_image(url: str) -> bool:

@@ -133,13 +133,18 @@ async def login(payload: LoginPayload, request: Request, response: Response) -> 
         raw_token = create_session(user.id, ip_address=client_ip, user_agent=user_agent)
 
         # Set secure HttpOnly cookie
+        is_https = (
+            request.url.scheme == "https"
+            or request.headers.get("x-forwarded-proto") == "https"
+            or bool(os.getenv("RENDER"))
+        )
         response.set_cookie(
             key="metaview_session",
             value=raw_token,
             httponly=True,
             samesite="lax",
             max_age=7 * 24 * 3600,
-            secure=False,  # Set to True on production HTTPS
+            secure=is_https,
         )
 
         log_audit(

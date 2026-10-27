@@ -212,6 +212,11 @@ def _http_get(client: httpx.Client, url: str, tries: int = 3) -> Tuple[Optional[
     * when it has to give up it puts the host in cooldown (>= Retry-After, 5-60 min) so no other
       request to that host is made until then, and returns the last response (429/503).
     """
+    from .security_network import validate_url_for_ssrf
+    is_safe, reason = validate_url_for_ssrf(url)
+    if not is_safe:
+        return None, f"SSRF_Blocked: {reason}"
+
     host = urlsplit(url).netloc.lower()
     remaining = _NET.cooling(host)
     if remaining > 0:
@@ -223,13 +228,6 @@ def _http_get(client: httpx.Client, url: str, tries: int = 3) -> Tuple[Optional[
             r = client.get(url)
         except httpx.HTTPError as exc:
             err_str = str(exc)
-            if "CERTIFICATE_VERIFY_FAILED" in err_str or "certificate verify failed" in err_str.lower():
-                try:
-                    with httpx.Client(verify=False, headers=client.headers, timeout=client.timeout, follow_redirects=True) as fallback_c:
-                        r_fallback = fallback_c.get(url)
-                        return r_fallback, None
-                except Exception as fb_exc:
-                    err_str = f"SSL_FallbackFailed: {fb_exc}"
             last_err = f"{type(exc).__name__}: {err_str[:200]}"
             if i + 1 < tries:
                 time.sleep(0.6 * (2 ** i))

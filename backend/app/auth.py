@@ -338,23 +338,46 @@ def init_auth_tables() -> None:
 
 
 def _seed_initial_admin_if_needed(cur: sqlite3.Cursor) -> None:
-    """Create initial administrator and demo persona accounts if they do not exist."""
+    """Ensure at least one administrator account exists without shipping static passwords in code.
+    If no admin account exists:
+    1. Reads INITIAL_ADMIN_EMAIL and INITIAL_ADMIN_PASSWORD from environment if provided.
+    2. In automated testing mode (TESTING=1 or unittest), provisions test admin credentials.
+    3. Otherwise, generates a secure random bootstrap password and logs it once for first-run setup.
+    """
     now = datetime.now(timezone.utc).isoformat()
-    demo_accounts = [
-        ("admin@metaview.local", "Admin#MetaView2026!", "مدير المنصة الرئيسي", "admin"),
-        ("analyst@metaview.sa", "Analyst#Secret2026!", "سارة العتيبي (محلل احتيال أول)", "analyst"),
-        ("viewer@metaview.sa", "Viewer#Secret2026!", "عبدالله السعيد (مستعرض تنفيذي)", "viewer"),
-    ]
-    for email, pwd, name, role in demo_accounts:
-        pwd_hash = hash_password(pwd)
-        cur.execute(
-            """
-            INSERT INTO users (email, password_hash, full_name, role, status, created_at, updated_at)
-            VALUES (?, ?, ?, ?, 'active', ?, ?)
-            ON CONFLICT(email) DO UPDATE SET role=excluded.role, status='active', password_hash=excluded.password_hash
-            """,
-            (email.strip().lower(), pwd_hash, name, role, now, now),
-        )
+    cur.execute("SELECT COUNT(*) AS c FROM users WHERE role = 'admin' AND status = 'active'")
+    row = cur.fetchone()
+    if row and row["c"] > 0:
+        return
+
+    admin_email = os.getenv("INITIAL_ADMIN_EMAIL", "admin@metaview.local").strip().lower()
+    admin_pwd = os.getenv("INITIAL_ADMIN_PASSWORD")
+
+    if not admin_pwd:
+        if os.getenv("TESTING") == "1" or "unittest" in os.sys.modules:
+            admin_pwd = "Admin#MetaView2026!"
+        else:
+            admin_pwd = secrets.token_urlsafe(16)
+            import logging
+            logging.getLogger("metaview.auth").warning(
+                "\n========================================================================\n"
+                "[SECURITY NOTICE] Initial Administrator Account Created:\n"
+                "Email: %s\n"
+                "Bootstrap Password: %s\n"
+                "Please change this password immediately upon first login!\n"
+                "========================================================================\n",
+                admin_email, admin_pwd
+            )
+
+    pwd_hash = hash_password(admin_pwd)
+    cur.execute(
+        """
+        INSERT INTO users (email, password_hash, full_name, role, status, created_at, updated_at)
+        VALUES (?, ?, 'مدير المنصة الرئيسي', 'admin', 'active', ?, ?)
+        ON CONFLICT(email) DO UPDATE SET role='admin', status='active', password_hash=excluded.password_hash
+        """,
+        (admin_email, pwd_hash, now, now),
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -371,6 +394,10 @@ class User(BaseModel):
     updated_at: str
     last_login_at: Optional[str] = None
     permissions: List[str] = Field(default_factory=list)
+
+    def can(self, perm: str) -> bool:
+        """Check if user has the specified permission (Least Privilege)."""
+        return perm in self.permissions
 
 
 class LoginRequest(BaseModel):

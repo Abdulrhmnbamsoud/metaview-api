@@ -28,6 +28,10 @@ services:
         value: "6"
       - key: ADMIN_TOKEN   # protects POST /saudi-fraud/ingest/run; set the value in the Render dashboard
         sync: false
+      - key: INITIAL_ADMIN_EMAIL   # optional: custom email for first admin
+        sync: false
+      - key: INITIAL_ADMIN_PASSWORD # optional: custom password for first admin
+        sync: false
     disk:
       name: metaview-data
       mountPath: /var/app/data
@@ -43,6 +47,22 @@ services:
     envVars:
       - key: VITE_API_URL
         value: https://metaview-backend.onrender.com
+    headers:
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      - path: /*
+        name: Permissions-Policy
+        value: camera=(), microphone=(), geolocation=(), payment=()
+      - path: /*
+        name: Strict-Transport-Security
+        value: max-age=31536000; includeSubDomains
     routes:
       - type: rewrite
         source: /*

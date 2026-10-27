@@ -23,8 +23,14 @@ def strip_html_tags(s: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
+from .security_network import safe_fetch_url, validate_url_for_ssrf
+
+
 async def fetch_feed(client: httpx.AsyncClient, url: str) -> Dict[str, Any]:
-    r = await client.get(url)
+    is_safe, reason = validate_url_for_ssrf(url)
+    if not is_safe:
+        raise ValueError(f"رفض رابط التغذية لأسباب أمنية (SSRF): {reason}")
+    r = await safe_fetch_url(url, timeout_sec=REQUEST_TIMEOUT)
     r.raise_for_status()
     parsed = feedparser.parse(r.text)
     return {"url": url, "parsed": parsed}

@@ -59,21 +59,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
 
-      // Default initial login as Admin if no active session, so user immediately explores the platform
-      try {
-        const res = await apiService.login({
-          email: TEST_ACCOUNTS.admin.email,
-          password: TEST_ACCOUNTS.admin.pass,
-        });
-        if (mounted) {
-          setUser(res.user);
-        }
-      } catch (err) {
-        console.warn('Initial admin auto-login failed:', err);
-      } finally {
-        if (mounted) {
-          setLoading(false);
-        }
+      // Default state: Public Viewer (unauthenticated read-only)
+      if (mounted) {
+        setUser(null);
+        setLoading(false);
       }
     };
 
