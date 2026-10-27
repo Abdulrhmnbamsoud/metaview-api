@@ -495,7 +495,7 @@ export const ExecutiveOverview: React.FC = () => {
   };
 
   if (loading && !ov) {
-    return <LoadingBlock label="جارٍ جلب وتحديث مركز الرصد العالمي للاحتيال المالي…" />;
+    return <LoadingBlock label="MetaView 3 — ما وراء الاحتيال: جارٍ جلب وتحديث البيانات…" />;
   }
 
   if (error && !ov) {
@@ -529,18 +529,27 @@ WHERE t.channel IN ('IPM_SARIE', 'ATM_WITHDRAWAL', 'POS')
       <div className="bg-white dark:bg-[#0f172a] rounded-2xl border border-stone-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs space-y-4">
         {/* Title, Subtitle, and Scope Switcher */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-              <h1 className="text-xl sm:text-2xl font-black text-stone-900 dark:text-white tracking-tight">
-                مركز الرصد العالمي للاحتيال المالي
-              </h1>
+              <span className="font-mono text-xs sm:text-sm font-extrabold tracking-wider text-blue-600 dark:text-blue-400 uppercase">
+                FINANCIAL FRAUD INTELLIGENCE
+              </span>
               <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 font-mono">
                 LIVE INTEL
               </span>
             </div>
-            <p className="text-xs sm:text-sm text-stone-500 dark:text-slate-400">
-              رصد مستمر لآخر مستجدات الاحتيال المالي، الحوادث الموثقة، والتحذيرات المصرفية من مصادر معتمدة.
+            <div className="flex items-baseline gap-2.5 flex-wrap">
+              <span className="text-2xl sm:text-3xl font-black text-stone-900 dark:text-white tracking-tight">
+                MetaView 3
+              </span>
+              <span className="text-stone-300 dark:text-slate-700 text-xl font-light">|</span>
+              <h1 className="text-xl sm:text-2xl font-black text-blue-600 dark:text-blue-400">
+                ما وراء الاحتيال
+              </h1>
+            </div>
+            <p className="text-xs sm:text-sm font-medium text-stone-600 dark:text-slate-300">
+              نرصد التحولات، ونربط الأنماط، ونكشف ما وراء الوقائع.
             </p>
           </div>
 
