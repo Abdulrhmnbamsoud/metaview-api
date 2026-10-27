@@ -357,17 +357,14 @@ def _seed_initial_admin_if_needed(cur: sqlite3.Cursor) -> None:
         if os.getenv("TESTING") == "1" or "unittest" in os.sys.modules:
             admin_pwd = "Admin#MetaView2026!"
         else:
-            admin_pwd = secrets.token_urlsafe(16)
+            # Banking hardening: Never generate or print unhashed passwords in application logs!
+            # If INITIAL_ADMIN_PASSWORD is missing in production, fail-closed without seeding an admin.
             import logging
             logging.getLogger("metaview.auth").warning(
-                "\n========================================================================\n"
-                "[SECURITY NOTICE] Initial Administrator Account Created:\n"
-                "Email: %s\n"
-                "Bootstrap Password: %s\n"
-                "Please change this password immediately upon first login!\n"
-                "========================================================================\n",
-                admin_email, admin_pwd
+                "[SECURITY] INITIAL_ADMIN_PASSWORD is not set in environment. "
+                "Automatic admin provisioning is safely disabled (fail-closed)."
             )
+            return
 
     pwd_hash = hash_password(admin_pwd)
     cur.execute(
@@ -516,7 +513,7 @@ def validate_session(raw_token: str) -> Optional[User]:
         cur = con.cursor()
         cur.execute(
             """
-            SELECT s.id AS session_id, s.expires_at, u.*
+            SELECT s.id AS session_id, s.expires_at, s.last_active_at, u.*
             FROM sessions s
             JOIN users u ON u.id = s.user_id
             WHERE s.token_hash = ?
@@ -532,6 +529,21 @@ def validate_session(raw_token: str) -> Optional[User]:
             cur.execute("DELETE FROM sessions WHERE id = ?", (row["session_id"],))
             con.commit()
             return None
+
+        # Check session inactivity idle timeout (default 12 hours)
+        idle_limit_hours = float(os.getenv("SESSION_IDLE_TIMEOUT_HOURS", "12"))
+        last_active = row["last_active_at"]
+        if last_active:
+            try:
+                dt_last = datetime.fromisoformat(last_active)
+                if dt_last.tzinfo is None:
+                    dt_last = dt_last.replace(tzinfo=timezone.utc)
+                if (datetime.now(timezone.utc) - dt_last).total_seconds() > idle_limit_hours * 3600:
+                    cur.execute("DELETE FROM sessions WHERE id = ?", (row["session_id"],))
+                    con.commit()
+                    return None
+            except Exception:
+                pass
 
         # Check if user is suspended or revoked
         if row["status"] != "active":

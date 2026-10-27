@@ -24,6 +24,8 @@ from typing import Optional, Set, Tuple
 from urllib.parse import urlparse
 
 import httpx
+import httpcore
+from httpcore._backends.anyio import AnyIOBackend
 
 from .config import REQUEST_TIMEOUT, USER_AGENT
 
@@ -136,6 +138,48 @@ def validate_url_for_ssrf(url: str) -> Tuple[bool, Optional[str]]:
     return True, None
 
 
+class SSRFSafeNetworkBackend(AnyIOBackend):
+    """Enforces SSRF validation directly at the socket TCP connection level.
+    Intercepts the connection after resolution to check the REAL peer IP address,
+    preventing DNS rebinding / TOCTOU attacks.
+    """
+    async def connect_tcp(
+        self,
+        host: str,
+        port: int,
+        timeout: Optional[float] = None,
+        local_address: Optional[str] = None,
+        socket_options = None,
+    ):
+        stream = await super().connect_tcp(
+            host, port, timeout=timeout, local_address=local_address, socket_options=socket_options
+        )
+        # Check the actual connected socket peer IP address
+        raw_sock = getattr(stream, "_raw_socket", None)
+        if raw_sock is not None:
+            try:
+                peer = raw_sock.getpeername()
+                peer_ip = ipaddress.ip_address(peer[0])
+                if is_ip_blocked(peer_ip):
+                    await stream.aclose()
+                    raise PermissionError(f"الاتصال محظور لأسباب أمنية (SSRF Socket Intercept: {peer_ip})")
+            except Exception:
+                await stream.aclose()
+                raise
+        return stream
+
+
+class SSRFSafeTransport(httpx.AsyncHTTPTransport):
+    """HTTPX Transport backed by SSRFSafeNetworkBackend."""
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._pool = httpcore.AsyncConnectionPool(
+            network_backend=SSRFSafeNetworkBackend(),
+            ssl_context=self._pool._ssl_context,
+            retries=self._pool._retries,
+        )
+
+
 async def safe_fetch_url(
     url: str,
     timeout_sec: float = REQUEST_TIMEOUT,
@@ -159,9 +203,11 @@ async def safe_fetch_url(
         client_headers.update(headers)
 
     timeout = httpx.Timeout(timeout_sec, connect=min(timeout_sec, 5.0))
+    transport = SSRFSafeTransport(verify=True)
 
     # We manage redirects manually so we can validate each redirect hop against SSRF
     async with httpx.AsyncClient(
+        transport=transport,
         headers=client_headers,
         timeout=timeout,
         follow_redirects=False,

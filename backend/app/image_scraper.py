@@ -157,13 +157,9 @@ async def scrape_article_webpage_image(article_url: str, client: Optional[httpx.
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     }
 
-    own_client = False
-    if client is None:
-        client = httpx.AsyncClient(timeout=3.5, follow_redirects=True, headers=headers)
-        own_client = True
-
+    from .security_network import safe_fetch_url
     try:
-        resp = await client.get(article_url)
+        resp = await safe_fetch_url(article_url, timeout_sec=3.5, max_bytes=200000, headers=headers)
         if resp.status_code != 200:
             return None
 
@@ -246,6 +242,9 @@ def fetch_x_profile(url: str, max_pages: int = 1) -> List[Dict]:
 
     for page in range(max_pages):
         logger.debug("Fetching X page %s: %s", page + 1, next_url)
+        if not is_safe_url(next_url):
+            logger.error("Blocked unsafe X URL for SSRF: %s", next_url)
+            break
         try:
             resp = httpx.get(next_url, headers=HEADERS, timeout=10.0)
         except Exception as e:

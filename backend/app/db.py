@@ -61,6 +61,44 @@ def backup_database(tag: str = "manual") -> Optional[str]:
         return None
 
 
+def restore_database(backup_path: str, target_db_path: Optional[str] = None) -> bool:
+    """Restores the database from a backup copy using the sqlite online-backup API.
+    Validates backup integrity before executing the restore.
+    """
+    import logging
+    import os
+    target = target_db_path or DB_PATH
+    if not os.path.exists(backup_path) or os.path.getsize(backup_path) == 0:
+        logging.getLogger("metaview.db").error("Restore failed: backup file does not exist or is empty: %s", backup_path)
+        return False
+    try:
+        # 1. Verify backup file is a valid sqlite database
+        test_con = sqlite3.connect(backup_path)
+        try:
+            test_cur = test_con.cursor()
+            test_cur.execute("PRAGMA quick_check")
+            result = test_cur.fetchone()
+            if not result or result[0] != "ok":
+                logging.getLogger("metaview.db").error("Restore failed: backup integrity check failed")
+                return False
+        finally:
+            test_con.close()
+
+        # 2. Consistent online restore into target
+        src = sqlite3.connect(backup_path)
+        dst = sqlite3.connect(target)
+        try:
+            src.backup(dst)
+        finally:
+            dst.close()
+            src.close()
+        logging.getLogger("metaview.db").info("Database successfully restored from %s to %s", backup_path, target)
+        return True
+    except Exception:
+        logging.getLogger("metaview.db").exception("Restore operation failed")
+        return False
+
+
 def _needs_incident_migration() -> bool:
     """True when an existing, non-empty DB predates the incident layer (no ``incidents`` table, or a
     threat_intel table without ``content_type``). A brand-new/empty DB needs no backup."""
