@@ -1,6 +1,5 @@
 // src/components/BankingComplianceModal.tsx
-import React from 'react';
-import { X, ShieldCheck, Lock, AlertTriangle, FileText, CheckCircle2 } from 'lucide-react';
+import { X, ShieldCheck, Lock, FileText, CheckCircle2 } from 'lucide-react';
 
 interface BankingComplianceModalProps {
   isOpen: boolean;
@@ -61,31 +60,19 @@ export const BankingComplianceModal: React.FC<BankingComplianceModalProps> = ({ 
             </p>
             <ul className="list-disc pr-5 space-y-1 text-emerald-950 dark:text-emerald-200/90">
               <li>لا يتم جمع، تخزين، أو معالجة أي أرقام حسابات بنكية، آيبان (IBAN)، أو بطاقات دفع حقيقية لعملاء البنوك.</li>
-              <li>البيانات المعروضة في سيناريوهات المحاكاة وقواعد الكشف هي أرقام تجريبية وافتراضية لأغراض التدريب الهندسي فقط.</li>
+              <li>كافة المؤشرات والإحصاءات المعروضة في المنصة هي بيانات تحليلية عامة مبنية على وقائع منشورة علناً.</li>
               <li>المنصة لا ترتبط بقواعد بيانات العملاء الداخلية لأي بنك أو مؤسسة مالية.</li>
             </ul>
           </div>
 
-          {/* Section 3: Detection Rules & Simulation Scope */}
-          <div className="p-3.5 rounded-xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-900/40 space-y-1.5">
-            <div className="flex items-center gap-2 font-bold text-amber-900 dark:text-amber-200 text-sm">
-              <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
-              <span>3. حدود استخدام وتطبيق قواعد الكشف (Rule Studio)</span>
-            </div>
-            <p>
-              قواعد الكشف الهندسية والتوصيات التقنية المعروضة في المنصة تمثل مسودات منطقية إرشادية.
-              تطبيق أي قاعدة كشف في بيئة العمليات المصرفية الحقيقية (مثل أنظمة SAS أو غرف العمليات المشتركة) يتطلب اتباع دورة الاعتماد الرسمية المعتمدة لدى إدارات مكافحة الاحتيال وإدارة المخاطر في كل بنك، واختبارها على معاملات حقيقية في بيئة تجريبية معزولة (Sandbox).
-            </p>
-          </div>
-
-          {/* Section 4: Public View-Only Mode */}
+          {/* Section 3: Public View-Only Mode */}
           <div className="p-3.5 rounded-xl bg-stone-100/70 dark:bg-slate-800/50 border border-stone-200 dark:border-slate-700/60 space-y-1.5">
             <div className="flex items-center gap-2 font-bold text-stone-900 dark:text-slate-200 text-sm">
               <CheckCircle2 className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />
-              <span>4. وضع المستعرض العام (Public Read-Only Mode)</span>
+              <span>3. وضع المستعرض العام (Public Read-Only Mode)</span>
             </div>
             <p>
-              تتيح المنصة للمختصين استعراض كافة التحليلات، الإحصاءات العامة، ومؤشرات الأنماط بصيغة القراءة فقط دون الحاجة إلى منحهم صلاحيات إدارية. تظل أدوات الإدارة وتعديل القواعد وتشغيل الجلب محمية ومحصورة في الخوادم الخلفية.
+              تتيح المنصة للمختصين استعراض كافة التحليلات، الإحصاءات العامة، ومؤشرات الأنماط بصيغة القراءة فقط دون الحاجة إلى منحهم صلاحيات إدارية. تظل أدوات الإدارة وتشغيل الجلب محمية ومحصورة في الخوادم الخلفية.
             </p>
           </div>
         </div>
