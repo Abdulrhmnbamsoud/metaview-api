@@ -145,8 +145,9 @@ def _where(category: Optional[str], source: Optional[str], q: Optional[str],
         params.append(bank)
 
     if q:
+        q_clean = str(q).strip()[:200]
         clauses.append("(t.title LIKE ? OR t.description LIKE ? OR a.headline LIKE ? OR t.fraud_category LIKE ? OR t.fraud_category_ar LIKE ? OR t.channels LIKE ?)")
-        params += [f"%{q}%"] * 6
+        params += [f"%{q_clean}%"] * 6
 
     if date_from:
         clauses.append("a.published_at >= ?")
@@ -768,15 +769,15 @@ def runtime(
         disk["data_dir_on_separate_device"] = disk["data_dir_device"] != disk["root_device"]
         disk["db_size_bytes"] = os.path.getsize(db_real) if os.path.exists(db_real) else None
         disk["free_bytes"] = shutil.disk_usage(data_real).free
-    except OSError as e:  # pragma: no cover
-        disk["error"] = str(e)
+    except OSError:  # pragma: no cover
+        disk["error"] = "storage_stat_unavailable"
     journal = None
     try:
         con = get_db()
         journal = con.execute("PRAGMA journal_mode").fetchone()[0]
         con.close()
-    except Exception as e:  # pragma: no cover
-        journal = f"error: {e}"
+    except Exception:  # pragma: no cover
+        journal = "unavailable"
     return {
         "commit": os.getenv("RENDER_GIT_COMMIT"),
         "branch": os.getenv("RENDER_GIT_BRANCH"),
@@ -796,19 +797,19 @@ def runtime(
 # --------------------------------------------------------------------------- #
 
 class XAnalyzeRequest(BaseModel):
-    url: str
+    url: str = Field(..., min_length=10, max_length=500)
 
 
 @router.post("/x/collect-public")
 async def collect_x_public_posts(
-    handle: str = "K_H_AlMuzaini",
+    handle: str = Query("K_H_AlMuzaini", min_length=1, max_length=30, pattern=r"^@?[A-Za-z0-9_]{1,20}$"),
     x_admin_token: Optional[str] = Header(None),
     authorization: Optional[str] = Header(None),
 ) -> Dict[str, Any]:
     """Fetch and ingest public posts from an X profile (admin only)."""
     _check_admin(x_admin_token, authorization, required_permission="ingestion.trigger")
     from . import x_public_collector
-    report = await x_public_collector.collect_and_store_x_posts(handle=handle)
+    report = await x_public_collector.collect_and_store_x_posts(handle=handle.lstrip("@"))
     return report
 
 

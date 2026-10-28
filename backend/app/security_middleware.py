@@ -59,8 +59,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         # 4. Restrict Hardware/Browser Features
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), payment=()"
 
-        # 5. Cross-Domain policies
+        # 5. Cross-Domain policies & Browser Isolation
         response.headers["X-Permitted-Cross-Domain-Policies"] = "none"
+        response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+        response.headers["X-DNS-Prefetch-Control"] = "off"
 
         # 6. HSTS (Strict-Transport-Security) for HTTPS / Cloud Production
         is_https = (
@@ -79,16 +81,20 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "font-src 'self' https://fonts.gstatic.com data:",
             "img-src 'self' data: https: blob:",
             "connect-src 'self' https://metaview-backend.onrender.com https://metaview-frontend.onrender.com http://localhost:8000 http://localhost:5173",
+            "object-src 'none'",
             "frame-ancestors 'none'",
             "base-uri 'self'",
             "form-action 'self'",
         ]
         response.headers["Content-Security-Policy"] = "; ".join(csp_directives)
 
-        # 8. Dynamic API Cache-Control (prevent stale 304 or browser caching of analytical data)
+        # 8. Dynamic API Cache-Control (prevent stale 304 or browser caching of analytical or sensitive data)
         path = request.url.path
         if (
             path.startswith("/api")
+            or path.startswith("/auth")
+            or path.startswith("/team")
+            or path.startswith("/workspace")
             or path.startswith("/fraud-intelligence")
             or path.startswith("/saudi-fraud")
             or path.startswith("/rules-studio")
@@ -160,6 +166,14 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
 
         key = f"{client_ip}:{'mut' if is_mutating else 'read'}"
         now = time.time()
+
+        # Prevent unbounded memory growth under distributed IP floods
+        if len(_IP_REQUEST_LOGS) > 10000:
+            stale = [k for k, ts in _IP_REQUEST_LOGS.items() if not ts or (now - ts[-1]) > window]
+            for k in stale:
+                _IP_REQUEST_LOGS.pop(k, None)
+            if len(_IP_REQUEST_LOGS) > 10000:
+                _IP_REQUEST_LOGS.clear()
 
         timestamps = _IP_REQUEST_LOGS.get(key, [])
         # Evict timestamps outside the sliding window

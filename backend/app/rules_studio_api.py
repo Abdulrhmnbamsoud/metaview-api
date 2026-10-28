@@ -48,13 +48,13 @@ router = APIRouter(tags=["rules-studio"])
 # --------------------------------------------------------------------------- #
 
 class ScenarioParseRequest(BaseModel):
-    scenario_text: str = Field(..., min_length=5, description="Natural language scenario in Arabic or English")
+    scenario_text: str = Field(..., min_length=5, max_length=5000, description="Natural language scenario in Arabic or English")
 
 
 class RuleSaveRequest(BaseModel):
     rule: Dict[str, Any]
-    change_summary: Optional[str] = "تحديث بيانات القاعدة"
-    change_reason: Optional[str] = "مراجعة وتطوير منطق الكشف"
+    change_summary: Optional[str] = Field(default="تحديث بيانات القاعدة", max_length=500)
+    change_reason: Optional[str] = Field(default="مراجعة وتطوير منطق الكشف", max_length=500)
 
 
 class SimulationRequest(BaseModel):
@@ -63,8 +63,8 @@ class SimulationRequest(BaseModel):
 
 class GovernanceUpdateRequest(BaseModel):
     new_status: str = Field(..., pattern="^(draft|evidence_review|logic_review|simulation|ready_for_bank_testing|approved_externally|rejected|needs_revision)$")
-    reason: str = Field(..., min_length=3)
-    reviewer_name: Optional[str] = "المراجع المعتمد"
+    reason: str = Field(..., min_length=3, max_length=1000)
+    reviewer_name: Optional[str] = Field(default="المراجع المعتمد", max_length=120)
     external_approval: Optional[Dict[str, Any]] = None
 
 
@@ -189,7 +189,7 @@ def parse_scenario(
         }
     except Exception as e:
         log.exception("Scenario parsing error: %s", e)
-        raise HTTPException(status_code=400, detail=f"فشل استخراج عناصر السيناريو: {str(e)}")
+        raise HTTPException(status_code=400, detail="فشل استخراج عناصر السيناريو. يرجى التحقق من النص المدخل والمحاولة مجدداً.")
 
 
 @router.post("/rules-studio/rules")
@@ -209,7 +209,7 @@ def save_rule(
         return res
     except Exception as e:
         log.exception("Failed to save rule: %s", e)
-        raise HTTPException(status_code=500, detail=f"تعذر حفظ القاعدة: {str(e)}")
+        raise HTTPException(status_code=500, detail="تعذر حفظ القاعدة. تم تسجيل الخطأ للمراجعة التقنية.")
 
 
 @router.post("/rules-studio/rules/{rule_id}/simulate")

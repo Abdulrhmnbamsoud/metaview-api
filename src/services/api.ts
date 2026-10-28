@@ -114,12 +114,12 @@ let _sessionToken: string | null = null;
 export const setSessionToken = (token: string | null) => {
   _sessionToken = token;
   try {
+    // Always purge legacy persistent localStorage token to minimize XSS exposure window
+    localStorage.removeItem('metaview_session_token');
     if (token) {
       sessionStorage.setItem('metaview_session_token', token);
-      localStorage.setItem('metaview_session_token', token);
     } else {
       sessionStorage.removeItem('metaview_session_token');
-      localStorage.removeItem('metaview_session_token');
     }
   } catch {}
 };
@@ -127,7 +127,16 @@ export const setSessionToken = (token: string | null) => {
 export const getSessionToken = (): string | null => {
   if (!_sessionToken) {
     try {
-      _sessionToken = sessionStorage.getItem('metaview_session_token') || localStorage.getItem('metaview_session_token');
+      _sessionToken = sessionStorage.getItem('metaview_session_token');
+      // Migrate one-time if a legacy token exists in localStorage
+      if (!_sessionToken) {
+        const legacy = localStorage.getItem('metaview_session_token');
+        if (legacy) {
+          _sessionToken = legacy;
+          sessionStorage.setItem('metaview_session_token', legacy);
+          localStorage.removeItem('metaview_session_token');
+        }
+      }
     } catch {
       _sessionToken = null;
     }
@@ -143,7 +152,9 @@ export interface FetchOptions extends RequestInit {
 
 async function requestWithRetry<T>(endpoint: string, options: FetchOptions = {}): Promise<T> {
   const { timeoutMs = DEFAULT_TIMEOUT_MS, retries = 2, forceRefresh = false, ...fetchOptions } = options;
-  let url = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint}`;
+  // Guard against protocol-relative open redirect (e.g. //evil.com)
+  const safeEndpoint = endpoint.startsWith('//') ? `/${endpoint.replace(/^\/+/, '')}` : endpoint;
+  let url = safeEndpoint.startsWith('http') ? safeEndpoint : `${API_BASE_URL}${safeEndpoint}`;
   if (forceRefresh) {
     const separator = url.includes('?') ? '&' : '?';
     url = `${url}${separator}_t=${Date.now()}`;
@@ -172,11 +183,13 @@ async function requestWithRetry<T>(endpoint: string, options: FetchOptions = {})
 
       const response = await fetch(url, {
         ...fetchOptions,
+        credentials: 'include',
         cache: forceRefresh ? 'no-store' : fetchOptions.cache,
         signal: controller.signal,
         headers: {
           'Accept': 'application/json',
           'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
           ...authHeader,
           ...cacheHeaders,
           ...(fetchOptions.headers || {}),

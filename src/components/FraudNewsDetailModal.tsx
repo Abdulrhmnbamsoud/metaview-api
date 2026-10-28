@@ -16,6 +16,7 @@ import { SaudiFraudItem } from '../types/saudi';
 import { apiService } from '../services/api';
 import { Chip, EpistemicChip, fmtDay } from './ui';
 import { getNewsImage } from '../utils/newsImages';
+import { sanitizeExternalUrl } from '../utils/security';
 
 const COUNTRY_MAP: Record<string, { name: string; flag: string }> = {
   SA: { name: 'المملكة العربية السعودية', flag: '🇸🇦' },
@@ -222,7 +223,7 @@ export const FraudNewsDetailModal: React.FC<FraudNewsDetailModalProps> = ({
             <div className="flex flex-wrap items-center gap-2">
               {item.original_url && (
                 <a
-                  href={item.original_url}
+                  href={sanitizeExternalUrl(item.original_url)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-700 text-white font-medium text-xs shadow-sm transition-colors"

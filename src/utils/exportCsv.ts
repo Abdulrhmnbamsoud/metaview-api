@@ -1,5 +1,6 @@
 // src/utils/exportCsv.ts
 import { Article } from '../types';
+import { sanitizeCsvCell } from './security';
 
 export function exportArticlesToCsv(articles: Article[], filename: string = 'metaview_intel_export.csv') {
   if (!articles || articles.length === 0) {
@@ -8,26 +9,27 @@ export function exportArticlesToCsv(articles: Article[], filename: string = 'met
   }
 
   const headers = ['المصدر', 'الدولة', 'النطاق', 'العنوان', 'الملخص', 'تاريخ النشر', 'رابط الخبر', 'رابط الصورة'];
-  
+
   const rows = articles.map(a => [
-    `"${(a.source || '').replace(/"/g, '""')}"`,
-    `"${(a.country || '').replace(/"/g, '""')}"`,
-    `"${(a.domain || '').replace(/"/g, '""')}"`,
-    `"${(a.headline || '').replace(/"/g, '""')}"`,
-    `"${(a.article_summary || '').replace(/"/g, '""')}"`,
-    `"${(a.published_at || '').replace(/"/g, '""')}"`,
-    `"${(a.url || '').replace(/"/g, '""')}"`,
-    `"${(a.image_url || '').replace(/"/g, '""')}"`,
+    sanitizeCsvCell(a.source),
+    sanitizeCsvCell(a.country),
+    sanitizeCsvCell(a.domain),
+    sanitizeCsvCell(a.headline),
+    sanitizeCsvCell(a.article_summary),
+    sanitizeCsvCell(a.published_at),
+    sanitizeCsvCell(a.url),
+    sanitizeCsvCell(a.image_url),
   ]);
 
   // UTF-8 BOM (\uFEFF) ensures Excel opens Arabic correctly
   const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\r\n');
-  
+
+  const safeFilename = filename.replace(/[^a-zA-Z0-9._-]/g, '_') || 'metaview_intel_export.csv';
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.setAttribute('href', url);
-  link.setAttribute('download', filename);
+  link.setAttribute('download', safeFilename);
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);

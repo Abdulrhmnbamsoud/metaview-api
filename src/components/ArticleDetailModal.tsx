@@ -3,6 +3,7 @@ import React, { useEffect } from 'react';
 import { X, ExternalLink, Copy, Check, Calendar, Globe, Building2, Code2, ShieldAlert } from 'lucide-react';
 import { Article } from '../types';
 import { formatDate } from '../utils/formatDate';
+import { sanitizeExternalUrl } from '../utils/security';
 
 interface ArticleDetailModalProps {
   article: Article | null;
@@ -154,7 +155,7 @@ export const ArticleDetailModal: React.FC<ArticleDetailModalProps> = ({ article,
           </button>
 
           <a
-            href={article.url}
+            href={sanitizeExternalUrl(article.url)}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#4cd7f6] to-[#dfc377] text-black font-bold text-xs shadow-lg hover:brightness-110 transition-all"

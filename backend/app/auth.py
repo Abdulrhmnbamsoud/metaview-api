@@ -108,6 +108,8 @@ PBKDF2_ITERATIONS = 200_000
 
 def hash_password(password: str) -> str:
     """Hash password using PBKDF2-HMAC-SHA256 with cryptographically secure random salt."""
+    if not password or len(password) > 128:
+        raise ValueError("طول كلمة المرور غير صالح")
     salt = secrets.token_hex(16)
     key = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), PBKDF2_ITERATIONS)
     return f"pbkdf2:sha256:{PBKDF2_ITERATIONS}${salt}${key.hex()}"
@@ -115,11 +117,13 @@ def hash_password(password: str) -> str:
 
 def verify_password(password: str, stored_hash: str) -> bool:
     """Verify password against stored PBKDF2 hash using constant-time comparison."""
-    if not stored_hash or not stored_hash.startswith("pbkdf2:sha256:"):
+    if not password or len(password) > 128 or not stored_hash or not stored_hash.startswith("pbkdf2:sha256:"):
         return False
     try:
         header, salt, key_hex = stored_hash.split("$")
         iterations = int(header.split(":")[2])
+        if iterations < 10_000 or iterations > 1_000_000:
+            return False
         computed_key = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), iterations)
         return hmac.compare_digest(computed_key.hex(), key_hex)
     except Exception:
@@ -591,17 +595,15 @@ def extract_token_from_request(
     request: Request,
     bearer: Optional[HTTPAuthorizationCredentials] = Depends(security_bearer),
 ) -> Optional[str]:
-    """Extract session token from Authorization: Bearer, Cookie, or legacy Admin Token header."""
+    """Extract session token strictly from Authorization: Bearer header or HttpOnly Cookie.
+    Query string tokens are prohibited to prevent token leakage in logs and Referer headers.
+    """
     if bearer and bearer.credentials:
         return bearer.credentials
-    # Cookie
+    # HttpOnly Session Cookie
     cookie_token = request.cookies.get("metaview_session")
     if cookie_token:
         return cookie_token
-    # Query parameter fallback (for secure single-use downloads or links)
-    query_token = request.query_params.get("session_token")
-    if query_token:
-        return query_token
     return None
 
 

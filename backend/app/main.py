@@ -26,7 +26,15 @@ from .security_middleware import (
     register_global_exception_handlers,
 )
 
-app = FastAPI(title=APP_NAME, version=APP_VERSION, description="Global News Intelligence API")
+_enable_docs = (not os.getenv("RENDER")) or (os.getenv("ENABLE_DOCS", "").lower() == "true")
+app = FastAPI(
+    title=APP_NAME,
+    version=APP_VERSION,
+    description="Global News Intelligence API",
+    docs_url="/docs" if _enable_docs else None,
+    redoc_url="/redoc" if _enable_docs else None,
+    openapi_url="/openapi.json" if _enable_docs else None,
+)
 
 # Banking-Grade Security Middlewares
 app.add_middleware(SecurityHeadersMiddleware)
@@ -53,7 +61,17 @@ app.add_middleware(
     allow_origin_regex=allow_origin_regex,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["*"],
+    allow_headers=[
+        "Authorization",
+        "Content-Type",
+        "Accept",
+        "Origin",
+        "X-Requested-With",
+        "X-Admin-Token",
+        "Cache-Control",
+        "Pragma",
+        "Expires",
+    ],
 )
 
 from .auth import init_auth_tables
@@ -123,7 +141,7 @@ def _build_where(
         where.append("language = ?")
         params.append(lang)
 
-    q_clean = (q or "").strip()
+    q_clean = (q or "").strip()[:200]
     if q_clean:
         where.append("(headline LIKE ? OR article_summary LIKE ? OR content LIKE ?)")
         params.extend([f"%{q_clean}%", f"%{q_clean}%", f"%{q_clean}%"])

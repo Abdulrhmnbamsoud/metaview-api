@@ -397,6 +397,54 @@ class AuthRBACTestCase(unittest.TestCase):
         rule_ids_after = [r["rule_id"] for r in public_rules_after]
         self.assertIn("RULE-SA-LOAN-001", rule_ids_after)
 
+    def test_09_advanced_security_hardening(self):
+        """Validate SSRF IPv4-mapped IPv6 protection, token_hash non-leakage, Origin poisoning guard, and query-param token rejection."""
+        admin_login = self.client.post("/auth/login", json={
+            "email": "admin@metaview.local",
+            "password": "Admin#MetaView2026!",
+        }).json()
+        admin_token = admin_login["token"]
+
+        # 1. Session token in URL query param (?session_token=...) must be rejected (401) when no header/cookie is present
+        self.client.cookies.clear()
+        res_query_tok = self.client.get(f"/auth/me?session_token={admin_token}")
+        self.assertEqual(res_query_tok.status_code, 401)
+
+        # 2. Origin header poisoning in /team/invite must be neutralized
+        inv_res = self.client.post(
+            "/team/invite",
+            json={"email": "sec_test@metaview.sa", "role": "viewer"},
+            headers={
+                "Authorization": f"Bearer {admin_token}",
+                "Origin": "https://evil-phishing.attacker.com",
+            },
+        )
+        self.assertEqual(inv_res.status_code, 200)
+        self.assertNotIn("evil-phishing", inv_res.json()["invite_url"])
+
+        # 3. GET /team/invitations must NOT expose token_hash
+        list_inv = self.client.get(
+            "/team/invitations",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        self.assertEqual(list_inv.status_code, 200)
+        for inv in list_inv.json()["invitations"]:
+            self.assertNotIn("token_hash", inv)
+
+        # 4. Oversized password (>128 chars) rejected with 422 before PBKDF2 hashing (DoS prevention)
+        huge_pw_res = self.client.post("/auth/login", json={
+            "email": "admin@metaview.local",
+            "password": "A" * 500,
+        })
+        self.assertEqual(huge_pw_res.status_code, 422)
+
+        # 5. IPv4-mapped IPv6 addresses (::ffff:127.0.0.1 and ::ffff:169.254.169.254) blocked by SSRF guard
+        from backend.app.security_network import validate_url_for_ssrf
+        safe_loopback, _ = validate_url_for_ssrf("http://[::ffff:127.0.0.1]/admin")
+        self.assertFalse(safe_loopback)
+        safe_meta, _ = validate_url_for_ssrf("http://[::ffff:169.254.169.254]/latest/meta-data/")
+        self.assertFalse(safe_meta)
+
 
 if __name__ == "__main__":
     unittest.main()

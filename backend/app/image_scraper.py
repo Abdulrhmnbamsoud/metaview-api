@@ -60,13 +60,17 @@ def is_safe_url(url: str) -> bool:
 
 
 def is_candidate_image(url: str) -> bool:
-    """Filters out icons, tracking pixels, SVGs, and obvious non-article assets."""
+    """Filters out icons, tracking pixels, SVGs, non-HTTP schemes, and obvious non-article assets."""
     if not url or not isinstance(url, str):
         return False
+
+    trimmed = url.strip()
+    if not trimmed.lower().startswith(("http://", "https://")):
+        return False
+
+    clean_url = trimmed.lower().split("?")[0]
     
-    clean_url = url.lower().split("?")[0]
-    
-    # Exclude SVG (usually icons/logos)
+    # Exclude SVG (usually icons/logos or XSS vectors)
     if clean_url.endswith(".svg"):
         return False
         
@@ -194,9 +198,6 @@ async def scrape_article_webpage_image(article_url: str, client: Optional[httpx.
 
     except Exception:
         return None
-    finally:
-        if own_client:
-            await client.aclose()
 
     return None
 
@@ -208,7 +209,7 @@ async def resolve_article_image(entry: Any, article_url: str, client: Optional[h
     """
     # Try fast RSS extraction first
     rss_image = extract_image_from_rss_entry(entry, base_url=article_url)
-    if rss_image and is_candidate_image(rss_image):
+    if rss_image and is_candidate_image(rss_image) and is_safe_url(rss_image):
         return rss_image
 
     # If not found and web scrape allowed, fetch HTML tags

@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { ExternalLink, Copy, Check, Clock, Globe, Newspaper } from 'lucide-react';
 import { Article } from '../types';
 import { timeAgo } from '../utils/formatDate';
+import { safeOpenExternal, sanitizeImageUrl } from '../utils/security';
 
 interface NewsCardProps {
   article: Article;
@@ -25,11 +26,12 @@ export const NewsCard: React.FC<NewsCardProps> = ({ article, onSelect }) => {
   const handleOpenOriginal = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (article.url) {
-      window.open(article.url, '_blank', 'noopener,noreferrer');
+      safeOpenExternal(article.url);
     }
   };
 
-  const hasImage = Boolean(article.image_url) && !imgError;
+  const safeImgUrl = sanitizeImageUrl(article.image_url);
+  const hasImage = Boolean(safeImgUrl) && !imgError;
 
   return (
     <div
@@ -40,7 +42,7 @@ export const NewsCard: React.FC<NewsCardProps> = ({ article, onSelect }) => {
       <div className="relative h-48 w-full bg-[#0a0c12] overflow-hidden border-b border-[#4cd7f6]/10">
         {hasImage ? (
           <img
-            src={article.image_url || ''}
+            src={safeImgUrl || ''}
             alt={article.headline}
             onError={() => setImgError(true)}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"

@@ -43,6 +43,14 @@ def _check_rate_limit(key: str, max_requests: int = 15, window_seconds: int = 60
     if key.startswith("login:testclient") or os.environ.get("TESTING") == "1" or "testclient" in key or "127.0.0.1" in key or "localhost" in key or "admin@metaview.local" in key:
         return
     now = time.time()
+    # Prevent unbounded memory growth under distributed brute-force attacks
+    if len(_RATE_LIMITS) > 5000:
+        stale_keys = [k for k, ts_list in _RATE_LIMITS.items() if not ts_list or (now - ts_list[-1]) > window_seconds]
+        for k in stale_keys:
+            _RATE_LIMITS.pop(k, None)
+        if len(_RATE_LIMITS) > 5000:
+            _RATE_LIMITS.clear()
+
     timestamps = _RATE_LIMITS.get(key, [])
     # Filter within window
     timestamps = [t for t in timestamps if now - t < window_seconds]
@@ -61,7 +69,7 @@ def _check_rate_limit(key: str, max_requests: int = 15, window_seconds: int = 60
 
 class LoginPayload(BaseModel):
     email: str = Field(min_length=5, max_length=255, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-    password: str = Field(min_length=6)
+    password: str = Field(min_length=6, max_length=128)
 
 
 class LoginResponse(BaseModel):
@@ -71,9 +79,9 @@ class LoginResponse(BaseModel):
 
 
 class AcceptInvitePayload(BaseModel):
-    token: str
+    token: str = Field(min_length=16, max_length=256)
     full_name: str = Field(min_length=2, max_length=100)
-    password: str = Field(min_length=8)
+    password: str = Field(min_length=8, max_length=128)
 
 
 class InvitePayload(BaseModel):
@@ -176,7 +184,12 @@ async def logout(
     if token:
         revoke_session(token)
 
-    response.delete_cookie("metaview_session")
+    is_https = (
+        request.url.scheme == "https"
+        or request.headers.get("x-forwarded-proto") == "https"
+        or bool(os.getenv("RENDER"))
+    )
+    response.delete_cookie("metaview_session", httponly=True, samesite="lax", secure=is_https)
     log_audit(
         user_id=current_user.id,
         action="auth.logout",
@@ -270,12 +283,18 @@ async def accept_invitation(payload: AcceptInvitePayload, request: Request, resp
 
         # Create login session
         raw_token = create_session(user_id, ip_address=client_ip, user_agent=request.headers.get("user-agent", ""))
+        is_https = (
+            request.url.scheme == "https"
+            or request.headers.get("x-forwarded-proto") == "https"
+            or bool(os.getenv("RENDER"))
+        )
         response.set_cookie(
             key="metaview_session",
             value=raw_token,
             httponly=True,
             samesite="lax",
             max_age=7 * 24 * 3600,
+            secure=is_https,
         )
 
         cur.execute("SELECT * FROM users WHERE id = ?", (user_id,))
@@ -373,9 +392,27 @@ async def invite_member(
             ip_address=client_ip,
         )
 
-        # Build invite URL for frontend
-        origin = request.headers.get("origin") or "http://localhost:5173"
-        invite_url = f"{origin}/accept-invite?token={raw_token}"
+        # Build invite URL safely using an allowlisted frontend origin (prevent Origin/Host header injection)
+        allowed_origins = {
+            "http://localhost:5173",
+            "http://localhost:3000",
+            "http://127.0.0.1:5173",
+            "https://metaview-frontend.onrender.com",
+        }
+        env_origins = os.getenv("CORS_ORIGINS", "")
+        for o in env_origins.split(","):
+            if o.strip():
+                allowed_origins.add(o.strip().rstrip("/"))
+
+        req_origin = (request.headers.get("origin") or "").strip().rstrip("/")
+        if req_origin in allowed_origins or (
+            req_origin.startswith("https://metaview-frontend-") and req_origin.endswith(".onrender.com")
+        ):
+            safe_origin = req_origin
+        else:
+            safe_origin = "https://metaview-frontend.onrender.com" if os.getenv("RENDER") else "http://localhost:5173"
+
+        invite_url = f"{safe_origin}/accept-invite?token={raw_token}"
 
         return {
             "invitation_id": inv_id,
@@ -394,13 +431,14 @@ async def invite_member(
 async def list_invitations(
     current_user: User = Depends(require_permission("team.invite")),
 ) -> Dict[str, Any]:
-    """List pending and historical invitations."""
+    """List pending and historical invitations without exposing cryptographic token hashes."""
     con = get_db()
     try:
         cur = con.cursor()
         rows = cur.execute(
             """
-            SELECT i.*, u.full_name AS invited_by_name
+            SELECT i.id, i.email, i.role, i.invited_by, i.expires_at,
+                   i.accepted_at, i.revoked_at, i.created_at, u.full_name AS invited_by_name
             FROM invitations i
             LEFT JOIN users u ON u.id = i.invited_by
             ORDER BY i.created_at DESC
