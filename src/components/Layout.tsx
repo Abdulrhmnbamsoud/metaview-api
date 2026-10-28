@@ -41,7 +41,6 @@ import { HealthStatus } from '../types';
 import { SaudiOverview } from '../types/saudi';
 import { getStoredTheme, applyTheme, Theme } from '../utils/theme';
 import { fmtDateTime } from './ui';
-import { BankingComplianceModal } from './BankingComplianceModal';
 
 const RefreshToast: React.FC<{
   message: string | null;
@@ -96,7 +95,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   });
   const [overview, setOverview] = useState<SaudiOverview | null>(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const [isComplianceModalOpen, setIsComplianceModalOpen] = useState(false);
 
   const { user, role, can, logout, switchPersona } = useAuth();
   const {
@@ -422,16 +420,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 <span>{isRefreshing ? 'جاري التحديث...' : 'تحديث'}</span>
               </button>
 
-              {/* Banking Compliance / Disclaimer Trigger */}
-              <button
-                onClick={() => setIsComplianceModalOpen(true)}
-                className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl border border-stone-200 dark:border-slate-700 hover:bg-stone-50 dark:hover:bg-slate-800 text-xs font-medium text-stone-600 dark:text-slate-300 transition-colors"
-                title="سياسة الخصوصية وضوابط البيئة المصرفية"
-              >
-                <ShieldCheck className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                <span>الضوابط والخصوصية</span>
-              </button>
-
               {/* Theme toggle */}
               <button
                 onClick={toggleTheme}
@@ -589,12 +577,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           </main>
         </div>
       </div>
-
-      {/* Banking Environment Governance & Privacy Policy Modal */}
-      <BankingComplianceModal
-        isOpen={isComplianceModalOpen}
-        onClose={() => setIsComplianceModalOpen(false)}
-      />
 
       {/* Global Refresh Notification Toast */}
       <RefreshToast
