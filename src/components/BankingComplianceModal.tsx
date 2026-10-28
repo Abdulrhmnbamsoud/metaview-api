@@ -22,9 +22,6 @@ export const BankingComplianceModal: React.FC<BankingComplianceModalProps> = ({ 
               <h2 className="text-base font-bold text-stone-900 dark:text-white">
                 سياسة الخصوصية وضوابط البيئة المصرفية
               </h2>
-              <p className="text-xs text-stone-500 dark:text-slate-400 font-mono">
-                Banking Environment Compliance & Public Intelligence Boundaries
-              </p>
             </div>
           </div>
           <button
