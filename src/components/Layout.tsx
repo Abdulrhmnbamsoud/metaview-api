@@ -31,15 +31,54 @@ import {
   Settings,
   FileText,
   ShieldCheck,
+  RefreshCw,
 } from 'lucide-react';
 import { apiService, getArabicOnly, setArabicOnly } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { useRefresh } from '../context/RefreshContext';
 import { UserRole } from '../types/auth';
 import { HealthStatus } from '../types';
 import { SaudiOverview } from '../types/saudi';
 import { getStoredTheme, applyTheme, Theme } from '../utils/theme';
 import { fmtDateTime } from './ui';
 import { BankingComplianceModal } from './BankingComplianceModal';
+
+const RefreshToast: React.FC<{
+  message: string | null;
+  type: 'info' | 'success' | 'error' | null;
+  onClose: () => void;
+}> = ({ message, type, onClose }) => {
+  if (!message) return null;
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl text-xs font-semibold border backdrop-blur-md transition-all animate-in fade-in duration-200 ${
+        type === 'error'
+          ? 'bg-rose-50/95 dark:bg-rose-950/95 text-rose-800 dark:text-rose-200 border-rose-200 dark:border-rose-800'
+          : type === 'info'
+          ? 'bg-sky-50/95 dark:bg-slate-900/95 text-sky-900 dark:text-sky-200 border-sky-200 dark:border-sky-800 shadow-sky-500/10'
+          : 'bg-emerald-50/95 dark:bg-emerald-950/95 text-emerald-900 dark:text-emerald-200 border-emerald-200 dark:border-emerald-800 shadow-emerald-500/10'
+      }`}
+    >
+      <div className="flex items-center gap-2">
+        <span
+          className={`w-2 h-2 rounded-full shrink-0 ${
+            type === 'error' ? 'bg-rose-500' : type === 'info' ? 'bg-sky-500' : 'bg-emerald-500'
+          }`}
+        />
+        <span>{message}</span>
+      </div>
+      <button
+        onClick={onClose}
+        className="p-1 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 cursor-pointer transition-colors"
+        title="إغلاق الإشعار"
+      >
+        <X className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  );
+};
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -60,6 +99,16 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [isComplianceModalOpen, setIsComplianceModalOpen] = useState(false);
 
   const { user, role, can, logout, switchPersona } = useAuth();
+  const {
+    isRefreshing,
+    lastUIRefresh,
+    lastSourceFetch,
+    lastDataProcessing,
+    refreshMessage,
+    refreshMessageType,
+    triggerGlobalRefresh,
+    clearMessage,
+  } = useRefresh();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -86,7 +135,12 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   useEffect(() => {
     fetchStatus();
     const interval = setInterval(fetchStatus, 30000);
-    return () => clearInterval(interval);
+    const handleRefresh = () => fetchStatus();
+    window.addEventListener('metaview:refresh', handleRefresh);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('metaview:refresh', handleRefresh);
+    };
   }, []);
 
   const handleHeaderSearch = (e: React.FormEvent) => {
@@ -98,12 +152,11 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   const isOnline = health.status !== 'offline' && health.status !== 'checking';
 
-  // Dynamic Navigation based on RBAC Least Privilege
+  // Dynamic Navigation based on RBAC Least Privilege (Detection Rules removed from public UI)
   const primaryNav = [
     { to: '/', label: 'الرئيسية', icon: Home, exact: true },
     { to: '/fraud-intelligence', label: 'ميتا فيو 3', icon: Activity },
     { to: '/explore', label: 'الاستكشاف', icon: Compass },
-    { to: '/rules', label: 'قواعد الكشف', icon: ListChecks },
     ...(can('rule.create') || can('incident.annotate') || role === 'analyst' || role === 'admin'
       ? [{ to: '/workspace', label: 'مساحة العمل', icon: Briefcase }]
       : []),
@@ -134,7 +187,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       { to: '/explore?source=x_k_h_almuzaini', label: 'رصد 𝕏 المزيني', icon: Radio },
       { to: '/explore?type=pattern', label: 'الأنماط', icon: Network },
       { to: '/system', label: 'المصادر والنظام', icon: Globe },
-      { to: '/rules', label: 'قواعد الكشف', icon: Radio },
       ...(can('rule.create') || can('incident.annotate') || role === 'analyst' || role === 'admin'
         ? [{ to: '/workspace', label: 'مساحة العمل', icon: LayoutGrid }]
         : []),
@@ -203,6 +255,13 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         <main dir="rtl" className="flex-1 overflow-y-auto bg-[#F7F9FC]">
           {children}
         </main>
+
+        {/* Global Refresh Notification Toast */}
+        <RefreshToast
+          message={refreshMessage}
+          type={refreshMessageType}
+          onClose={clearMessage}
+        />
       </div>
     );
   }
@@ -337,11 +396,31 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 <span>السعودية</span>
               </div>
 
-              {/* Last update */}
-              <div className="hidden lg:flex items-center gap-1.5 text-xs text-stone-500 dark:text-slate-400 font-mono">
+              {/* Telemetry freshness transparency */}
+              <div
+                className="hidden xl:flex items-center gap-2 text-[11px] text-stone-500 dark:text-slate-400 bg-stone-50 dark:bg-slate-800/60 px-2.5 py-1 rounded-xl border border-stone-200/70 dark:border-slate-700/60 font-mono"
+                title={`آخر محاولة جلب من المصادر: ${lastSourceFetch ? fmtDateTime(lastSourceFetch) : 'غير متوفر'}\nآخر معالجة للبيانات: ${lastDataProcessing ? fmtDateTime(lastDataProcessing) : 'غير متوفر'}\nآخر طلب للواجهة: ${lastUIRefresh ? lastUIRefresh.toLocaleTimeString('ar-SA') : 'الآن'}`}
+              >
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                <span>آخر تحديث: {overview?.last_fetch_at ? fmtDateTime(overview.last_fetch_at) : '13:18، 23 أكتوبر'}</span>
+                <span>المصادر: {lastSourceFetch ? fmtDateTime(lastSourceFetch) : 'محدثة'}</span>
+                <span className="text-stone-300 dark:text-slate-600">|</span>
+                <span>المعالجة: {lastDataProcessing ? fmtDateTime(lastDataProcessing) : 'جاهزة'}</span>
               </div>
+
+              {/* Unified Global Refresh Button */}
+              <button
+                onClick={() => triggerGlobalRefresh()}
+                disabled={isRefreshing}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer shadow-xs ${
+                  isRefreshing
+                    ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border-blue-300 dark:border-blue-800'
+                    : 'bg-white dark:bg-[#0f172a] text-stone-700 dark:text-slate-300 border-stone-200 dark:border-slate-700 hover:bg-stone-50 dark:hover:bg-slate-800'
+                }`}
+                title={`تحديث موحد للبيانات (آخر فحص للواجهة: ${lastUIRefresh ? lastUIRefresh.toLocaleTimeString('ar-SA') : 'الآن'})`}
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-blue-600' : 'text-stone-400'}`} />
+                <span>{isRefreshing ? 'جاري التحديث...' : 'تحديث'}</span>
+              </button>
 
               {/* Banking Compliance / Disclaimer Trigger */}
               <button
@@ -515,6 +594,13 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       <BankingComplianceModal
         isOpen={isComplianceModalOpen}
         onClose={() => setIsComplianceModalOpen(false)}
+      />
+
+      {/* Global Refresh Notification Toast */}
+      <RefreshToast
+        message={refreshMessage}
+        type={refreshMessageType}
+        onClose={clearMessage}
       />
     </div>
   );

@@ -1697,10 +1697,10 @@ def save_or_update_rule(
                     version = ?, updated_at = ?
                 WHERE rule_id = ?
             """, (
-                rule_dict.get("name"),
-                rule_dict.get("detection_hypothesis") or rule_dict.get("hypothesis"),
-                rule_dict.get("logic", {}).get("raw_expression", str(rule_dict.get("logic"))),
-                rule_dict.get("fraud_category"),
+                rule_dict.get("name") or rule_dict.get("title_ar") or rule_dict.get("title") or (existing["name"] if existing else "قاعدة كشف جديدة"),
+                rule_dict.get("detection_hypothesis") or rule_dict.get("hypothesis") or rule_dict.get("summary_ar") or (existing["hypothesis"] if existing else "افتراض كشف"),
+                rule_dict.get("logic", {}).get("raw_expression", str(rule_dict.get("logic")) if rule_dict.get("logic") else "منطق كشف"),
+                rule_dict.get("fraud_category") or (existing["pattern_key"] if existing else None),
                 json.dumps(rule_dict.get("data_requirements", {}).get("required_fields", []), ensure_ascii=False),
                 json.dumps(rule_dict.get("logic", {}).get("exception_conditions", []), ensure_ascii=False),
                 rule_dict.get("status", "draft"),

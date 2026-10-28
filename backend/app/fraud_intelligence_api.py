@@ -24,7 +24,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, HTTPException, Query
 
-from .db import get_db
+from .db import get_db, get_data_telemetry
 from .intelligence_enrichment import (
     CHANNELS_DEF,
     COUNTRY_NAMES_EN_AR,
@@ -1656,6 +1656,7 @@ def get_dashboard_view(
             "latest_incidents": latest_table,
             "banking_implications": banking_implications,
             "data_quality_stats": data_quality_stats,
+            "telemetry": get_data_telemetry(con),
             "active_filters": {
                 "geo": filter_meta["geo"],
                 "country": filter_meta.get("country"),

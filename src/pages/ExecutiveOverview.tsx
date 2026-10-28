@@ -36,6 +36,7 @@ import {
 } from '../types/saudi';
 import { LoadingBlock, ErrorBlock, fmtDay } from '../components/ui';
 import { timeAgo } from '../utils/formatDate';
+import { useRefresh } from '../context/RefreshContext';
 
 type ScopeMode = 'all' | 'saudi' | 'country';
 type TimeWindow = '24h' | '7d' | '30d' | 'custom';
@@ -162,8 +163,10 @@ export const ExecutiveOverview: React.FC = () => {
     return { code: 'Unknown', name: 'غير محددة', flag: '🌐' };
   };
 
-  // Load primary data with synchronous filters
-  const loadData = useCallback(async (isSilent = false) => {
+  const { updateTelemetry } = useRefresh();
+
+  // Load primary data with synchronous filters (supports forceRefresh cache-busting)
+  const loadData = useCallback(async (isSilent = false, isForce = false) => {
     if (!isSilent) setLoading(true);
     setError(null);
     try {
@@ -181,6 +184,7 @@ export const ExecutiveOverview: React.FC = () => {
           window_days: winDays,
           date_from: dFrom,
           date_to: dTo,
+          forceRefresh: isForce,
         }),
         apiService.getSaudiIncidents({
           scope: effScope,
@@ -203,6 +207,9 @@ export const ExecutiveOverview: React.FC = () => {
       ]);
 
       setOv(overviewRes);
+      if (overviewRes.telemetry) {
+        updateTelemetry(overviewRes.telemetry);
+      }
       setIncidents(incidentsRes.items || []);
       setNewsItems(newsRes.items || []);
       setAvailableCountries(countriesRes.countries || []);
@@ -226,16 +233,19 @@ export const ExecutiveOverview: React.FC = () => {
     } finally {
       if (!isSilent) setLoading(false);
     }
-  }, [scope, selectedCountry, timeWindow, customDateFrom, customDateTo, sortBy]);
+  }, [scope, selectedCountry, timeWindow, customDateFrom, customDateTo, sortBy, updateTelemetry]);
 
   useEffect(() => {
     loadData();
-    const h = () => loadData();
+    const h = (e?: Event) => {
+      const isForce = (e as CustomEvent)?.detail?.forceRefresh ?? false;
+      loadData(false, isForce);
+    };
     window.addEventListener('metaview:refresh', h);
 
     const timer = setInterval(() => {
       if (document.visibilityState === 'visible') {
-        loadData(true);
+        loadData(true, false);
       }
     }, 60000);
 

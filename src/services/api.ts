@@ -60,6 +60,7 @@ import {
   DataQualityResponse,
   DrilldownResponse,
   DashboardViewResponse,
+  DataTelemetry,
 } from '../types/fraudIntelligence';
 import {
   UnifiedRule,
@@ -134,14 +135,19 @@ export const getSessionToken = (): string | null => {
   return _sessionToken;
 };
 
-interface FetchOptions extends RequestInit {
+export interface FetchOptions extends RequestInit {
   timeoutMs?: number;
   retries?: number;
+  forceRefresh?: boolean;
 }
 
 async function requestWithRetry<T>(endpoint: string, options: FetchOptions = {}): Promise<T> {
-  const { timeoutMs = DEFAULT_TIMEOUT_MS, retries = 2, ...fetchOptions } = options;
-  const url = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint}`;
+  const { timeoutMs = DEFAULT_TIMEOUT_MS, retries = 2, forceRefresh = false, ...fetchOptions } = options;
+  let url = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint}`;
+  if (forceRefresh) {
+    const separator = url.includes('?') ? '&' : '?';
+    url = `${url}${separator}_t=${Date.now()}`;
+  }
 
   let lastError: any = null;
 
@@ -156,13 +162,23 @@ async function requestWithRetry<T>(endpoint: string, options: FetchOptions = {})
         authHeader['Authorization'] = `Bearer ${token}`;
       }
 
+      const cacheHeaders: Record<string, string> = forceRefresh
+        ? {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0',
+          }
+        : {};
+
       const response = await fetch(url, {
         ...fetchOptions,
+        cache: forceRefresh ? 'no-store' : fetchOptions.cache,
         signal: controller.signal,
         headers: {
           'Accept': 'application/json',
           'Content-Type': 'application/json',
           ...authHeader,
+          ...cacheHeaders,
           ...(fetchOptions.headers || {}),
         },
       });
@@ -335,17 +351,22 @@ export const apiService = {
     date_to?: string;
     date_basis?: string;
     fraud_type?: string;
+    forceRefresh?: boolean;
   } = {}): Promise<SaudiOverview> {
+    const { forceRefresh = false, ...rest } = params;
     const sp = new URLSearchParams();
-    if (params.scope) sp.append('scope', params.scope);
-    if (params.country) sp.append('country', params.country);
-    if (params.window_days !== undefined) sp.append('window_days', String(params.window_days));
-    if (params.date_from) sp.append('date_from', params.date_from);
-    if (params.date_to) sp.append('date_to', params.date_to);
-    if (params.date_basis) sp.append('date_basis', params.date_basis);
-    if (params.fraud_type) sp.append('fraud_type', params.fraud_type);
+    if (rest.scope) sp.append('scope', rest.scope);
+    if (rest.country) sp.append('country', rest.country);
+    if (rest.window_days !== undefined) sp.append('window_days', String(rest.window_days));
+    if (rest.date_from) sp.append('date_from', rest.date_from);
+    if (rest.date_to) sp.append('date_to', rest.date_to);
+    if (rest.date_basis) sp.append('date_basis', rest.date_basis);
+    if (rest.fraud_type) sp.append('fraud_type', rest.fraud_type);
     const qs = sp.toString();
-    return await requestWithRetry<SaudiOverview>(`/saudi-fraud/overview${qs ? `?${qs}` : ''}`);
+    return await requestWithRetry<SaudiOverview>(
+      `/saudi-fraud/overview${qs ? `?${qs}` : ''}`,
+      { forceRefresh }
+    );
   },
 
   async getSaudiNews(params: SaudiNewsParams = {}): Promise<SaudiNewsResponse> {
@@ -826,20 +847,29 @@ export const apiService = {
     dateFrom?: string;
     dateTo?: string;
     dateBasis?: string;
+    forceRefresh?: boolean;
   } = {}): Promise<DashboardViewResponse> {
+    const { forceRefresh = false, ...rest } = params;
     const sp = new URLSearchParams();
-    if (params.windowDays) sp.append('window_days', String(params.windowDays));
-    if (params.geo) sp.append('geo', params.geo);
-    if (params.country) sp.append('country', params.country);
-    if (params.city) sp.append('city', params.city);
-    if (params.region) sp.append('region', params.region);
-    if (params.mapMode) sp.append('map_mode', params.mapMode);
-    if (params.fraudType) sp.append('fraud_type', params.fraudType);
-    if (params.dateFrom) sp.append('date_from', params.dateFrom);
-    if (params.dateTo) sp.append('date_to', params.dateTo);
-    if (params.dateBasis) sp.append('date_basis', params.dateBasis);
+    if (rest.windowDays) sp.append('window_days', String(rest.windowDays));
+    if (rest.geo) sp.append('geo', rest.geo);
+    if (rest.country) sp.append('country', rest.country);
+    if (rest.city) sp.append('city', rest.city);
+    if (rest.region) sp.append('region', rest.region);
+    if (rest.mapMode) sp.append('map_mode', rest.mapMode);
+    if (rest.fraudType) sp.append('fraud_type', rest.fraudType);
+    if (rest.dateFrom) sp.append('date_from', rest.dateFrom);
+    if (rest.dateTo) sp.append('date_to', rest.dateTo);
+    if (rest.dateBasis) sp.append('date_basis', rest.dateBasis);
     const qs = sp.toString();
-    return await requestWithRetry<DashboardViewResponse>(`/fraud-intelligence/dashboard-view${qs ? `?${qs}` : ''}`);
+    return await requestWithRetry<DashboardViewResponse>(
+      `/fraud-intelligence/dashboard-view${qs ? `?${qs}` : ''}`,
+      { forceRefresh }
+    );
+  },
+
+  async getTelemetry(forceRefresh: boolean = false): Promise<DataTelemetry> {
+    return await requestWithRetry<DataTelemetry>('/telemetry', { forceRefresh, timeoutMs: 5000, retries: 1 });
   },
 
   async getXCollectorStatus(): Promise<XPublicCollectorStatus> {

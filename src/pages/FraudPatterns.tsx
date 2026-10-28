@@ -41,6 +41,11 @@ export const FraudPatterns: React.FC = () => {
 
   useEffect(() => {
     load();
+    const handleRefresh = () => load();
+    window.addEventListener('metaview:refresh', handleRefresh);
+    return () => {
+      window.removeEventListener('metaview:refresh', handleRefresh);
+    };
   }, [load]);
 
   const filtered = useMemo(() => {
@@ -215,7 +220,6 @@ export const FraudPatterns: React.FC = () => {
                 <Panel
                   title="قواعد الكشف المقترحة لهذا النمط"
                   icon={<ListChecks className="w-4 h-4" />}
-                  right={<Link to="/rules" className="text-xs text-brand hover:underline">كل القواعد ←</Link>}
                 >
                   {linkedRules.length === 0 ? (
                     <Unavailable title="لا قواعد مرتبطة" note="لم تُشتق قاعدة مقترحة لهذا النمط." />

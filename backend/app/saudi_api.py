@@ -14,7 +14,7 @@ from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
 from .config import ADMIN_TOKEN, DATA_DIR, DB_PATH, SAUDI_AUTO_INGEST, SAUDI_INGEST_EVERY_HOURS
-from .db import get_db
+from .db import get_db, get_data_telemetry
 from . import incidents, saudi_ingest
 from .fraud_intel import CATEGORY_AR, CATEGORY_ORDER, CONTENT_TYPE_AR, VISIBLE_CONTENT_TYPES
 from .auth import validate_session
@@ -238,6 +238,7 @@ def overview(
 
         ok_sources = con.execute("SELECT COUNT(*) n FROM source_registry WHERE last_status='ok'").fetchone()["n"]
         all_sources = con.execute("SELECT COUNT(*) n FROM source_registry").fetchone()["n"]
+        telemetry_info = get_data_telemetry(con)
     finally:
         con.close()
     cats = inc["incident_categories"]
@@ -280,6 +281,7 @@ def overview(
         "refresh_every_hours": SAUDI_INGEST_EVERY_HOURS,
         "auto_ingest_enabled": SAUDI_AUTO_INGEST,
         "ingest_running": bool(saudi_ingest.RUN_STATE.get("running")) or bool(saudi_ingest.lease_status().get("active")),
+        "telemetry": telemetry_info,
     }
 
 

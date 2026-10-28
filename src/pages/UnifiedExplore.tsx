@@ -242,6 +242,11 @@ export const UnifiedExplore: React.FC = () => {
 
   useEffect(() => {
     loadData();
+    const handleRefresh = () => loadData();
+    window.addEventListener('metaview:refresh', handleRefresh);
+    return () => {
+      window.removeEventListener('metaview:refresh', handleRefresh);
+    };
   }, [loadData]);
 
   // 1. Gather all items in current scope/country/bank/source without filtering by itemType

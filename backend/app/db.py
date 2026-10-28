@@ -1,6 +1,8 @@
 # backend/app/db.py
+import hashlib
 import re
 import sqlite3
+from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional, Tuple
 from .config import DB_PATH
 
@@ -646,3 +648,90 @@ def get_stats_summary(lang: Optional[str] = None) -> Dict[str, Any]:
         "source_distribution": source_dist,
         "country_distribution": country_dist
     }
+
+
+def get_data_telemetry(con: Optional[sqlite3.Connection] = None) -> Dict[str, Any]:
+    """Provides high-precision data freshness and revision telemetry.
+    Distinguishes clearly between:
+      - last_source_fetch: latest successful timestamp of data fetched from external sources
+      - last_data_processing: latest timestamp of enrichment / pattern analysis / incident synthesis
+      - data_version: deterministic revision identifier (based on counts, latest ids, and processing timestamps)
+      - total_articles: total count of stored articles
+      - total_incidents: total count of structured incidents
+      - server_time: current UTC timestamp
+    """
+    should_close = False
+    if con is None:
+        con = get_db()
+        should_close = True
+    try:
+        cur = con.cursor()
+
+        # 1. Last Source Fetch (from fetch_log if available, fallback to articles)
+        last_source_fetch = None
+        try:
+            cur.execute("SELECT MAX(finished_at) AS last_fetch FROM fetch_log WHERE ok = 1")
+            row = cur.fetchone()
+            if row and row["last_fetch"]:
+                last_source_fetch = row["last_fetch"]
+        except Exception:
+            pass
+
+        if not last_source_fetch:
+            try:
+                cur.execute("SELECT MAX(fetched_at) AS last_fetch FROM articles")
+                row = cur.fetchone()
+                if row and row["last_fetch"]:
+                    last_source_fetch = row["last_fetch"]
+            except Exception:
+                pass
+
+        # 2. Last Data Processing (from enrichment_audit_log, fallback to incidents)
+        last_data_processing = None
+        try:
+            cur.execute("SELECT MAX(created_at) AS last_proc FROM enrichment_audit_log")
+            row = cur.fetchone()
+            if row and row["last_proc"]:
+                last_data_processing = row["last_proc"]
+        except Exception:
+            pass
+
+        if not last_data_processing:
+            try:
+                cur.execute("SELECT MAX(updated_at) AS last_proc FROM incidents")
+                row = cur.fetchone()
+                if row and row["last_proc"]:
+                    last_data_processing = row["last_proc"]
+            except Exception:
+                pass
+
+        # 3. Deterministic Data Version
+        art_cnt, art_max = 0, 0
+        try:
+            cur.execute("SELECT COUNT(*), COALESCE(MAX(id), 0) FROM articles")
+            art_cnt, art_max = cur.fetchone()
+        except Exception:
+            pass
+
+        inc_cnt, inc_upd = 0, ""
+        try:
+            cur.execute("SELECT COUNT(*), COALESCE(MAX(updated_at), '') FROM incidents")
+            inc_cnt, inc_upd = cur.fetchone()
+        except Exception:
+            pass
+
+        rev_raw = f"{art_cnt}:{art_max}:{inc_cnt}:{inc_upd}:{last_data_processing}"
+        data_version = hashlib.sha256(rev_raw.encode("utf-8")).hexdigest()[:16]
+
+        return {
+            "last_source_fetch": last_source_fetch,
+            "last_data_processing": last_data_processing,
+            "data_version": data_version,
+            "total_articles": art_cnt,
+            "total_incidents": inc_cnt,
+            "server_time": datetime.now(timezone.utc).isoformat(),
+        }
+    finally:
+        if should_close:
+            con.close()
+

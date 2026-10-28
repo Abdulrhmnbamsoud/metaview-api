@@ -36,6 +36,7 @@ export interface SaudiOverview {
   excluded_unrelated?: number;
   unclassified?: number;
   by_content_type?: Record<string, number>;
+  telemetry?: import('./fraudIntelligence').DataTelemetry;
 }
 
 export interface SaudiDetectionRule {

@@ -44,6 +44,8 @@ import {
   TopCountryItem,
 } from '../types/fraudIntelligence';
 import { timeAgo } from '../utils/formatDate';
+import { fmtDateTime } from '../components/ui';
+import { useRefresh } from '../context/RefreshContext';
 import { WORLD_BASE_PATHS, WORLD_HIGHLIGHT_PATHS } from '../data/worldMapPaths';
 
 const MINOR_DOTS = [
@@ -149,8 +151,17 @@ export const FraudIntelligenceDashboard: React.FC = () => {
   const isFiltered = datePreset !== 30 || geoFilter !== 'السعودية' || fraudTypeFilter !== 'all' || Boolean(dateFrom);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(new Date());
 
-  // Fetch Dashboard Data Centrally (supports silent background updates)
-  const loadDashboardData = useCallback(async (isSilent = false) => {
+  const {
+    isRefreshing,
+    lastUIRefresh,
+    lastSourceFetch,
+    lastDataProcessing,
+    triggerGlobalRefresh,
+    updateTelemetry,
+  } = useRefresh();
+
+  // Fetch Dashboard Data Centrally (supports silent background updates & forceRefresh cache-busting)
+  const loadDashboardData = useCallback(async (isSilent = false, isForce = false) => {
     const reqId = ++reqSequenceRef.current;
     try {
       if (!isSilent) setLoading(true);
@@ -167,12 +178,16 @@ export const FraudIntelligenceDashboard: React.FC = () => {
         dateFrom: datePreset === 'custom' && dateFrom ? dateFrom : undefined,
         dateTo: datePreset === 'custom' && dateTo ? dateTo : undefined,
         dateBasis: dateBasis,
+        forceRefresh: isForce,
       });
 
       // Drop stale responses if a newer request was dispatched
       if (reqId === reqSequenceRef.current) {
         setData(res);
         setLastUpdated(new Date());
+        if (res.telemetry) {
+          updateTelemetry(res.telemetry);
+        }
       }
     } catch (err: any) {
       if (reqId === reqSequenceRef.current) {
@@ -184,7 +199,7 @@ export const FraudIntelligenceDashboard: React.FC = () => {
         setLoading(false);
       }
     }
-  }, [datePreset, dateFrom, dateTo, dateBasis, geoFilter, mapScope, fraudTypeFilter]);
+  }, [datePreset, dateFrom, dateTo, dateBasis, geoFilter, mapScope, fraudTypeFilter, updateTelemetry]);
 
   // Initial and reactive load
   useEffect(() => {
@@ -195,11 +210,14 @@ export const FraudIntelligenceDashboard: React.FC = () => {
   useEffect(() => {
     const timer = setInterval(() => {
       if (document.visibilityState === 'visible') {
-        loadDashboardData(true);
+        loadDashboardData(true, false);
       }
     }, 60000);
 
-    const handleRefresh = () => loadDashboardData();
+    const handleRefresh = (e?: Event) => {
+      const isForce = (e as CustomEvent)?.detail?.forceRefresh ?? false;
+      loadDashboardData(false, isForce);
+    };
     window.addEventListener('metaview:refresh', handleRefresh);
 
     return () => {
@@ -453,20 +471,27 @@ export const FraudIntelligenceDashboard: React.FC = () => {
 
           {/* 4. Actions: Freshness, Refresh, Reset & Export */}
           <div className="col-span-2 sm:col-span-1 flex items-center gap-2">
-            {/* Live freshness badge */}
-            <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-2 bg-white border border-[#E7ECF3] rounded-xl text-[11px] font-medium text-[#64748B] shadow-xs">
+            {/* Live freshness badge with 3 distinct timestamps */}
+            <div
+              className="hidden lg:flex items-center gap-2 px-3 py-2 bg-white border border-[#E7ECF3] rounded-xl text-[11px] font-medium text-[#64748B] shadow-xs cursor-default"
+              title={`- آخر محاولة جلب من المصادر: ${lastSourceFetch ? fmtDateTime(lastSourceFetch) : 'غير متوفر'}\n- آخر معالجة للبيانات: ${lastDataProcessing ? fmtDateTime(lastDataProcessing) : 'غير متوفر'}\n- آخر طلب للواجهة: ${lastUIRefresh ? lastUIRefresh.toLocaleTimeString('ar-SA') : 'الآن'}`}
+            >
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>آخر تحديث: {lastUpdated ? timeAgo(lastUpdated.toISOString()) : 'الآن'}</span>
+              <div className="flex items-center gap-1.5 font-mono">
+                <span>المصادر: {lastSourceFetch ? timeAgo(lastSourceFetch) : 'محدثة'}</span>
+                <span className="text-slate-300">|</span>
+                <span>المعالجة: {lastDataProcessing ? timeAgo(lastDataProcessing) : 'جاهزة'}</span>
+              </div>
             </div>
 
             {/* Refresh Button */}
             <button
-              onClick={() => loadDashboardData()}
-              disabled={loading}
-              title="تحديث البيانات لحظياً من الـ API"
-              className="flex items-center justify-center p-2 bg-white hover:bg-slate-50 border border-[#E7ECF3] text-[#10213D] rounded-xl text-xs font-semibold transition shadow-xs cursor-pointer"
+              onClick={() => triggerGlobalRefresh()}
+              disabled={loading || isRefreshing}
+              title={`تحديث موحد للبيانات (آخر فحص للواجهة: ${lastUIRefresh ? lastUIRefresh.toLocaleTimeString('ar-SA') : 'الآن'})`}
+              className="flex items-center justify-center p-2 bg-white hover:bg-slate-50 border border-[#E7ECF3] text-[#10213D] rounded-xl text-xs font-semibold transition shadow-xs cursor-pointer disabled:opacity-60"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-blue-600' : ''}`} />
+              <RefreshCw className={`w-3.5 h-3.5 ${loading || isRefreshing ? 'animate-spin text-blue-600' : ''}`} />
             </button>
 
             {/* Reset Filters button if modified */}

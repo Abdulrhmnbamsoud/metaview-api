@@ -88,6 +88,11 @@ export const SourcesAndSystem: React.FC = () => {
 
   useEffect(() => {
     load();
+    const handleRefresh = () => load();
+    window.addEventListener('metaview:refresh', handleRefresh);
+    return () => {
+      window.removeEventListener('metaview:refresh', handleRefresh);
+    };
   }, [load]);
 
   const handleRunIngest = async () => {

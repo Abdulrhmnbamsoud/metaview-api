@@ -385,6 +385,7 @@ export interface DashboardViewResponse {
   latest_incidents: LatestTableIncident[];
   banking_implications: BankingImplicationItem[];
   data_quality_stats: DataQualityStats;
+  telemetry?: DataTelemetry;
   active_filters?: {
     geo: string;
     country: string;
@@ -396,4 +397,14 @@ export interface DashboardViewResponse {
     map_mode?: string;
   };
 }
+
+export interface DataTelemetry {
+  last_source_fetch: string | null;
+  last_data_processing: string | null;
+  data_version: string;
+  total_articles: number;
+  total_incidents: number;
+  server_time: string;
+}
+
 

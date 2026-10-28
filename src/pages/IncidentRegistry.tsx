@@ -121,6 +121,11 @@ export const IncidentRegistry: React.FC = () => {
 
   useEffect(() => {
     loadIncidents();
+    const handleRefresh = () => loadIncidents();
+    window.addEventListener('metaview:refresh', handleRefresh);
+    return () => {
+      window.removeEventListener('metaview:refresh', handleRefresh);
+    };
   }, [loadIncidents]);
 
   useEffect(() => {

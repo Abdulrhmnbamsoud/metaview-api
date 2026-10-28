@@ -13,7 +13,7 @@ from .config import (
     DB_PATH, MAX_ITEMS_PER_FEED
 )
 from .sources import DEFAULT_SOURCES, SOURCE_DISPLAY_NAMES, SOURCE_COUNTRY_MAP
-from .db import init_db, get_db, row_count, get_stats_summary
+from .db import init_db, get_db, row_count, get_stats_summary, get_data_telemetry
 from .schemas import IngestRequest, SearchResponse, HealthResponse, StatsResponse, ThreatIntel
 from .ingest import ingest_once
 from .saudi_api import router as saudi_router
@@ -218,6 +218,14 @@ def health():
 @app.get("/stats", response_model=StatsResponse)
 def get_stats(lang: Optional[str] = Query(None, pattern="^(ar|en)$")):
     return get_stats_summary(lang)
+
+
+@app.get("/telemetry")
+@app.get("/api/telemetry")
+def get_telemetry() -> Dict[str, Any]:
+    """Returns real-time data freshness, source fetch, processing, and revision telemetry."""
+    return get_data_telemetry()
+
 
 
 @app.get("/sources")

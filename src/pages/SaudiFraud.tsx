@@ -98,7 +98,15 @@ export const SaudiFraud: React.FC = () => {
 
   useEffect(() => {
     loadOverview();
-  }, [loadOverview]);
+    const handleRefresh = () => {
+      loadOverview();
+      loadNews();
+    };
+    window.addEventListener('metaview:refresh', handleRefresh);
+    return () => {
+      window.removeEventListener('metaview:refresh', handleRefresh);
+    };
+  }, [loadOverview, loadNews]);
 
   useEffect(() => {
     loadNews();

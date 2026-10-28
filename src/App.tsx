@@ -2,13 +2,13 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
+import { RefreshProvider } from './context/RefreshContext';
 import { Layout } from './components/Layout';
 
-// 4 Primary destinations
+// Primary destinations
 import { ExecutiveOverview } from './pages/ExecutiveOverview';
 import { FraudIntelligenceDashboard } from './pages/FraudIntelligenceDashboard';
 import { UnifiedExplore } from './pages/UnifiedExplore';
-import { DetectionRules } from './pages/DetectionRules';
 import { SourcesAndSystem } from './pages/SourcesAndSystem';
 
 // RBAC & Team Management Destinations
@@ -32,25 +32,27 @@ import { Sources } from './pages/Sources';
 export const App: React.FC = () => {
   return (
     <AuthProvider>
-      <Router>
-        <Routes>
-          {/* Standalone Authentication pages */}
-          <Route path="/login" element={<Login />} />
-          <Route path="/accept-invite" element={<AcceptInvite />} />
+      <RefreshProvider>
+        <Router>
+          <Routes>
+            {/* Standalone Authentication pages */}
+            <Route path="/login" element={<Login />} />
+            <Route path="/accept-invite" element={<AcceptInvite />} />
 
-          {/* Main Application with Layout */}
-          <Route
-            path="/*"
-            element={
-              <Layout>
-                <Routes>
-                  {/* Primary Destinations */}
-                  <Route path="/" element={<ExecutiveOverview />} />
-                  <Route path="/fraud-intelligence" element={<FraudIntelligenceDashboard />} />
-                  <Route path="/intelligence" element={<FraudIntelligenceDashboard />} />
-                  <Route path="/explore" element={<UnifiedExplore />} />
-                  <Route path="/rules" element={<DetectionRules />} />
-                  <Route path="/system" element={<SourcesAndSystem />} />
+            {/* Main Application with Layout */}
+            <Route
+              path="/*"
+              element={
+                <Layout>
+                  <Routes>
+                    {/* Primary Destinations */}
+                    <Route path="/" element={<ExecutiveOverview />} />
+                    <Route path="/fraud-intelligence" element={<FraudIntelligenceDashboard />} />
+                    <Route path="/intelligence" element={<FraudIntelligenceDashboard />} />
+                    <Route path="/explore" element={<UnifiedExplore />} />
+                    {/* Safe fallback for /rules without breaking UI */}
+                    <Route path="/rules" element={<Navigate to="/fraud-intelligence" replace />} />
+                    <Route path="/system" element={<SourcesAndSystem />} />
 
                   {/* Team Management & Analyst Workspace */}
                   <Route path="/team" element={<TeamManagement />} />
@@ -78,6 +80,7 @@ export const App: React.FC = () => {
           />
         </Routes>
       </Router>
+      </RefreshProvider>
     </AuthProvider>
   );
 };

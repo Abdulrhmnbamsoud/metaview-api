@@ -85,11 +85,35 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         ]
         response.headers["Content-Security-Policy"] = "; ".join(csp_directives)
 
-        # Remove Server or version disclosure headers if present
-        if "server" in response.headers:
-            del response.headers["server"]
+        # 8. Dynamic API Cache-Control (prevent stale 304 or browser caching of analytical data)
+        path = request.url.path
+        if (
+            path.startswith("/api")
+            or path.startswith("/fraud-intelligence")
+            or path.startswith("/saudi-fraud")
+            or path.startswith("/rules-studio")
+            or path.startswith("/governance")
+            or path in [
+                "/health",
+                "/stats",
+                "/sources",
+                "/countries",
+                "/overview",
+                "/news",
+                "/incidents",
+                "/patterns",
+                "/rules",
+                "/threats",
+                "/search-text",
+                "/telemetry",
+            ]
+        ):
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
 
         return response
+
 
 
 class RequestSizeLimiterMiddleware(BaseHTTPMiddleware):
