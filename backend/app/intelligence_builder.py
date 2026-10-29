@@ -104,7 +104,7 @@ def rebuild_fraud_intelligence(con: Optional[sqlite3.Connection] = None, user_ta
                         target_group, content_type, created_at, updated_at
                     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                     ON CONFLICT(article_id) DO UPDATE SET
-                        content_type = excluded.content_type,
+                        content_type = CASE WHEN threat_intel.content_type IS NOT NULL AND ? = 'x_k_h_almuzaini' THEN threat_intel.content_type ELSE excluded.content_type END,
                         fraud_category = excluded.fraud_category,
                         fraud_category_ar = excluded.fraud_category_ar,
                         modus_operandi = excluded.modus_operandi,
@@ -135,6 +135,7 @@ def rebuild_fraud_intelligence(con: Optional[sqlite3.Connection] = None, user_ta
                         enr["content_type"],
                         now,
                         now,
+                        a["source_code"] or "",
                     )
                 )
 

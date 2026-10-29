@@ -89,6 +89,7 @@ FRAUD_TYPES = {
             "huntington bank", "intesa", "banking scam", "bank fraud", "mule account", "mule accounts",
             "bank card fraud", "bogus bank", "fake bank", "احتيال بنكي", "احتيال مصرفي", "حسابات بنكية وسيطة",
             "elder financial scam", "central bank governor on suspicion", "kitchener bank card", "argenta",
+            "حسابات لايبانات", "لبنك دال", "بنك دال", "d360bank", "تطبيق برق", "hsbc scam", "suspected bank scam",
         ],
     },
     "gov_impersonation": {
@@ -125,6 +126,8 @@ FRAUD_TYPES = {
             "guaranteed returns", "diamond scam", "invest wisely", "bitcoin scam", "bitcoin fraud",
             "cryptomus", "fund fraud", "fund scam", "elon musk impersonat", "smart ring scam",
             "smart ring fraud", "الترويج للزئبق", "كشف الآثار", "تداول العملات المشفرة", "bitcoin", "crypto",
+            "عوائد الاصول المالية", "عوائدالاصول المالية", "صكوك المالية", "الإنماء المالية", "دراية المالية", "الراجحي المالية",
+            "الخبير المالية", "كفاءة المالية", "محفظة تابعة", "محافظ البنوك والشركات المالية",
         ],
     },
     "ecommerce_fraud": {
@@ -136,6 +139,7 @@ FRAUD_TYPES = {
             "seller scam", "buyer scam", "roofing scam", "online shopping scam", "shopping scam",
             "الخصم المفاجئ", "صفحة وهمية لبيع", "بيع أسلحة بيضاء", "بيع المواد المخدرة",
             "النصب على شركة أجهزة", "dodgy cigarettes", "زيادة المتابعين والإعلانات الممولة",
+            "التجارة الوهمية عبر الإنترنت",
         ],
     },
     "job_fraud": {
@@ -165,6 +169,7 @@ FRAUD_TYPES = {
             "check fraud", "changed bank details", "supplier bank details", "compromised invoice",
             "business email compromise", "bec scam", "app fraud", "financial fraud", "launder scam proceeds",
             "money laundering", "wallingford police arrest 2 in separate financial fraud",
+            "مدفوعات سداد", "تحديث فواتير", "يتم الاحتيال بها", "رسوم المدارس الأهلية", "سداد قروض",
         ],
     },
     "romance_scam": {
@@ -250,7 +255,11 @@ GLOBAL_LOCATIONS: Dict[str, Tuple[str, str, str]] = {
     "kitchener": ("Kitchener", "Ontario", "CA"),
     "prince edward": ("Charlottetown", "Prince Edward Island", "CA"),
     "p.e.i.": ("Charlottetown", "Prince Edward Island", "CA"),
+    "nova scotia": ("Halifax", "Nova Scotia", "CA"),
     "canadian": ("Toronto", "Ontario", "CA"),
+    # Australia
+    "bendigo": ("Melbourne", "Victoria", "AU"),
+    "australian": ("Sydney", "New South Wales", "AU"),
     # UK
     "london": ("London", "Greater London", "GB"),
     "birmingham": ("Birmingham", "West Midlands", "GB"),
@@ -263,6 +272,9 @@ GLOBAL_LOCATIONS: Dict[str, Tuple[str, str, str]] = {
     "hungarian": ("Budapest", "Central Hungary", "HU"),
     "hungary": ("Budapest", "Central Hungary", "HU"),
     "amsterdam": ("Amsterdam", "North Holland", "NL"),
+    "dutch": ("Amsterdam", "North Holland", "NL"),
+    "nl times": ("Amsterdam", "North Holland", "NL"),
+    "netherlands": ("Amsterdam", "North Holland", "NL"),
     "rome": ("Rome", "Lazio", "IT"),
     "milan": ("Milan", "Lombardy", "IT"),
     "italy": ("Rome", "Lazio", "IT"),
@@ -272,6 +284,8 @@ GLOBAL_LOCATIONS: Dict[str, Tuple[str, str, str]] = {
     "belgian": ("Brussels", "Brussels", "BE"),
     "ireland": ("Dublin", "Leinster", "IE"),
     "oslo": ("Oslo", "Oslo", "NO"),
+    "norwegians": ("Oslo", "Oslo", "NO"),
+    "norway": ("Oslo", "Oslo", "NO"),
     "belarus": ("Minsk", "Minsk", "BY"),
     "بيلاروسيا": ("مينسك", "مينسك", "BY"),
     # Arab / Middle East
@@ -405,6 +419,7 @@ CHANNELS_DEF = {
             "bank fraud", "bank scam", "snap fraud", "ppp fraud", "pandemic relief", "ponzi",
             "احتيال مالي", "احتيال بنكي", "استيلاء على أموال", "أرصدة", "bank card", "loans", "loan",
             "corporate bank", "charged rs", "financial scam", "central bank", "launder", "bank",
+            "مدفوعات سداد", "تحديث فواتير", "آيبانات", "ايبانات", "محفظة", "محافظ", "تطبيق برق",
         ],
     },
     "sms": {
@@ -428,7 +443,7 @@ CHANNELS_DEF = {
             "social media", "telegram", "twitter", "facebook", "instagram", "tiktok", "finfluencer",
             "ميتا", "منصات اجتماعية", "منصات التواصل", "حسابات موثقة", "influencer", "متابعين",
             "إعلانات ممولة", "post", "social network", "elon musk", "bitcoin", "crypto",
-            "ابتزاز", "صور فاضحة", "مساعدات مالية",
+            "ابتزاز", "صور فاضحة", "مساعدات مالية", "التيك توك", "تيك توك",
         ],
     },
     "mobile_app": {
@@ -456,7 +471,8 @@ SECTORS_DEF = {
             "استثمار", "أسهم", "تداول", "عملات مشفرة", "محفظة استثمارية", "ذهب", "سبائك",
             "سبائك ذهبية", "سبائك ذهب", "investment", "trading", "stock market", "crypto", "forex",
             "diamond", "bitcoin", "cryptomus", "fund", "funds", "smart ring", "زئبق", "آثار",
-            "بورصة", "ponzi",
+            "بورصة", "ponzi", "عوائد الاصول المالية", "صكوك المالية", "الإنماء المالية", "دراية المالية",
+            "الراجحي المالية", "الخبير المالية", "كفاءة المالية", "الشركات المالية",
         ],
     },
     "telecom": {
@@ -484,7 +500,8 @@ SECTORS_DEF = {
             "سداد", "درهم", "جنيه", "دولار", "سنتيم", "ريال", "ملايين", "مليار", "أموال",
             "أموالهم", "أرصدة", "مبالغ", "حسابات", "card-swap", "mule account", "wire",
             "financial fraud", "financial", "loans", "loan", "wire transfer", "chase", "intesa",
-            "huntington", "argenta",
+            "huntington", "argenta", "مدفوعات سداد", "تحديث فواتير", "آيبانات", "ايبانات",
+            "تطبيق برق", "d360bank", "hsbc", "bendigo",
         ],
     },
     "individuals": {
@@ -510,6 +527,17 @@ IMPERSONATED_ENTITIES: List[Tuple[str, str, bool]] = [
     ("الأمن العام", "الأمن العام السعودي", False),
     ("وزارة التجارة", "وزارة التجارة", False),
     ("وزارة الداخلية", "وزارة الداخلية", False),
+    ("مدفوعات سداد", "نظام سداد للمدفوعات (SADAD)", False),
+    ("الراجحي المالية", "الراجحي المالية (Al Rajhi Capital)", False),
+    ("الإنماء المالية", "الإنماء المالية (Alinma Capital)", False),
+    ("دراية المالية", "شركة دراية المالية (Derayah)", False),
+    ("صكوك المالية", "شركة صكوك المالية (Sukuk Capital)", False),
+    ("عوائد الاصول المالية", "عوائد الأصول المالية (Awaed)", False),
+    ("عوائدالاصول المالية", "عوائد الأصول المالية (Awaed)", False),
+    ("الخبير المالية", "شركة الخبير المالية (Alkhabeer Capital)", False),
+    ("كفاءة المالية", "شركة كفاءة المالية (Kafaa Capital)", False),
+    ("تطبيق برق", "محفظة برق الرقمية (Barq)", False),
+    ("d360bank", "بنك دال ثلاثمائة وستون (D360 Bank)", False),
     ("الراجحي", "مصرف الراجحي", False),
     ("البنك الأهلي", "البنك الأهلي السعودي (SNB)", False),
     ("بنك الرياض", "بنك الرياض", False),
@@ -625,7 +653,7 @@ def enrich_intelligence(
 
     # 1. Content Type classification (Incident vs Warning vs Awareness vs Cyber vs Unrelated)
     fraud_core = bool(re.search(
-        rf"{_AR_PREFIX}(احتيال|نصب|ابتزاز|غسيل اموال|انتحال|تداول وهمي|روابط مشبوه|شيكات|متاجر وهمي|عملات مزيف){_AR_SUFFIX}|"
+        rf"{_AR_PREFIX}(احتيال|نصب|ابتزاز|غسيل اموال|انتحال|تداول وهمي|روابط مشبوه|شيكات|متاجر وهمي|عملات مزيف|مدفوعات سداد|تحديث فواتير|بلاغ هام|بلاغ عاجل|ايبانات|عوائد الاصول|صكوك الماليه|الانماء الماليه|درايه الماليه|الراجحي الماليه|الخبير الماليه|كفاءه الماليه){_AR_SUFFIX}|"
         r"\b(fraud|scam|scams|phish|phishing|smishing|vishing|swindler|defraud|extortion|ponzi|identity theft|wire fraud)\b",
         full_norm
     ))
@@ -656,15 +684,15 @@ def enrich_intelligence(
         ))
         # Check C: Confirmed enforcement, police bust, court sanction, official arrest
         is_confirmed = bool(re.search(
-            rf"{_AR_PREFIX}(?:ال|[يوت]|وال)?(قبض|اطاح|اطاحت|ضبط|توقيف|محكمه|سجن|ادان|ادانت|موقوف|مشتبه|سقوط عصابه|في قبضه|تفكيك|مواجهه الشبح){_AR_SUFFIX}|"
+            rf"{_AR_PREFIX}(?:ال|[يوت]|وال)?(قبض|اطاح|اطاحت|ضبط|توقيف|محكمه|سجن|ادان|ادانت|موقوف|مشتبه|سقوط عصابه|في قبضه|تفكيك|مواجهه الشبح|حكم قضائي|برد المبلغ المسروق|استعاده اكثر من|تجميد الاموال المسروقه){_AR_SUFFIX}|"
             r"\b(arrest|arrested|arrests|charged|charges|sentenc|sentenced|indicted|busted|detained|strike force|convicted|sanctions|operation confrontation ghost)\b",
             head_norm
         ))
         # Check D: Documented reported incidents with actual victims, reported losses, or ongoing investigations (no arrest required)
         is_reported = bool(re.search(
-            rf"{_AR_PREFIX}(وقع ضحيه|وقعت في فخ|تعرض لعمليه|استولي علي|استولوا|سرقوا|ضحايا|خسائر|تفاصيل جريمه|احتيال وابتزاز|فخ احتيال|محتالون في الفخ|سحب مبالغ|سرقه ارصده|شكوي|بلاغات|تعرضوا لمحاوله احتيال){_AR_SUFFIX}|"
-            r"\b(defrauded|victim of|victims|lost|losses|stolen|drains|drained|hit by|cost victims|scam costs|investigate.*complaints|scammed|withdraw funds.*pick)\b",
-            full_text
+            rf"{_AR_PREFIX}(وقع ضحيه|وقعت في فخ|تعرض لعمليه|استولي علي|استولوا|سرقوا|ضحايا|خسائر|تفاصيل جريمه|احتيال وابتزاز|فخ احتيال|محتالون في الفخ|سحب مبالغ|سرقه ارصده|شكوي|بلاغات|تعرضوا لمحاوله احتيال|بلاغ هام|بلاغ عاجل|بلاغ جديد|حالات احتيال مؤكده|يتم الاحتيال بها|يتم الاحتيال من خلالها|تستغل من قبل عصابات|تحديث فواتير|يستخدم في الاحتيال|استغلال محافظ البنوك|حسابات لايبانات|يطال رسوم المدارس){_AR_SUFFIX}|"
+            r"\b(defrauded|victim of|victims|lost|losses|stolen|drains|drained|hit by|cost victims|scam costs|investigate.*complaints|scammed|withdraw funds.*pick|leaves bendigo in a tangle|targeted in swatting incident after suspected bank scam|fall for scam)\b",
+            full_norm
         ))
         # Check E: Scams detected or thwarted before financial loss
         is_attempt = bool(re.search(
@@ -673,15 +701,15 @@ def enrich_intelligence(
             head_norm
         ))
 
-        # Resolution hierarchy: Awareness/Legal analysis first to avoid tagging general penal law discussions as arrests
+        # Resolution hierarchy: Awareness/Legal analysis first, then confirmed/reported incidents, then warnings
         if is_awareness:
             content_type = "awareness_campaign"
-        elif is_warning:
-            content_type = "fraud_warning"
         elif is_confirmed:
             content_type = "confirmed_incident"
         elif is_reported:
             content_type = "reported_incident"
+        elif is_warning:
+            content_type = "fraud_warning"
         elif is_attempt:
             content_type = "fraud_attempt"
         else:
@@ -740,7 +768,8 @@ def enrich_intelligence(
                 or "شرطة منطقة" in full_norm
                 or "النيابة العامة السعودية" in full_norm
                 or ("السعودية" in full_norm and ("اطاحت" in full_norm or "ضبطت" in full_norm or "مقيمين" in full_norm))
-                or (source_country == "SA" and "احتيال" in full_norm and not any(other in full_norm for other in ("مصر", "لبنان", "دبي", "الامارات", "الاردن")))
+                or (source_country == "SA" and not any(other in full_norm for other in ("مصر", "لبنان", "دبي", "الامارات", "الاردن", "باكستان", "كندا", "بريطانيا")))
+                or any(k in full_norm for k in ("مدفوعات سداد", "الراجحي الماليه", "الانماء الماليه", "درايه الماليه", "صكوك الماليه", "عوائد الاصول", "الخبير الماليه", "كفاءه الماليه", "البنك المركزي السعودي", "تطبيق برق", "d360bank"))
             ):
                 incident_country = "SA"
                 incident_region = "المملكة العربية السعودية"

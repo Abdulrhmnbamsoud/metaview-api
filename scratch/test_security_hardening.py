@@ -98,8 +98,8 @@ test("POST /rules-studio/parse-scenario without auth -> 401 Unauthorized", r.sta
 r = client.post("/saudi-fraud/ingest/run", json={})
 test("POST /saudi-fraud/ingest/run without auth -> 401 or 503 Fail-Closed", r.status_code in (401, 503), f"Got {r.status_code}")
 
-r = client.post("/saudi-fraud/x/collect-public", json={})
-test("POST /saudi-fraud/x/collect-public without auth -> 401 or 503 Fail-Closed", r.status_code in (401, 503), f"Got {r.status_code}")
+r = client.post("/saudi-fraud/x/collect-public?handle=arbitrary_account", json={})
+test("POST /saudi-fraud/x/collect-public (arbitrary handle) without auth -> 401 or 503 Fail-Closed", r.status_code in (401, 503), f"Got {r.status_code}")
 
 r = client.post("/fraud-intelligence/migrate-database", json={})
 test("POST /fraud-intelligence/migrate-database without auth -> 401 Unauthorized", r.status_code == 401, f"Got {r.status_code}")

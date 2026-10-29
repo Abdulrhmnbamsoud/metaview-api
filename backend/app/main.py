@@ -120,11 +120,25 @@ try:
             _latest_x = _c.execute(
                 "SELECT MAX(published_at) AS mp FROM articles WHERE source_code = 'x_k_h_almuzaini'"
             ).fetchone()["mp"]
+            _latest_inc = _c.execute(
+                "SELECT MAX(first_reported_at) AS mi FROM incidents"
+            ).fetchone()["mi"]
         finally:
             _c.close()
-        if not _latest_x or str(_latest_x) < "2026-10-29":
+
+        def _startup_sync_x_and_dashboard() -> None:
+            try:
+                if not _latest_x or str(_latest_x) < "2026-10-29":
+                    asyncio.run(collect_and_store_x_posts(max_posts=80))
+                if not _latest_inc or str(_latest_inc) < "2026-10-29":
+                    from .intelligence_builder import rebuild_fraud_intelligence
+                    rebuild_fraud_intelligence(user_tag="startup_sync")
+            except Exception:
+                pass
+
+        if (not _latest_x or str(_latest_x) < "2026-10-29") or (not _latest_inc or str(_latest_inc) < "2026-10-29"):
             threading.Thread(
-                target=lambda: asyncio.run(collect_and_store_x_posts(max_posts=80)),
+                target=_startup_sync_x_and_dashboard,
                 daemon=True,
             ).start()
 except Exception:

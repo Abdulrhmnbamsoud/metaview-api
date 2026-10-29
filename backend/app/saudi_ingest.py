@@ -853,6 +853,8 @@ def run_saudi_ingest(trigger: str = "manual", only: Optional[List[str]] = None) 
         incident_report: Dict[str, Any] = {}
         try:
             incident_report = incidents.rebuild()
+            from .intelligence_builder import rebuild_fraud_intelligence
+            rebuild_fraud_intelligence(user_tag=f"saudi_ingest_{trigger}")
         except Exception as exc:
             log.exception("incident rebuild failed")
             incident_report = {"error": f"{type(exc).__name__}: {exc}"}

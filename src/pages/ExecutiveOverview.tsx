@@ -193,7 +193,7 @@ export const ExecutiveOverview: React.FC = () => {
           window_days: winDays,
           date_from: dFrom,
           date_to: dTo,
-          page_size: 25,
+          page_size: 80,
         }),
         apiService.getSaudiNews({
           scope: effScope,
@@ -202,7 +202,7 @@ export const ExecutiveOverview: React.FC = () => {
           date_from: dFrom,
           date_to: dTo,
           sort_by: sortBy,
-          page_size: 80,
+          page_size: 100,
         }),
         apiService
           .getSaudiNews({

@@ -35,6 +35,15 @@ COUNTRY_METADATA: Dict[str, Dict[str, Any]] = {
     "BR": {"name_ar": "البرازيل", "name_en": "Brazil", "flag": "🇧🇷", "x": 30.8, "y": 55.6},
     "CN": {"name_ar": "الصين", "name_en": "China", "flag": "🇨🇳", "x": 62.5, "y": 35.0},
     "JP": {"name_ar": "اليابان", "name_en": "Japan", "flag": "🇯🇵", "x": 68.2, "y": 34.0},
+    "NO": {"name_ar": "النرويج", "name_en": "Norway", "flag": "🇳🇴", "x": 45.0, "y": 22.0},
+    "PK": {"name_ar": "باكستان", "name_en": "Pakistan", "flag": "🇵🇰", "x": 55.0, "y": 41.0},
+    "MA": {"name_ar": "المغرب", "name_en": "Morocco", "flag": "🇲🇦", "x": 39.5, "y": 39.5},
+    "DZ": {"name_ar": "الجزائر", "name_en": "Algeria", "flag": "🇩🇿", "x": 42.5, "y": 40.5},
+    "NG": {"name_ar": "نيجيريا", "name_en": "Nigeria", "flag": "🇳🇬", "x": 44.6, "y": 56.0},
+    "SG": {"name_ar": "سنغافورة", "name_en": "Singapore", "flag": "🇸🇬", "x": 63.2, "y": 51.5},
+    "BY": {"name_ar": "بيلاروسيا", "name_en": "Belarus", "flag": "🇧🇾", "x": 47.5, "y": 28.0},
+    "HU": {"name_ar": "المجر", "name_en": "Hungary", "flag": "🇭🇺", "x": 46.0, "y": 31.5},
+    "OM": {"name_ar": "عمان", "name_en": "Oman", "flag": "🇴🇲", "x": 54.0, "y": 46.5},
     "Unknown": {"name_ar": "موقع دولي غير محدد", "name_en": "Unknown", "flag": "🌐", "x": 50.0, "y": 50.0},
 }
 

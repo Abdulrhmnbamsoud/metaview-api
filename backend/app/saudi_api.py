@@ -826,6 +826,12 @@ async def collect_x_public_posts(
         _check_admin(x_admin_token, authorization, required_permission="ingestion.trigger", session_cookie=session_cookie)
     from . import x_public_collector
     report = await x_public_collector.collect_and_store_x_posts(handle=clean_handle)
+    try:
+        from .intelligence_builder import rebuild_fraud_intelligence
+        rebuild_res = rebuild_fraud_intelligence(user_tag="x_collect_public")
+        report["dashboard_incidents_synced"] = rebuild_res.get("total_incidents_created", 0)
+    except Exception:
+        pass
     return report
 
 
@@ -855,6 +861,32 @@ async def analyze_x_post(
             status_code=400 if status == x_public_collector.STATUS_NOT_SUPPORTED else 502,
             detail=error or "تعذر جلب المنشور",
         )
+    # Persist eligible analyzed post into articles + threat_intel + dashboard incidents
+    try:
+        if post.is_eligible_explore:
+            from .db import insert_article_if_new
+            from .intelligence_builder import rebuild_fraud_intelligence
+            now_iso = datetime.now(timezone.utc).isoformat()
+            headline = post.text[:120].strip() + ("..." if len(post.text) > 120 else "")
+            art_id, _ = insert_article_if_new({
+                "source": f"{post.author_name} ({post.author_handle})",
+                "domain": "x.com",
+                "country": "SA",
+                "headline": headline,
+                "content": post.text,
+                "article_summary": post.text,
+                "url": post.url,
+                "published_at": post.published_at or now_iso,
+                "created_at": now_iso,
+                "category": "Social Media Intel",
+                "source_code": post.source_code or "x_k_h_almuzaini",
+                "language": "ar",
+            })
+            if art_id:
+                x_public_collector._store_post_threat_intel(post, art_id, now_iso)
+                rebuild_fraud_intelligence(user_tag="x_analyze_post")
+    except Exception:
+        pass
     return {
         "status": status,
         "post": post.to_dict(),
