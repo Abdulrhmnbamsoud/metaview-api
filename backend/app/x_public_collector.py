@@ -162,7 +162,9 @@ def classify_x_post(text: str, author_handle: str = "@K_H_AlMuzaini") -> Dict[st
     has_signal = fraud_intel.has_fraud_signal(cleaned)
     fraud_keywords = [
         "احتيال", "نصب", "اختراق", "تصيد", "منتحل", "وهمي", "سرقة", "تحذير",
+        "احذر", "احذروا", "انتبه", "انتبهوا", "خطير", "تنبيه", "مجهول",
         "توعية", "بطاقات", "سداد", "حوالة", "مشبوه", "عصابات", "خطابة", "وظائف وهمية",
+        "بنك", "مصرف", "ابشر", "نفاذ", "غسيل",
         "خلك_حريص", "نقطة مظلمة", "phishing", "scam", "fraud"
     ]
     has_keyword = any(k in norm_text for k in [fraud_intel.norm(w) for w in fraud_keywords])
@@ -586,6 +588,110 @@ async def fetch_single_public_post(tweet_url_or_id: str) -> Tuple[Optional[XPubl
         return None, STATUS_FAILED, f"خطأ أثناء جلب المنشور: {str(e)}"
 
 
+def _store_post_threat_intel(post: XPublicPost, article_id: int, now_iso: str) -> None:
+    """Persist an eligible XPublicPost into the threat_intel table."""
+    headline = post.text[:120].strip()
+    if len(post.text) > 120:
+        headline += "..."
+
+    media_evidence = ",".join(post.media_urls + post.outbound_urls) if (post.media_urls or post.outbound_urls) else None
+    analysis_facts = {
+        "source_handle": post.author_handle,
+        "tweet_id": post.post_id,
+        "classification": post.category_label,
+        "reasons": post.classification_reasons,
+        "media_count": len(post.media_urls),
+        "outbound_links_count": len(post.outbound_urls),
+    }
+
+    is_bank = any(
+        k in post.text for k in ["بنك", "مصرف", "حساب", "بطاق", "سداد", "حوال", "رمز التحقق", "otp", "نفاذ"]
+    )
+    bank_rel = "high" if is_bank else "medium"
+
+    threat_data = {
+        "article_id": article_id,
+        "title": headline,
+        "description": post.text,
+        "threat_type": "social_media_fraud_warning",
+        "event_type": post.content_type,
+        "evidence_confidence": "verified_social_post",
+        "analysis_confidence": "high",
+        "verified_facts": json.dumps(analysis_facts, ensure_ascii=False),
+        "analytical_assessment": json.dumps({"analyst_notes": "رصد عام من منصة X"}, ensure_ascii=False),
+        "detection_indicators": json.dumps(post.classification_reasons, ensure_ascii=False),
+        "preventive_recommendations": json.dumps(["التحقق من الروابط الرسمية وعدم التجاوب مع أرقام مجهولة"], ensure_ascii=False),
+        "evidence_urls": media_evidence,
+        "confidence": 0.85,
+        "original_url": post.url,
+        "related_links": None,
+        "is_saudi": 1,
+        "is_financial": 1 if is_bank else 0,
+        "created_at": now_iso,
+        "updated_at": now_iso,
+        "fraud_category": "social_engineering",
+        "fraud_category_ar": "هندسة اجتماعية واحتيال رقمي",
+        "modus_operandi": post.text[:200],
+        "channels": json.dumps(["social_media"], ensure_ascii=False),
+        "target_group": json.dumps(["مستخدمو وسائل التواصل الاجتماعي"], ensure_ascii=False),
+        "bank_relevance": bank_rel,
+        "detection_rule": None,
+        "required_data": None,
+        "matched_terms": json.dumps(post.classification_reasons, ensure_ascii=False),
+        "content_type": post.content_type,
+    }
+    intel._store_threat_intel(threat_data)
+
+
+def sync_x_articles_to_threat_intel(source_code: str = DEFAULT_SOURCE_CODE) -> int:
+    """Ensure all eligible stored X articles in `articles` have corresponding `threat_intel` records."""
+    now_iso = datetime.now(timezone.utc).isoformat()
+    synced = 0
+    con = get_db()
+    try:
+        rows = con.execute(
+            """
+            SELECT a.id, a.url, a.content, a.headline, a.published_at, t.id AS tid
+            FROM articles a
+            LEFT JOIN threat_intel t ON t.article_id = a.id
+            WHERE a.source_code = ?
+            """,
+            (source_code,),
+        ).fetchall()
+    finally:
+        con.close()
+
+    for r in rows:
+        if r["tid"] is not None:
+            continue
+        text = clean_tweet_text(r["content"] or r["headline"] or "")
+        if not text:
+            continue
+        m = re.search(r"status/(\d+)", r["url"] or "")
+        tid_str = m.group(1) if m else str(r["id"])
+        cls = classify_x_post(text, author_handle=f"@{DEFAULT_MONITORED_HANDLE}")
+        if not cls["eligible_for_explore"]:
+            continue
+        post = XPublicPost(
+            post_id=tid_str,
+            text=text,
+            published_at=r["published_at"],
+            url=r["url"] or f"https://x.com/{DEFAULT_MONITORED_HANDLE}/status/{tid_str}",
+            author_handle=f"@{DEFAULT_MONITORED_HANDLE}",
+            author_name=DEFAULT_SOURCE_NAME,
+            source_code=source_code,
+            category_key=cls["category_key"],
+            category_label=cls["category_label"],
+            content_type=cls["content_type"],
+            classification_reasons=cls["reasons"],
+            is_eligible_explore=cls["eligible_for_explore"],
+            is_eligible_incident=cls["eligible_for_incident"],
+        )
+        _store_post_threat_intel(post, r["id"], now_iso)
+        synced += 1
+    return synced
+
+
 async def collect_and_store_x_posts(
     handle: str = DEFAULT_MONITORED_HANDLE,
     source_code: str = DEFAULT_SOURCE_CODE,
@@ -650,6 +756,14 @@ async def collect_and_store_x_posts(
 
             if existing:
                 report["duplicates_skipped"] += 1
+                # Ensure threat_intel row exists if eligible for explore
+                if post.is_eligible_explore:
+                    has_ti = con.execute(
+                        "SELECT id FROM threat_intel WHERE article_id = ?",
+                        (existing["id"],),
+                    ).fetchone()
+                    if not has_ti:
+                        _store_post_threat_intel(post, existing["id"], now_iso)
                 # If there are media URLs or outbound links, attach to evidence_urls
                 if post.media_urls or post.outbound_urls:
                     combined_evidence = ",".join(post.media_urls + post.outbound_urls)
@@ -694,59 +808,7 @@ async def collect_and_store_x_posts(
             # Process into threat intelligence according to classification
             if post.is_eligible_explore:
                 report["eligible_explore_items"] += 1
-                article_for_intel = article_record.copy()
-                article_for_intel["article_id"] = article_id
-
-                # Generate threat intel record directly aligned with classification
-                media_evidence = ",".join(post.media_urls + post.outbound_urls) if (post.media_urls or post.outbound_urls) else None
-                analysis_facts = {
-                    "source_handle": post.author_handle,
-                    "tweet_id": post.post_id,
-                    "classification": post.category_label,
-                    "reasons": post.classification_reasons,
-                    "media_count": len(post.media_urls),
-                    "outbound_links_count": len(post.outbound_urls),
-                }
-
-                # Bank relevance check
-                is_bank = any(
-                    k in post.text for k in ["بنك", "مصرف", "حساب", "بطاق", "سداد", "حوال", "رمز التحقق", "otp", "نفاذ"]
-                )
-                bank_rel = "high" if is_bank else "medium"
-
-                # Persist in threat_intel
-                threat_data = {
-                    "article_id": article_id,
-                    "title": headline,
-                    "description": post.text,
-                    "threat_type": "social_media_fraud_warning",
-                    "event_type": post.content_type,
-                    "evidence_confidence": "verified_social_post",
-                    "analysis_confidence": "high",
-                    "verified_facts": json.dumps(analysis_facts, ensure_ascii=False),
-                    "analytical_assessment": json.dumps({"analyst_notes": "رصد عام من منصة X"}, ensure_ascii=False),
-                    "detection_indicators": json.dumps(post.classification_reasons, ensure_ascii=False),
-                    "preventive_recommendations": json.dumps(["التحقق من الروابط الرسمية وعدم التجاوب مع أرقام مجهولة"], ensure_ascii=False),
-                    "evidence_urls": media_evidence,
-                    "confidence": 0.85,
-                    "original_url": post.url,
-                    "related_links": None,
-                    "is_saudi": 1,
-                    "is_financial": 1 if is_bank else 0,
-                    "created_at": now_iso,
-                    "updated_at": now_iso,
-                    "fraud_category": "social_engineering",
-                    "fraud_category_ar": "هندسة اجتماعية واحتيال رقمي",
-                    "modus_operandi": post.text[:200],
-                    "channels": json.dumps(["social_media"], ensure_ascii=False),
-                    "target_group": json.dumps(["مستخدمو وسائل التواصل الاجتماعي"], ensure_ascii=False),
-                    "bank_relevance": bank_rel,
-                    "detection_rule": None,
-                    "required_data": None,
-                    "matched_terms": json.dumps(post.classification_reasons, ensure_ascii=False),
-                    "content_type": post.content_type,
-                }
-                intel._store_threat_intel(threat_data)
+                _store_post_threat_intel(post, article_id, now_iso)
 
             report["stored_items"].append({
                 "post_id": post.post_id,

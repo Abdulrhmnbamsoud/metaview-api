@@ -106,6 +106,14 @@ except Exception as _e:
     import logging
     logging.getLogger(__name__).exception("Automatic pipeline recovery check encountered an error: %s", _e)
 
+try:
+    from .x_sources import register_x_sources_in_db
+    from .x_public_collector import sync_x_articles_to_threat_intel
+    register_x_sources_in_db()
+    sync_x_articles_to_threat_intel()
+except Exception:
+    pass
+
 # Saudi Fraud Intelligence: periodic ingestion (enabled with SAUDI_AUTO_INGEST=true)
 start_saudi_scheduler()
 

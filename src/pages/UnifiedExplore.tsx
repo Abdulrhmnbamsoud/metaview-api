@@ -195,14 +195,27 @@ export const UnifiedExplore: React.FC = () => {
         q: searchQuery || undefined,
       };
 
+      const mergeNewsWithX = (primary: SaudiFraudItem[], xList: SaudiFraudItem[]) => {
+        const seen = new Set(primary.map((i) => i.id));
+        const merged = [...primary];
+        xList.forEach((x) => {
+          if (!seen.has(x.id)) {
+            seen.add(x.id);
+            merged.push(x);
+          }
+        });
+        return merged;
+      };
+
       if (scope === 'saudi') {
-        const [incRes, newsRes, patRes] = await Promise.all([
+        const [incRes, newsRes, xNewsRes, patRes] = await Promise.all([
           apiService.getSaudiIncidents(incParams),
           apiService.getSaudiNews({ scope: 'saudi', page_size: 100, q: searchQuery || undefined }),
+          apiService.getSaudiNews({ source: 'x_k_h_almuzaini', page_size: 50, q: searchQuery || undefined }).catch(() => ({ items: [] as SaudiFraudItem[] })),
           apiService.getSaudiPatterns(),
         ]);
         setIncidents(incRes.items || []);
-        setNews(newsRes.items || []);
+        setNews(mergeNewsWithX(newsRes.items || [], xNewsRes.items || []));
         setPatterns(patRes.patterns || []);
       } else if (scope === 'global') {
         const [incRes, newsRes] = await Promise.all([
@@ -219,7 +232,7 @@ export const UnifiedExplore: React.FC = () => {
         setPatterns([]);
       } else {
         // scope === 'all'
-        const [incRes, newsRes, patRes] = await Promise.all([
+        const [incRes, newsRes, xNewsRes, patRes] = await Promise.all([
           apiService.getSaudiIncidents(incParams),
           apiService.getSaudiNews({
             scope: 'all',
@@ -227,10 +240,15 @@ export const UnifiedExplore: React.FC = () => {
             page_size: 100,
             q: searchQuery || undefined,
           }),
+          apiService.getSaudiNews({ source: 'x_k_h_almuzaini', page_size: 50, q: searchQuery || undefined }).catch(() => ({ items: [] as SaudiFraudItem[] })),
           apiService.getSaudiPatterns(),
         ]);
         setIncidents(incRes.items || []);
-        setNews(newsRes.items || []);
+        setNews(
+          selectedCountry === 'all' || selectedCountry === 'SA'
+            ? mergeNewsWithX(newsRes.items || [], xNewsRes.items || [])
+            : newsRes.items || []
+        );
         setPatterns(patRes.patterns || []);
       }
     } catch (e) {

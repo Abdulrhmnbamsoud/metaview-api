@@ -118,6 +118,7 @@ export const ExecutiveOverview: React.FC = () => {
   const [ov, setOv] = useState<SaudiOverview | null>(null);
   const [incidents, setIncidents] = useState<SaudiIncident[]>([]);
   const [newsItems, setNewsItems] = useState<SaudiFraudItem[]>([]);
+  const [xPostsItems, setXPostsItems] = useState<SaudiFraudItem[]>([]);
   const [availableCountries, setAvailableCountries] = useState<CountryCount[]>([]);
   const [selectedIncidentDetail, setSelectedIncidentDetail] = useState<SaudiIncident | null>(null);
   const [loading, setLoading] = useState(true);
@@ -177,7 +178,7 @@ export const ExecutiveOverview: React.FC = () => {
       const effScope = scope === 'country' ? 'all' : scope;
       const effCountry = scope === 'country' ? (selectedCountry !== 'all' ? selectedCountry : undefined) : (scope === 'saudi' ? 'SA' : undefined);
 
-      const [overviewRes, incidentsRes, newsRes, countriesRes] = await Promise.all([
+      const [overviewRes, incidentsRes, newsRes, xNewsRes, countriesRes] = await Promise.all([
         apiService.getSaudiOverview({
           scope: effScope,
           country: effCountry,
@@ -203,6 +204,13 @@ export const ExecutiveOverview: React.FC = () => {
           sort_by: sortBy,
           page_size: 80,
         }),
+        apiService
+          .getSaudiNews({
+            source: 'x_k_h_almuzaini',
+            sort_by: sortBy,
+            page_size: 50,
+          })
+          .catch(() => ({ items: [] as SaudiFraudItem[], total: 0, page: 1, page_size: 50 })),
         apiService.getFraudCountries('all'),
       ]);
 
@@ -212,6 +220,7 @@ export const ExecutiveOverview: React.FC = () => {
       }
       setIncidents(incidentsRes.items || []);
       setNewsItems(newsRes.items || []);
+      setXPostsItems(xNewsRes.items || []);
       setAvailableCountries(countriesRes.countries || []);
       setLastRefreshedAt(new Date());
 
@@ -428,9 +437,61 @@ export const ExecutiveOverview: React.FC = () => {
     return list;
   }, [incidents, newsItems, sortBy]);
 
+  // Dedicated X posts feed items so the منشورات 𝕏 tab always displays monitored @K_H_AlMuzaini posts
+  const xFeedItems = useMemo<UnifiedFeedItem[]>(() => {
+    const map = new Map<string, UnifiedFeedItem>();
+    feedItems.filter((i) => i.isXPost).forEach((i) => map.set(i.id, i));
+    xPostsItems.forEach((news) => {
+      const id = `news-${news.id}`;
+      if (map.has(id)) return;
+      const isWarning = news.content_type === 'fraud_warning';
+      const isAwareness = news.content_type === 'awareness_campaign';
+      let badgeType: UnifiedFeedItem['badgeType'] = 'warning';
+      let badgeText = 'تحذير احتيالي';
+      if (isAwareness) {
+        badgeType = 'awareness';
+        badgeText = 'توعية أمنية';
+      } else if (!isWarning && news.content_type === 'confirmed_incident') {
+        badgeType = 'confirmed';
+        badgeText = 'حادثة موثقة';
+      }
+      const text = `${news.title} ${news.summary || ''}`;
+      const channels = news.channels || [];
+      const isThreat = evaluateBankingThreat(news.bank_relevance, badgeType, channels, text);
+      const c = resolveCountry(news.incident_country || news.country, news.is_saudi);
+      map.set(id, {
+        id,
+        newsId: news.id,
+        title: news.title,
+        summary: cleanSummary(news.summary || news.headline),
+        badgeType,
+        badgeText,
+        date: fmtDay(news.published_at) || 'مؤخرًا',
+        publishedAt: news.published_at,
+        occurredAt: news.occurred_at || null,
+        sourceName: news.source || 'منصة 𝕏',
+        sourceUrl: news.original_url || undefined,
+        countryCode: c.code,
+        countryName: c.name,
+        countryFlag: c.flag,
+        sourcesCount: 1,
+        isXPost: true,
+        sourceHandle: '@K_H_AlMuzaini',
+        bankRelevance: news.bank_relevance || 'low',
+        isBankingThreat: isThreat,
+        locations: news.incident_city ? [news.incident_city] : [],
+        tags: ['منشور 𝕏 (@K_H_AlMuzaini)'],
+        channels,
+        verifiedFacts: news.verified_facts,
+        itemData: news,
+      });
+    });
+    return Array.from(map.values()).sort((a, b) => (b.publishedAt || '').localeCompare(a.publishedAt || ''));
+  }, [feedItems, xPostsItems]);
+
   // Tab and Query Filtering
   const filteredFeedItems = useMemo(() => {
-    let result = feedItems;
+    let result = activeTab === 'x_posts' ? xFeedItems : feedItems;
 
     if (activeTab === 'confirmed') {
       result = result.filter((i) => i.badgeType === 'confirmed');
@@ -465,11 +526,18 @@ export const ExecutiveOverview: React.FC = () => {
     }
 
     return result;
-  }, [feedItems, activeTab, searchQuery]);
+  }, [feedItems, xFeedItems, activeTab, searchQuery]);
 
   const currentSelectedItem = useMemo(() => {
-    return feedItems.find((i) => i.id === selectedItemId) || feedItems[0] || null;
-  }, [feedItems, selectedItemId]);
+    return (
+      filteredFeedItems.find((i) => i.id === selectedItemId) ||
+      feedItems.find((i) => i.id === selectedItemId) ||
+      xFeedItems.find((i) => i.id === selectedItemId) ||
+      filteredFeedItems[0] ||
+      feedItems[0] ||
+      null
+    );
+  }, [filteredFeedItems, feedItems, xFeedItems, selectedItemId]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
