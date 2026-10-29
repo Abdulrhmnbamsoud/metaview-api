@@ -33,7 +33,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 import httpx
 from bs4 import BeautifulSoup
@@ -243,9 +243,45 @@ def classify_x_post(text: str, author_handle: str = "@K_H_AlMuzaini") -> Dict[st
 
 
 KNOWN_ALMUZAINI_TWEET_IDS: List[str] = [
-    "2095217265289683297",
-    "1938006009160843393",
-    "1928417072880484508",
+    # Latest October 2026 fraud warnings & reports
+    "2115601658025562177",  # 2026-10-29
+    "2115594630217568590",  # 2026-10-29
+    "2115486354725322922",  # 2026-10-28
+    "2115475533462958316",  # 2026-10-28
+    "2115244789662912764",  # 2026-10-28
+    "2115224108573024463",  # 2026-10-27
+    "2115153561990402126",  # 2026-10-27
+    "2115076384934580589",  # 2026-10-27
+    "2114504221747769652",  # 2026-10-25
+    "2114495130681942432",  # 2026-10-25
+    "2114365919484911964",  # 2026-10-25
+    "2114309056831578361",  # 2026-10-25
+    "2114132350431076740",  # 2026-10-24
+    "2113716005155590394",  # 2026-10-23
+    "2113016376302461122",  # 2026-10-21
+    "2111488424444043627",  # 2026-10-17
+    "2111423202727514449",  # 2026-10-17
+    "2110507375891210422",  # 2026-10-14
+    "2109711370060972322",  # 2026-10-12
+    "2109697339455668633",  # 2026-10-12
+    "2109332611063861386",  # 2026-10-11
+    "2108672510090756293",  # 2026-10-09
+    "2107990314749501734",  # 2026-10-08
+    # September 2026 fraud warnings & reports
+    "2104900112740704320",  # 2026-09-29
+    "2103587899220348982",  # 2026-09-25
+    "2102737506227700086",  # 2026-09-23
+    "2098853757467472176",  # 2026-09-12
+    "2097826781587726835",  # 2026-09-09
+    "2097820617709883412",  # 2026-09-09
+    "2097750860990181789",  # 2026-09-09
+    "2095538821303579101",  # 2026-09-03
+    "2095470404324217100",  # 2026-09-03
+    "2095217265289683297",  # 2026-09-02
+    # Earlier verified fraud warnings
+    "2086244478143078697",
+    "2056864961545253031",
+    "2056119244165681582",
     "1921559244353999356",
     "1920231223634317669",
     "1908551793753432515",
@@ -253,26 +289,7 @@ KNOWN_ALMUZAINI_TWEET_IDS: List[str] = [
     "1773361419334861027",
     "1770550949653651625",
     "1763249389282222100",
-    "1670869946794901505",
-    "1654606809959653376",
-    "1654447271465852930",
-    "1632660357603885057",
-    "1558882392340938752",
-    "1558881341411819520",
     "1558848332893753350",
-    "1558824075648172035",
-    "1552068007244996615",
-    "1552062696790671360",
-    "1523140349719326721",
-    "1521210456895021056",
-    "1521109499481894912",
-    "1520573997146120192",
-    "1520573705788837888",
-    "1516685764213547011",
-    "1516163747173351427",
-    "1515083648495755269",
-    "1513231342481330180",
-    "1504325605948629000",
 ]
 
 
@@ -282,7 +299,8 @@ def _parse_tweet_dict_to_post(tweet: Dict[str, Any], clean_handle: str = DEFAULT
     if not tweet_id or tweet_id == "0":
         return None
 
-    raw_text = tweet.get("full_text") or tweet.get("text", "")
+    note_tweet_text = (tweet.get("note_tweet") or {}).get("text") if isinstance(tweet.get("note_tweet"), dict) else None
+    raw_text = note_tweet_text or tweet.get("full_text") or tweet.get("text", "")
     text = clean_tweet_text(raw_text)
     if not text:
         return None
@@ -336,19 +354,40 @@ async def _fetch_tweet_via_cdn(client: httpx.AsyncClient, tweet_id: str, clean_h
         r = await client.get(cdn_url, headers={"User-Agent": USER_AGENT})
         if r.status_code == 200:
             data = r.json()
-            if isinstance(data, dict) and (data.get("text") or data.get("full_text")):
+            if isinstance(data, dict) and (data.get("text") or data.get("full_text") or data.get("note_tweet")):
                 return _parse_tweet_dict_to_post(data, clean_handle)
     except Exception:
         pass
     return None
 
 
+async def _discover_recent_tweet_ids_via_public_search(client: httpx.AsyncClient, clean_handle: str) -> List[str]:
+    """Discover the latest public status IDs for the monitored handle via public search indexers."""
+    discovered: set[str] = set()
+    search_headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+        "Accept-Language": "ar,en-US;q=0.9,en;q=0.8",
+    }
+    try:
+        r = await client.get(
+            "https://search.yahoo.com/search",
+            params={"p": f"site:x.com/{clean_handle}/status", "n": "30"},
+            headers=search_headers,
+        )
+        if r.status_code == 200:
+            ids = re.findall(rf"{re.escape(clean_handle)}/status/(\d{{18,20}})", unquote(r.text), re.I)
+            discovered.update(ids)
+    except Exception:
+        pass
+    return sorted(discovered, key=lambda x: int(x) if x.isdigit() else 0, reverse=True)
+
+
 async def _fallback_public_posts_for_monitored_handle(
     client: httpx.AsyncClient,
     clean_handle: str,
 ) -> List[XPublicPost]:
-    """Fallback public posts collector using Twitter's official cdn.syndication.twimg.com endpoint
-    and persisted verified public posts when the profile timeline HTML endpoint returns HTTP 429.
+    """Collect the newest public posts using Twitter's official cdn.syndication.twimg.com endpoint,
+    live public search discovery, and persisted verified public posts.
     """
     posts_by_id: Dict[str, XPublicPost] = {}
 
@@ -391,9 +430,16 @@ async def _fallback_public_posts_for_monitored_handle(
     except Exception:
         pass
 
-    # 2. Fetch live updates from Twitter's official syndication CDN for missing or latest IDs
-    missing_ids = [tid for tid in KNOWN_ALMUZAINI_TWEET_IDS if tid not in posts_by_id]
-    target_ids = missing_ids[:12] if missing_ids else KNOWN_ALMUZAINI_TWEET_IDS[:4]
+    # 2. Discover any brand-new tweet IDs from public search + curated recent IDs
+    live_discovered = await _discover_recent_tweet_ids_via_public_search(client, clean_handle)
+    candidate_ids: List[str] = []
+    for tid in live_discovered + KNOWN_ALMUZAINI_TWEET_IDS:
+        if tid not in candidate_ids:
+            candidate_ids.append(tid)
+
+    # 3. Fetch live updates from Twitter's official syndication CDN for missing or latest IDs
+    missing_ids = [tid for tid in candidate_ids if tid not in posts_by_id]
+    target_ids = missing_ids[:35] if missing_ids else candidate_ids[:8]
     if target_ids:
         fetched = await asyncio.gather(
             *[_fetch_tweet_via_cdn(client, tid, clean_handle) for tid in target_ids],
@@ -472,10 +518,16 @@ async def fetch_public_posts_syndication(
                 if post_obj:
                     posts.append(post_obj)
 
-            if not posts and clean_handle.lower() == DEFAULT_MONITORED_HANDLE.lower():
+            if clean_handle.lower() == DEFAULT_MONITORED_HANDLE.lower():
                 fallback_posts = await _fallback_public_posts_for_monitored_handle(client, DEFAULT_MONITORED_HANDLE)
-                if fallback_posts:
-                    return fallback_posts, STATUS_ACTIVE, None
+                by_id: Dict[str, XPublicPost] = {p.post_id: p for p in posts}
+                for fp in fallback_posts:
+                    by_id[fp.post_id] = fp
+                posts = sorted(
+                    by_id.values(),
+                    key=lambda p: int(p.post_id) if p.post_id.isdigit() else 0,
+                    reverse=True,
+                )
 
             return posts, STATUS_ACTIVE, None
 
@@ -695,7 +747,7 @@ def sync_x_articles_to_threat_intel(source_code: str = DEFAULT_SOURCE_CODE) -> i
 async def collect_and_store_x_posts(
     handle: str = DEFAULT_MONITORED_HANDLE,
     source_code: str = DEFAULT_SOURCE_CODE,
-    max_posts: int = 50,
+    max_posts: int = 80,
 ) -> Dict[str, Any]:
     """Execute complete public collection, deduplication, classification, and persistence pipeline.
     Adheres strictly to the user requirements and returns full audit report.

@@ -107,10 +107,26 @@ except Exception as _e:
     logging.getLogger(__name__).exception("Automatic pipeline recovery check encountered an error: %s", _e)
 
 try:
+    import asyncio
+    import sys
+    import threading
     from .x_sources import register_x_sources_in_db
-    from .x_public_collector import sync_x_articles_to_threat_intel
+    from .x_public_collector import collect_and_store_x_posts, sync_x_articles_to_threat_intel
     register_x_sources_in_db()
     sync_x_articles_to_threat_intel()
+    if "pytest" not in sys.modules and "unittest" not in sys.modules:
+        _c = get_db()
+        try:
+            _latest_x = _c.execute(
+                "SELECT MAX(published_at) AS mp FROM articles WHERE source_code = 'x_k_h_almuzaini'"
+            ).fetchone()["mp"]
+        finally:
+            _c.close()
+        if not _latest_x or str(_latest_x) < "2026-10-29":
+            threading.Thread(
+                target=lambda: asyncio.run(collect_and_store_x_posts(max_posts=80)),
+                daemon=True,
+            ).start()
 except Exception:
     pass
 
