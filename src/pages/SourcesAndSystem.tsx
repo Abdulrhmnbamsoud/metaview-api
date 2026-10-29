@@ -57,7 +57,8 @@ export const SourcesAndSystem: React.FC = () => {
   const [xCollectionMsg, setXCollectionMsg] = useState<string | null>(null);
 
   // Single post link analyzer
-  const [singlePostUrl, setSinglePostUrl] = useState('');
+  const DEFAULT_SAMPLE_POST_URL = 'https://x.com/K_H_AlMuzaini/status/1558848332893753350';
+  const [singlePostUrl, setSinglePostUrl] = useState(DEFAULT_SAMPLE_POST_URL);
   const [isAnalyzingPost, setIsAnalyzingPost] = useState(false);
   const [analyzedPost, setAnalyzedPost] = useState<XPublicPostDetail | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
@@ -134,12 +135,16 @@ export const SourcesAndSystem: React.FC = () => {
   };
 
   const handleAnalyzeSinglePost = async () => {
-    if (!singlePostUrl.trim() || isAnalyzingPost) return;
+    if (isAnalyzingPost) return;
+    const targetUrl = singlePostUrl.trim() || DEFAULT_SAMPLE_POST_URL;
+    if (!singlePostUrl.trim()) {
+      setSinglePostUrl(DEFAULT_SAMPLE_POST_URL);
+    }
     setIsAnalyzingPost(true);
     setAnalysisError(null);
     setAnalyzedPost(null);
     try {
-      const res = await apiService.analyzeSingleXPost(singlePostUrl.trim());
+      const res = await apiService.analyzeSingleXPost(targetUrl);
       setAnalyzedPost(res.post);
     } catch (e: any) {
       setAnalysisError(e.message || 'تعذر تحليل المنشور المحدد');
@@ -515,9 +520,9 @@ export const SourcesAndSystem: React.FC = () => {
               />
               <button
                 onClick={handleAnalyzeSinglePost}
-                disabled={isAnalyzingPost || !singlePostUrl.trim()}
+                disabled={isAnalyzingPost}
                 className={`px-4 py-2 rounded-lg text-xs font-semibold whitespace-nowrap flex items-center gap-1.5 transition-all ${
-                  isAnalyzingPost || !singlePostUrl.trim()
+                  isAnalyzingPost
                     ? 'bg-stone-200 dark:bg-slate-800 text-stone-400 cursor-not-allowed'
                     : 'bg-sky-600 hover:bg-sky-700 text-white'
                 }`}

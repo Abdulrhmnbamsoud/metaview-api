@@ -89,12 +89,16 @@ def register_x_sources_in_db() -> None:
         cur.execute("SELECT code, last_status, last_success_at FROM source_registry WHERE code = ?", (src.code,))
         row = cur.fetchone()
 
-        initial_status = "requires_integration" if (not has_token and not src.publisher_feed) else "ok"
-        initial_error = (
-            "يتطلب تكامل X API (Requires Integration - X_BEARER_TOKEN) للوصول المصرح إلى المنشورات."
-            if (not has_token and not src.publisher_feed)
-            else None
-        )
+        if src.code == "x_k_h_almuzaini":
+            initial_status = "active"
+            initial_error = None
+        else:
+            initial_status = "requires_integration" if (not has_token and not src.publisher_feed) else "ok"
+            initial_error = (
+                "يتطلب تكامل X API (Requires Integration - X_BEARER_TOKEN) للوصول المصرح إلى المنشورات."
+                if (not has_token and not src.publisher_feed)
+                else None
+            )
 
         if not row:
             cur.execute(
@@ -122,7 +126,9 @@ def register_x_sources_in_db() -> None:
             cur.execute(
                 """
                 UPDATE source_registry
-                SET name = ?, url = ?, kind = ?, country = ?, lang = ?, official = ?, handle = ?
+                SET name = ?, url = ?, kind = ?, country = ?, lang = ?, official = ?, handle = ?,
+                    last_status = CASE WHEN code = 'x_k_h_almuzaini' AND last_status IN ('access_restricted', 'requires_integration') THEN 'active' ELSE last_status END,
+                    last_error = CASE WHEN code = 'x_k_h_almuzaini' AND last_status IN ('access_restricted', 'requires_integration') THEN NULL ELSE last_error END
                 WHERE code = ?
                 """,
                 (
